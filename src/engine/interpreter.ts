@@ -9,8 +9,6 @@ import {
   ExecutionError,
   LinkedListNode,
   TreeNodeData,
-  GraphNodeData,
-  GraphEdgeData,
 } from '../types/execution';
 
 // Helper to estimate byte sizes in JVM
@@ -29,10 +27,9 @@ function estimateSize(type: string, val: any): number {
       return 24 + (typeof val === 'string' ? val.length * 2 : 8);
     case 'reference':
     case 'ref':
-      return 8;
     case 'node':
     case 'treenode':
-      return 24;
+      return 8;
     case 'stack':
     case 'queue':
     case 'hashmap':
@@ -61,7 +58,6 @@ class Scope {
   }
 
   set(name: string, info: VariableInfo) {
-    // If it exists in parent or current, update it
     if (this.variables[name]) {
       this.variables[name] = info;
       return;
@@ -80,6 +76,19 @@ class Scope {
   }
 }
 
+interface ParamDef {
+  type: string;
+  name: string;
+}
+
+interface FunctionDef {
+  name: string;
+  returnType: string;
+  params: ParamDef[];
+  body: string[];
+  startLine: number;
+}
+
 export class ExecutionEngine {
   private steps: ExecutionStep[] = [];
   private structures: Record<string, DataStructureState> = {};
@@ -87,9 +96,9 @@ export class ExecutionEngine {
   private callStack: CallFrame[] = [];
   private consoleOutput: string[] = [];
   private heapCounter = 100;
-  private maxSteps = 400;
+  private maxSteps = 500;
   private currentScope: Scope = new Scope('main');
-  private functions: Record<string, { params: string[]; body: string[]; startLine: number }> = {};
+  private functions: Record<string, FunctionDef> = {};
 
   private allocateHeapId(prefix: string): string {
     this.heapCounter++;
@@ -107,7 +116,6 @@ export class ExecutionEngine {
     comparison: ComparisonInfo | null = null,
     error: ExecutionError | null = null
   ) {
-    // Calculate memory stats
     const allVars = this.currentScope.getAll();
     let stackBytes = 0;
     for (const v of Object.values(allVars)) {
@@ -118,10 +126,23 @@ export class ExecutionEngine {
       heapBytes += h.estimatedBytes;
     }
 
-    // Extract active pointers
     const activePointers: Record<string, any> = {};
     for (const [vName, vInfo] of Object.entries(allVars)) {
-      if (typeof vInfo.value === 'number' && (vName === 'i' || vName === 'j' || vName === 'k' || vName === 'left' || vName === 'right' || vName === 'mid' || vName === 'low' || vName === 'high' || vName === 'top' || vName === 'front' || vName === 'rear')) {
+      if (
+        typeof vInfo.value === 'number' &&
+        (vName === 'i' ||
+          vName === 'j' ||
+          vName === 'k' ||
+          vName === 'left' ||
+          vName === 'right' ||
+          vName === 'mid' ||
+          vName === 'low' ||
+          vName === 'high' ||
+          vName === 'top' ||
+          vName === 'front' ||
+          vName === 'rear' ||
+          vName.startsWith('count'))
+      ) {
         activePointers[vName] = vInfo.value;
       } else if (vInfo.isReference) {
         activePointers[vName] = vInfo.refTargetId || vInfo.value;
@@ -156,13 +177,23 @@ export class ExecutionEngine {
     this.functions = {};
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      // Match function: e.g. int factorial(int n) { or def factorial(n):
-      const funcMatchJava = line.match(/^(?:public\s+|private\s+|static\s+)*(?:void|int|double|boolean|String|Node|TreeNode)\s+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*\{?$/);
+      const funcMatchJava = line.match(
+        /^(?:public\s+|private\s+|protected\s+|static\s+)*(void|int|double|boolean|String|Node|ListNode|TreeNode)\s+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*\{?$/
+      );
       const funcMatchPy = line.match(/^def\s+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*:/);
 
-      if (funcMatchJava && !line.includes('main')) {
-        const funcName = funcMatchJava[1];
-        const rawParams = funcMatchJava[2].split(',').map((p) => p.trim().split(/\s+/).pop() || '').filter(Boolean);
+      if (funcMatchJava && !line.includes('main(')) {
+        const returnType = funcMatchJava[1];
+        const funcName = funcMatchJava[2];
+        const rawParamStrings = funcMatchJava[3].split(',').map((p) => p.trim()).filter(Boolean);
+
+        const params: ParamDef[] = rawParamStrings.map((p) => {
+          const parts = p.split(/\s+/);
+          const pName = parts[parts.length - 1];
+          const pType = parts.length > 1 ? parts[0] : 'Object';
+          return { type: pType, name: pName };
+        });
+
         const bodyLines: string[] = [];
         let braceCount = line.includes('{') ? 1 : 0;
         let j = i + 1;
@@ -176,10 +207,17 @@ export class ExecutionEngine {
           bodyLines.push(l);
           j++;
         }
-        this.functions[funcName] = { params: rawParams, body: bodyLines, startLine: i + 1 };
+        this.functions[funcName] = {
+          name: funcName,
+          returnType,
+          params,
+          body: bodyLines,
+          startLine: i + 1,
+        };
       } else if (funcMatchPy) {
         const funcName = funcMatchPy[1];
-        const rawParams = funcMatchPy[2].split(',').map((p) => p.trim()).filter(Boolean);
+        const rawParamStrings = funcMatchPy[2].split(',').map((p) => p.trim()).filter(Boolean);
+        const params: ParamDef[] = rawParamStrings.map((p) => ({ type: 'any', name: p }));
         const bodyLines: string[] = [];
         let j = i + 1;
         while (j < lines.length) {
@@ -188,7 +226,13 @@ export class ExecutionEngine {
           bodyLines.push(l);
           j++;
         }
-        this.functions[funcName] = { params: rawParams, body: bodyLines, startLine: i + 1 };
+        this.functions[funcName] = {
+          name: funcName,
+          returnType: 'any',
+          params,
+          body: bodyLines,
+          startLine: i + 1,
+        };
       }
     }
   }
@@ -247,13 +291,13 @@ export class ExecutionEngine {
       return st && st.stackData ? st.stackData.length === 0 : true;
     }
 
-    // Node property: node.val or node.next
+    // Node property: node.val, node.data, or node.next
     const nodeProp = expr.match(/^([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)$/);
     if (nodeProp) {
       const varName = nodeProp[1];
       const prop = nodeProp[2];
       const v = this.currentScope.get(varName);
-      if (v && v.value === null) {
+      if (v && (v.value === null || v.refTargetId === undefined)) {
         throw {
           type: 'NullPointerException',
           message: `Attempted to access field '${prop}' on null reference '${varName}'`,
@@ -264,24 +308,26 @@ export class ExecutionEngine {
       }
       if (v && v.refTargetId) {
         const heapObj = this.heap.find((h) => h.id === v.refTargetId);
-        if (heapObj && heapObj.fields && prop in heapObj.fields) {
-          return heapObj.fields[prop];
+        if (heapObj && heapObj.fields) {
+          if (prop === 'data' && 'val' in heapObj.fields) return heapObj.fields.val;
+          if (prop === 'val' && 'data' in heapObj.fields) return heapObj.fields.data;
+          if (prop in heapObj.fields) return heapObj.fields[prop];
         }
       }
     }
 
     // Identifier lookup
     const v = this.currentScope.get(expr);
-    if (v !== undefined) return v.value;
+    if (v !== undefined) {
+      return v.value;
+    }
 
     // Arithmetic / binary operations with basic precedence
-    // We safely parse arithmetic expressions with identifiers replaced
     try {
       const sanitized = expr.replace(/[a-zA-Z_]\w*(?:\[[^\]]+\]|\.[a-zA-Z_]\w*)?/g, (token) => {
         const val = this.evaluateExpr(token);
         return typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val);
       });
-      // Evaluate basic arithmetic safely
       // eslint-disable-next-line no-eval
       return Function(`"use strict"; return (${sanitized});`)();
     } catch {
@@ -289,14 +335,17 @@ export class ExecutionEngine {
     }
   }
 
-  // Parse condition: e.g. "i < arr.length" or "arr[j] > arr[j + 1]"
-  private evaluateCondition(condStr: string, line: number): { result: boolean; comparison: ComparisonInfo } {
+  // Parse condition: e.g. "curr != null" or "count2 + K == count"
+  private evaluateCondition(condStr: string): { result: boolean; comparison: ComparisonInfo } {
     const operators = ['<=', '>=', '==', '!=', '<', '>'];
     for (const op of operators) {
       const parts = condStr.split(op);
       if (parts.length === 2) {
-        const leftVal = this.evaluateExpr(parts[0]);
-        const rightVal = this.evaluateExpr(parts[1]);
+        const leftExpr = parts[0].trim();
+        const rightExpr = parts[1].trim();
+        const leftVal = this.evaluateExpr(leftExpr);
+        const rightVal = this.evaluateExpr(rightExpr);
+
         let res = false;
         switch (op) {
           case '<':
@@ -324,7 +373,7 @@ export class ExecutionEngine {
           right: rightVal,
           operator: op,
           result: res,
-          explanation: `Evaluated: (${parts[0].trim()} [${leftVal}] ${op} ${parts[1].trim()} [${rightVal}]) ➔ ${res ? 'TRUE' : 'FALSE'}`,
+          explanation: `Evaluated (${leftExpr} [${leftVal}] ${op} ${rightExpr} [${rightVal}]) ➔ ${res ? 'TRUE' : 'FALSE'}`,
         };
 
         return { result: res, comparison };
@@ -345,7 +394,7 @@ export class ExecutionEngine {
   }
 
   // Main runner
-  public execute(code: string, language: 'java' | 'python'): ExecutionStep[] {
+  public execute(code: string, _language: 'java' | 'python'): ExecutionStep[] {
     this.steps = [];
     this.structures = {};
     this.heap = [];
@@ -357,7 +406,6 @@ export class ExecutionEngine {
     const rawLines = code.split('\n');
     const cleanedLines = rawLines.map((l) => l.replace(/[\r]/g, ''));
 
-    // Push initial main frame
     this.callStack.push({
       id: 'frame-main',
       functionName: 'main()',
@@ -375,8 +423,58 @@ export class ExecutionEngine {
 
     this.extractFunctions(cleanedLines);
 
+    // Determine if user code has top-level executable statements outside function/class declarations
+    let hasTopLevelCode = false;
+    for (let i = 0; i < cleanedLines.length; i++) {
+      const trimmed = cleanedLines[i].trim();
+      if (
+        !trimmed ||
+        trimmed.startsWith('//') ||
+        trimmed.startsWith('#') ||
+        trimmed.startsWith('/*') ||
+        trimmed.startsWith('*') ||
+        trimmed.startsWith('package ') ||
+        trimmed.startsWith('import ') ||
+        trimmed.startsWith('public class ') ||
+        trimmed.startsWith('class ') ||
+        trimmed.startsWith('interface ') ||
+        trimmed === '{' ||
+        trimmed === '}'
+      ) {
+        continue;
+      }
+      // Check if it's the start of a function definition
+      if (
+        trimmed.match(
+          /^(?:public\s+|private\s+|protected\s+|static\s+)*(?:void|int|double|boolean|String|Node|ListNode|TreeNode)\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*\{?$/
+        ) ||
+        trimmed.startsWith('def ')
+      ) {
+        let depth = trimmed.includes('{') ? 1 : 0;
+        i++;
+        while (i < cleanedLines.length && depth > 0) {
+          if (cleanedLines[i].includes('{')) depth++;
+          if (cleanedLines[i].includes('}')) depth--;
+          i++;
+        }
+        continue;
+      }
+
+      hasTopLevelCode = true;
+      break;
+    }
+
     try {
-      this.executeBlock(cleanedLines, 0, cleanedLines.length, 1);
+      if (!hasTopLevelCode && Object.keys(this.functions).length > 0) {
+        // Auto-harness: The user pasted a standalone method (e.g. LeetCode / GeeksForGeeks style)
+        const primaryFuncName = Object.keys(this.functions)[0];
+        const primaryFunc = this.functions[primaryFuncName];
+
+        this.synthesizeTestInputAndExecute(primaryFunc);
+      } else {
+        // Normal top-level execution
+        this.executeBlock(cleanedLines, 0, cleanedLines.length, 1);
+      }
     } catch (err: any) {
       const errLine = err.line || 1;
       const errorObj: ExecutionError = {
@@ -413,14 +511,257 @@ export class ExecutionEngine {
       }
     }
 
-    // Set totalSteps on every step
     const total = this.steps.length;
     this.steps.forEach((s) => (s.totalSteps = total));
 
     return this.steps;
   }
 
-  private executeBlock(lines: string[], startIdx: number, endIdx: number, baseLineOffset: number) {
+  // Auto-synthesize mock inputs for standalone methods
+  private synthesizeTestInputAndExecute(funcDef: FunctionDef) {
+    const evaluatedArgs: Record<string, any> = {};
+    const inputDescriptions: string[] = [];
+
+    funcDef.params.forEach((param) => {
+      const pType = param.type.toLowerCase();
+      const pName = param.name;
+
+      if (pType.includes('node') || pType.includes('listnode')) {
+        // Construct Linked List 10 -> 20 -> 30 -> 40 -> 50
+        const values = [10, 20, 30, 40, 50];
+        let headId: string | null = null;
+        let prevNode: LinkedListNode | null = null;
+        const nodesMap: Record<string, LinkedListNode> = {};
+
+        values.forEach((v) => {
+          const nId = this.allocateHeapId('Node');
+          if (!headId) headId = nId;
+          const node: LinkedListNode = { id: nId, value: v, nextId: null };
+          nodesMap[nId] = node;
+
+          this.heap.push({
+            id: nId,
+            type: 'Node',
+            label: `Node(${v})`,
+            fields: { val: v, data: v, next: null },
+            estimatedBytes: 24,
+            referencesTo: [],
+          });
+
+          if (prevNode) {
+            prevNode.nextId = nId;
+            const prevHeap = this.heap.find((h) => h.id === prevNode!.id);
+            if (prevHeap) prevHeap.fields.next = nId;
+          }
+          prevNode = node;
+        });
+
+        this.structures['LinkedList'] = {
+          id: 'll-harness',
+          name: 'LinkedList (Input)',
+          type: 'linkedlist',
+          dataType: 'Node',
+          linkedListData: { headId, nodes: nodesMap },
+          pointers: { head: headId! },
+          lastOperation: 'Synthesized 5-node test input',
+        };
+
+        evaluatedArgs[pName] = `ref -> ${headId}`;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'Node',
+          value: `ref -> ${headId}`,
+          scope: 'main',
+          isReference: true,
+          refTargetId: headId!,
+          estimatedBytes: 8,
+        });
+
+        inputDescriptions.push(`${pName} = [10 ➔ 20 ➔ 30 ➔ 40 ➔ 50]`);
+      } else if (pType.includes('tree') || pType.includes('treenode')) {
+        // Construct 5-node BST
+        const rootId = this.allocateHeapId('TreeNode');
+        const lId = this.allocateHeapId('TreeNode');
+        const rId = this.allocateHeapId('TreeNode');
+
+        this.heap.push(
+          { id: rootId, type: 'TreeNode', label: 'TreeNode(50)', fields: { val: 50, left: lId, right: rId }, estimatedBytes: 24, referencesTo: [lId, rId] },
+          { id: lId, type: 'TreeNode', label: 'TreeNode(25)', fields: { val: 25, left: null, right: null }, estimatedBytes: 24, referencesTo: [] },
+          { id: rId, type: 'TreeNode', label: 'TreeNode(75)', fields: { val: 75, left: null, right: null }, estimatedBytes: 24, referencesTo: [] }
+        );
+
+        this.structures['BinaryTree'] = {
+          id: 'tree-harness',
+          name: 'BinaryTree (Input)',
+          type: 'tree',
+          dataType: 'TreeNode',
+          treeData: {
+            rootId,
+            nodes: {
+              [rootId]: { id: rootId, value: 50, leftId: lId, rightId: rId },
+              [lId]: { id: lId, value: 25, leftId: null, rightId: null },
+              [rId]: { id: rId, value: 75, leftId: null, rightId: null },
+            },
+          },
+          lastOperation: 'Synthesized test BST',
+        };
+
+        evaluatedArgs[pName] = `ref -> ${rootId}`;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'TreeNode',
+          value: `ref -> ${rootId}`,
+          scope: 'main',
+          isReference: true,
+          refTargetId: rootId,
+          estimatedBytes: 8,
+        });
+
+        inputDescriptions.push(`${pName} = BST(50)`);
+      } else if (pType.includes('[]')) {
+        const arrVals = [10, 20, 30, 40, 50];
+        const hId = this.allocateHeapId('Array');
+        this.structures[pName] = {
+          id: hId,
+          name: pName,
+          type: 'array',
+          dataType: 'int[]',
+          arrayData: [...arrVals],
+          lastOperation: 'Synthesized array input',
+        };
+        this.heap.push({
+          id: hId,
+          type: 'int[]',
+          label: `${pName} (5 elements)`,
+          fields: { length: 5, values: [...arrVals] },
+          estimatedBytes: 36,
+          referencesTo: [],
+        });
+        evaluatedArgs[pName] = `ref -> ${hId}`;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'int[]',
+          value: `ref -> ${hId}`,
+          scope: 'main',
+          isReference: true,
+          refTargetId: hId,
+          estimatedBytes: 8,
+        });
+        inputDescriptions.push(`${pName} = [10, 20, 30, 40, 50]`);
+      } else if (pType === 'int' && /^k$/i.test(pName)) {
+        evaluatedArgs[pName] = 2;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'int',
+          value: 2,
+          scope: 'main',
+          isReference: false,
+          estimatedBytes: 4,
+        });
+        inputDescriptions.push(`${pName} = 2`);
+      } else if (pType === 'int' && /target/i.test(pName)) {
+        evaluatedArgs[pName] = 30;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'int',
+          value: 30,
+          scope: 'main',
+          isReference: false,
+          estimatedBytes: 4,
+        });
+        inputDescriptions.push(`${pName} = 30`);
+      } else if (pType === 'int') {
+        evaluatedArgs[pName] = 4;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'int',
+          value: 4,
+          scope: 'main',
+          isReference: false,
+          estimatedBytes: 4,
+        });
+        inputDescriptions.push(`${pName} = 4`);
+      } else {
+        evaluatedArgs[pName] = 0;
+        this.currentScope.set(pName, {
+          name: pName,
+          type: 'int',
+          value: 0,
+          scope: 'main',
+          isReference: false,
+          estimatedBytes: 4,
+        });
+        inputDescriptions.push(`${pName} = 0`);
+      }
+    });
+
+    this.recordStep(
+      funcDef.startLine,
+      {
+        type: 'FUNCTION_CALL',
+        line: funcDef.startLine,
+        functionName: funcDef.name,
+        arguments: evaluatedArgs,
+      },
+      `⚡ Auto-harness initialized test inputs: ${inputDescriptions.join(', ')} and invoked \`${funcDef.name}()\`.`
+    );
+
+    // Call frame
+    this.callStack.push({
+      id: `frame-${this.callStack.length + 1}`,
+      functionName: `${funcDef.name}(${Object.values(evaluatedArgs).join(', ')})`,
+      arguments: evaluatedArgs,
+      localVariables: {},
+      line: funcDef.startLine,
+      depth: this.callStack.length + 1,
+    });
+
+    const funcScope = new Scope(funcDef.name, this.currentScope);
+    for (const [k, v] of Object.entries(evaluatedArgs)) {
+      const existing = this.currentScope.get(k);
+      if (existing) {
+        funcScope.set(k, { ...existing, scope: funcDef.name });
+      } else {
+        funcScope.set(k, {
+          name: k,
+          type: 'Object',
+          value: v,
+          scope: funcDef.name,
+          isReference: false,
+          estimatedBytes: 4,
+        });
+      }
+    }
+
+    const prevScope = this.currentScope;
+    this.currentScope = funcScope;
+
+    const res = this.executeBlock(funcDef.body, 0, funcDef.body.length, funcDef.startLine);
+
+    this.callStack.pop();
+    this.currentScope = prevScope;
+
+    if (res.returned) {
+      this.recordStep(
+        funcDef.startLine + funcDef.body.length,
+        {
+          type: 'FUNCTION_RETURN',
+          line: funcDef.startLine + funcDef.body.length,
+          functionName: funcDef.name,
+          returnValue: res.value,
+        },
+        `🏁 \`${funcDef.name}\` finished and returned: \`${res.value !== undefined ? (typeof res.value === 'object' ? JSON.stringify(res.value) : res.value) : 'void'}\`.`
+      );
+    }
+  }
+
+  // Execute a block of statements line by line
+  private executeBlock(
+    lines: string[],
+    startIdx: number,
+    endIdx: number,
+    baseLineOffset: number
+  ): { returned: boolean; value: any } {
     let i = startIdx;
     while (i < endIdx) {
       if (this.steps.length >= this.maxSteps) {
@@ -446,7 +787,8 @@ export class ExecutionEngine {
         trimmed.startsWith('package ') ||
         trimmed.startsWith('import ') ||
         trimmed.startsWith('public class ') ||
-        trimmed.startsWith('class Main') ||
+        trimmed.startsWith('class ') ||
+        trimmed.startsWith('interface ') ||
         trimmed === '{' ||
         trimmed === '}'
       ) {
@@ -456,10 +798,11 @@ export class ExecutionEngine {
 
       // Check if it's the start of a function definition - skip execution here as it is executed on call
       if (
-        trimmed.match(/^(?:public\s+|private\s+|static\s+)*(?:void|int|double|boolean|String|Node|TreeNode)\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*\{?$/) &&
+        trimmed.match(
+          /^(?:public\s+|private\s+|protected\s+|static\s+)*(?:void|int|double|boolean|String|Node|ListNode|TreeNode)\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*\{?$/
+        ) &&
         !trimmed.includes('main(')
       ) {
-        // Skip function block
         let depth = trimmed.includes('{') ? 1 : 0;
         i++;
         while (i < endIdx && depth > 0) {
@@ -477,8 +820,24 @@ export class ExecutionEngine {
         continue;
       }
 
+      // 0. RETURN STATEMENT
+      const retMatch = trimmed.match(/^return(?:\s+([^;]+))?;?$/);
+      if (retMatch) {
+        const retExpr = retMatch[1];
+        const retVal = retExpr ? this.evaluateExpr(retExpr) : undefined;
+        this.recordStep(
+          currentLineNum,
+          {
+            type: 'FUNCTION_RETURN',
+            line: currentLineNum,
+            returnValue: retVal,
+          },
+          `🔙 Return executed: \`${retExpr || ''}\` ➔ ${retVal !== undefined ? retVal : 'void'}`
+        );
+        return { returned: true, value: retVal };
+      }
+
       // 1. FOR LOOP
-      // e.g. for (int i = 0; i < arr.length; i++) or for (int i = 0; i < 5; i++)
       const forMatch = trimmed.match(/^for\s*\(\s*(?:int\s+)?([a-zA-Z_]\w*)\s*=\s*([^;]+);\s*([^;]+);\s*([^)]+)\)\s*\{?$/);
       if (forMatch) {
         const iterVar = forMatch[1];
@@ -486,7 +845,6 @@ export class ExecutionEngine {
         const condExpr = forMatch[3];
         const stepExpr = forMatch[4];
 
-        // Locate loop body
         let bodyLines: string[] = [];
         let loopEndIdx = i + 1;
         let braceCount = trimmed.includes('{') ? 1 : 0;
@@ -503,11 +861,9 @@ export class ExecutionEngine {
             loopEndIdx++;
           }
         } else {
-          // single line body
           bodyLines.push(lines[loopEndIdx]);
         }
 
-        // Initialize loop variable
         const initVal = this.evaluateExpr(initValExpr);
         const iterVarInfo: VariableInfo = {
           name: iterVar,
@@ -531,12 +887,10 @@ export class ExecutionEngine {
           `🔁 Initialized loop iterator \`${iterVar} = ${initVal}\``
         );
 
-        // Loop iterations with safety counter
         let loopSafety = 0;
         while (loopSafety < 150) {
           loopSafety++;
-          // Evaluate condition
-          const { result, comparison } = this.evaluateCondition(condExpr, currentLineNum);
+          const { result, comparison } = this.evaluateCondition(condExpr);
           this.recordStep(
             currentLineNum,
             {
@@ -558,10 +912,11 @@ export class ExecutionEngine {
             break;
           }
 
-          // Execute loop body
-          this.executeBlock(bodyLines, 0, bodyLines.length, i + 1 + baseLineOffset);
+          const bodyRes = this.executeBlock(bodyLines, 0, bodyLines.length, i + 1 + baseLineOffset);
+          if (bodyRes.returned) {
+            return bodyRes;
+          }
 
-          // Perform step increment: e.g. i++ or i += 1 or i--
           const currVal = this.currentScope.get(iterVar)?.value || 0;
           let nextVal = currVal;
           if (stepExpr.includes('++')) nextVal = currVal + 1;
@@ -596,7 +951,6 @@ export class ExecutionEngine {
       }
 
       // 2. WHILE LOOP
-      // e.g. while (left < right)
       const whileMatch = trimmed.match(/^while\s*\(([^)]+)\)\s*\{?$/);
       if (whileMatch) {
         const condExpr = whileMatch[1];
@@ -621,7 +975,7 @@ export class ExecutionEngine {
         let loopSafety = 0;
         while (loopSafety < 150) {
           loopSafety++;
-          const { result, comparison } = this.evaluateCondition(condExpr, currentLineNum);
+          const { result, comparison } = this.evaluateCondition(condExpr);
           this.recordStep(
             currentLineNum,
             {
@@ -643,7 +997,10 @@ export class ExecutionEngine {
             break;
           }
 
-          this.executeBlock(bodyLines, 0, bodyLines.length, i + 1 + baseLineOffset);
+          const bodyRes = this.executeBlock(bodyLines, 0, bodyLines.length, i + 1 + baseLineOffset);
+          if (bodyRes.returned) {
+            return bodyRes;
+          }
         }
 
         i = loopEndIdx + 1;
@@ -673,7 +1030,6 @@ export class ExecutionEngine {
           thenLines.push(lines[idx]);
         }
 
-        // Check if next is else
         idx++;
         if (idx < endIdx && lines[idx].trim().startsWith('else')) {
           const elseLine = lines[idx].trim();
@@ -695,7 +1051,7 @@ export class ExecutionEngine {
           }
         }
 
-        const { result, comparison } = this.evaluateCondition(condExpr, currentLineNum);
+        const { result, comparison } = this.evaluateCondition(condExpr);
         this.recordStep(
           currentLineNum,
           {
@@ -709,9 +1065,11 @@ export class ExecutionEngine {
         );
 
         if (result) {
-          this.executeBlock(thenLines, 0, thenLines.length, i + 1 + baseLineOffset);
+          const res = this.executeBlock(thenLines, 0, thenLines.length, i + 1 + baseLineOffset);
+          if (res.returned) return res;
         } else if (elseLines.length > 0) {
-          this.executeBlock(elseLines, 0, elseLines.length, idx - elseLines.length + baseLineOffset);
+          const res = this.executeBlock(elseLines, 0, elseLines.length, idx - elseLines.length + baseLineOffset);
+          if (res.returned) return res;
         }
 
         i = idx;
@@ -719,7 +1077,6 @@ export class ExecutionEngine {
       }
 
       // 4. ARRAY INITIALIZATION
-      // e.g. int[] arr = {10, 20, 30}; or int[] arr = new int[5]; or arr = [10, 20, 30]
       const arrayInitMatch =
         trimmed.match(/^(?:int|double|String|char|long)\[\]\s+([a-zA-Z_]\w*)\s*=\s*\{([^}]*)\};?$/) ||
         trimmed.match(/^([a-zA-Z_]\w*)\s*=\s*\[([^\]]*)\];?$/);
@@ -730,7 +1087,7 @@ export class ExecutionEngine {
         const parsedVals = rawVals.map((v) => this.evaluateExpr(v) ?? 0);
         const heapId = this.allocateHeapId('Array');
 
-        const arrayState: DataStructureState = {
+        this.structures[arrName] = {
           id: heapId,
           name: arrName,
           type: 'array',
@@ -740,19 +1097,17 @@ export class ExecutionEngine {
           pointers: {},
           lastOperation: 'Created array',
         };
-        this.structures[arrName] = arrayState;
 
-        const heapObj: HeapObject = {
+        this.heap.push({
           id: heapId,
           type: 'int[]',
           label: `${arrName} (length: ${parsedVals.length})`,
           fields: { length: parsedVals.length, values: [...parsedVals] },
           estimatedBytes: 16 + parsedVals.length * 4,
           referencesTo: [],
-        };
-        this.heap.push(heapObj);
+        });
 
-        const varInfo: VariableInfo = {
+        this.currentScope.set(arrName, {
           name: arrName,
           type: 'int[]',
           value: `ref -> ${heapId}`,
@@ -760,8 +1115,7 @@ export class ExecutionEngine {
           isReference: true,
           refTargetId: heapId,
           estimatedBytes: 8,
-        };
-        this.currentScope.set(arrName, varInfo);
+        });
 
         this.recordStep(
           currentLineNum,
@@ -780,42 +1134,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 4b. 2D ARRAY (MATRIX)
-      // e.g. int[][] matrix = {{1, 2}, {3, 4}};
-      const matrixInitMatch = trimmed.match(/^(?:int|double)\[\]\[\]\s+([a-zA-Z_]\w*)\s*=\s*\{\s*\{([^}]*)\}\s*,\s*\{([^}]*)\}\s*\};?$/);
-      if (matrixInitMatch) {
-        const matName = matrixInitMatch[1];
-        const row1 = matrixInitMatch[2].split(',').map((x) => this.evaluateExpr(x.trim()));
-        const row2 = matrixInitMatch[3].split(',').map((x) => this.evaluateExpr(x.trim()));
-        const heapId = this.allocateHeapId('Matrix');
-
-        this.structures[matName] = {
-          id: heapId,
-          name: matName,
-          type: 'matrix',
-          dataType: 'int[][]',
-          matrixData: [row1, row2],
-          lastOperation: 'Created 2D matrix',
-        };
-
-        this.recordStep(
-          currentLineNum,
-          {
-            type: 'ARRAY_CREATE',
-            line: currentLineNum,
-            variable: matName,
-            structureId: heapId,
-            structureType: 'matrix',
-          },
-          `▦ Initialized 2D Matrix \`${matName}\` with dimensions 2x${row1.length}`
-        );
-
-        i++;
-        continue;
-      }
-
-      // 5. ARRAY ELEMENT UPDATE
-      // e.g. arr[i] = arr[i] * 2; or arr[1] = 50;
+      // 5. ARRAY ELEMENT UPDATE: arr[i] = ...
       const arrayUpdateMatch = trimmed.match(/^([a-zA-Z_]\w*)\[([^\]]+)\]\s*=\s*([^;]+);?$/);
       if (arrayUpdateMatch) {
         const arrName = arrayUpdateMatch[1];
@@ -841,7 +1160,6 @@ export class ExecutionEngine {
           st.activeIndices = [idx];
           st.lastOperation = `Updated arr[${idx}] = ${newVal}`;
 
-          // Update heap object as well
           const heapObj = this.heap.find((h) => h.id === st.id);
           if (heapObj) {
             heapObj.fields.values = [...st.arrayData];
@@ -867,7 +1185,6 @@ export class ExecutionEngine {
       }
 
       // 6. STACK CREATION
-      // e.g. Stack<Integer> a = new Stack<>(); or st = Stack()
       const stackCreateMatch =
         trimmed.match(/^Stack(?:<[^>]+>)?\s+([a-zA-Z_]\w*)\s*=\s*new\s+Stack(?:<[^>]*>)?\(\);?$/) ||
         trimmed.match(/^([a-zA-Z_]\w*)\s*=\s*\[\];?\s*(?:#.*stack.*)?$/i);
@@ -876,7 +1193,7 @@ export class ExecutionEngine {
         const stackName = stackCreateMatch[1];
         const heapId = this.allocateHeapId('Stack');
 
-        const stackState: DataStructureState = {
+        this.structures[stackName] = {
           id: heapId,
           name: stackName,
           type: 'stack',
@@ -885,7 +1202,6 @@ export class ExecutionEngine {
           pointers: { top: -1 },
           lastOperation: 'Created Stack',
         };
-        this.structures[stackName] = stackState;
 
         this.heap.push({
           id: heapId,
@@ -922,15 +1238,14 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 7. STACK OPERATIONS: push, pop, peek
+      // 7. STACK OPS: push, pop
       const stackPushMatch =
         trimmed.match(/^([a-zA-Z_]\w*)\.push\(([^)]+)\);?$/) ||
         trimmed.match(/^([a-zA-Z_]\w*)\.append\(([^)]+)\);?$/);
 
       if (stackPushMatch) {
         const stackName = stackPushMatch[1];
-        const valExpr = stackPushMatch[2];
-        const val = this.evaluateExpr(valExpr);
+        const val = this.evaluateExpr(stackPushMatch[2]);
         const st = this.structures[stackName];
 
         if (st && st.type === 'stack' && st.stackData) {
@@ -954,7 +1269,7 @@ export class ExecutionEngine {
               structureId: st.id,
               value: val,
             },
-            `⬇️ Pushed element \`${val}\` onto stack \`${stackName}\`. Stack height is now ${st.stackData.length}.`
+            `⬇️ Pushed element \`${val}\` onto stack \`${stackName}\`. Height: ${st.stackData.length}.`
           );
         }
 
@@ -1009,7 +1324,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 8. QUEUE CREATION & OPS: offer/poll
+      // 8. QUEUE CREATION & OPS
       const queueCreateMatch = trimmed.match(/^Queue(?:<[^>]+>)?\s+([a-zA-Z_]\w*)\s*=\s*new\s+LinkedList(?:<[^>]*>)?\(\);?$/);
       if (queueCreateMatch) {
         const queueName = queueCreateMatch[1];
@@ -1080,7 +1395,7 @@ export class ExecutionEngine {
               structureId: st.id,
               value: val,
             },
-            `👉 Enqueued \`${val}\` to the rear of queue \`${queueName}\`. Total items: ${st.queueData.length}.`
+            `👉 Enqueued \`${val}\` to rear of queue \`${queueName}\`.`
           );
         }
 
@@ -1127,35 +1442,8 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 9. LINKED LIST NODE CREATION & ASSIGNMENT
-      // e.g. Node head = new Node(10); or head.next = new Node(20); or Node node = null;
-      const nodeNullMatch = trimmed.match(/^Node\s+([a-zA-Z_]\w*)\s*=\s*null;?$/);
-      if (nodeNullMatch) {
-        const nodeName = nodeNullMatch[1];
-        this.currentScope.set(nodeName, {
-          name: nodeName,
-          type: 'Node',
-          value: null,
-          scope: this.currentScope.name,
-          isReference: true,
-          refTargetId: undefined,
-          estimatedBytes: 8,
-        });
-
-        this.recordStep(
-          currentLineNum,
-          {
-            type: 'REFERENCE_NULL',
-            line: currentLineNum,
-            variable: nodeName,
-          },
-          `⚪ Assigned \`${nodeName} ➔ null\`. The pointer holds no object address.`
-        );
-
-        i++;
-        continue;
-      }
-
+      // 9. LINKED LIST NODE CREATION & REFERENCE ASSIGNMENTS
+      // 9a. new Node(val) instantiation: Node head = new Node(10); or ans = new Node(curr2.data);
       const nodeNewMatch = trimmed.match(/^(?:Node\s+)?([a-zA-Z_]\w*(?:\.next)?)\s*=\s*new\s+Node\(([^)]*)\);?$/);
       if (nodeNewMatch) {
         const targetRef = nodeNewMatch[1];
@@ -1168,17 +1456,15 @@ export class ExecutionEngine {
           nextId: null,
         };
 
-        const heapObj: HeapObject = {
+        this.heap.push({
           id: nodeId,
           type: 'Node',
           label: `Node(${nodeVal})`,
-          fields: { val: nodeVal, next: null },
+          fields: { val: nodeVal, data: nodeVal, next: null },
           estimatedBytes: 24,
           referencesTo: [],
-        };
-        this.heap.push(heapObj);
+        });
 
-        // Ensure a linked list structure exists
         let llState = Object.values(this.structures).find((s) => s.type === 'linkedlist');
         if (!llState) {
           llState = {
@@ -1231,7 +1517,6 @@ export class ExecutionEngine {
             `🔗 Linked \`${parentName}.next ➔ ${nodeId} [val: ${nodeVal}]\``
           );
         } else {
-          // Setting head or new pointer
           if (llState.linkedListData && !llState.linkedListData.headId) {
             llState.linkedListData.headId = nodeId;
           }
@@ -1261,7 +1546,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // Pointer traversal: e.g. curr = curr.next; or head = head.next;
+      // 9b. Pointer traversal: curr = curr.next; or head = head.next;
       const pointerAdvanceMatch = trimmed.match(/^([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\.next;?$/);
       if (pointerAdvanceMatch) {
         const destPtr = pointerAdvanceMatch[1];
@@ -1307,8 +1592,66 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 10. BINARY TREE / BST NODE CREATION & LINK
-      // e.g. TreeNode root = new TreeNode(50); or root.left = new TreeNode(30);
+      // 9c. Reference Assignment / null pointer: Node curr = head; or Node ans = null; or curr2 = head;
+      const refAssignMatch = trimmed.match(/^(?:Node\s+)?([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*);?$/);
+      if (refAssignMatch && !trimmed.startsWith('int ') && !trimmed.startsWith('return ')) {
+        const destVar = refAssignMatch[1];
+        const srcExpr = refAssignMatch[2];
+
+        if (srcExpr === 'null') {
+          this.currentScope.set(destVar, {
+            name: destVar,
+            type: 'Node',
+            value: null,
+            scope: this.currentScope.name,
+            isReference: true,
+            refTargetId: undefined,
+            estimatedBytes: 8,
+          });
+
+          this.recordStep(
+            currentLineNum,
+            {
+              type: 'REFERENCE_NULL',
+              line: currentLineNum,
+              variable: destVar,
+            },
+            `⚪ Pointed \`${destVar} ➔ null\``
+          );
+
+          i++;
+          continue;
+        }
+
+        const srcVar = this.currentScope.get(srcExpr);
+        if (srcVar && srcVar.isReference) {
+          this.currentScope.set(destVar, {
+            name: destVar,
+            type: srcVar.type,
+            value: srcVar.value,
+            scope: this.currentScope.name,
+            isReference: true,
+            refTargetId: srcVar.refTargetId,
+            estimatedBytes: 8,
+          });
+
+          this.recordStep(
+            currentLineNum,
+            {
+              type: 'REFERENCE_CREATE',
+              line: currentLineNum,
+              variable: destVar,
+              value: srcVar.refTargetId,
+            },
+            `👉 Pointed reference \`${destVar}\` to \`${srcExpr}\` (${srcVar.refTargetId || 'null'})`
+          );
+
+          i++;
+          continue;
+        }
+      }
+
+      // 10. BINARY TREE CREATION & LINK
       const treeNodeMatch = trimmed.match(/^(?:TreeNode\s+)?([a-zA-Z_]\w*(?:\.(?:left|right))?)\s*=\s*new\s+TreeNode\(([^)]*)\);?$/);
       if (treeNodeMatch) {
         const targetRef = treeNodeMatch[1];
@@ -1408,7 +1751,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 11. HASHMAP CREATION & OPS: map.put(k, v), map.get(k)
+      // 11. HASHMAP
       const mapCreateMatch = trimmed.match(/^Map(?:<[^>]+>)?\s+([a-zA-Z_]\w*)\s*=\s*new\s+HashMap(?:<[^>]*>)?\(\);?$/);
       if (mapCreateMatch) {
         const mapName = mapCreateMatch[1];
@@ -1466,7 +1809,6 @@ export class ExecutionEngine {
         const st = this.structures[mapName];
 
         if (st && st.type === 'map' && st.mapData) {
-          // Simple hash calculation
           const hash = String(key)
             .split('')
             .reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) % 1000000, 0);
@@ -1490,7 +1832,7 @@ export class ExecutionEngine {
               structureId: st.id,
               values: { key, value: val, hash, bucket },
             },
-            `🗝️ Hashed key \`"${key}"\` ➔ hash: ${hash} ➔ Bucket #${bucket} ➔ Stored value \`${val}\``
+            `🗝️ Hashed key \`"${key}"\` ➔ Bucket #${bucket} ➔ Stored value \`${val}\``
           );
         }
 
@@ -1498,71 +1840,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 12. GRAPH CREATION & OPS: Graph g = new Graph(); g.addEdge(0, 1);
-      const graphCreateMatch = trimmed.match(/^Graph\s+([a-zA-Z_]\w*)\s*=\s*new\s+Graph\(\);?$/);
-      if (graphCreateMatch) {
-        const gName = graphCreateMatch[1];
-        const heapId = this.allocateHeapId('Graph');
-
-        this.structures[gName] = {
-          id: heapId,
-          name: gName,
-          type: 'graph',
-          dataType: 'Graph',
-          graphData: { nodes: [], edges: [] },
-          lastOperation: 'Created Graph',
-        };
-
-        this.recordStep(
-          currentLineNum,
-          {
-            type: 'GRAPH_NODE_CREATE',
-            line: currentLineNum,
-            variable: gName,
-            structureId: heapId,
-            structureType: 'graph',
-          },
-          `🕸️ Created directed graph structure \`${gName}\``
-        );
-
-        i++;
-        continue;
-      }
-
-      const graphEdgeMatch = trimmed.match(/^([a-zA-Z_]\w*)\.addEdge\(([^,]+),\s*([^)]+)\);?$/);
-      if (graphEdgeMatch) {
-        const gName = graphEdgeMatch[1];
-        const u = String(this.evaluateExpr(graphEdgeMatch[2]));
-        const v = String(this.evaluateExpr(graphEdgeMatch[3]));
-        const st = this.structures[gName];
-
-        if (st && st.graphData) {
-          if (!st.graphData.nodes.find((n) => n.id === u)) {
-            st.graphData.nodes.push({ id: u, label: u });
-          }
-          if (!st.graphData.nodes.find((n) => n.id === v)) {
-            st.graphData.nodes.push({ id: v, label: v });
-          }
-          st.graphData.edges.push({ source: u, target: v, directed: true });
-
-          this.recordStep(
-            currentLineNum,
-            {
-              type: 'GRAPH_EDGE_CREATE',
-              line: currentLineNum,
-              variable: gName,
-              values: { from: u, to: v },
-            },
-            `🔗 Added directed edge from node \`${u}\` ➔ \`${v}\``
-          );
-        }
-
-        i++;
-        continue;
-      }
-
-      // 13. PRINT / CONSOLE OUTPUT
-      // e.g. System.out.println("Hello"); or print("Hello")
+      // 12. PRINT / CONSOLE
       const printMatch = trimmed.match(/^(?:System\.out\.println|System\.out\.print|print)\s*\((.*)\);?$/);
       if (printMatch) {
         const printExpr = printMatch[1];
@@ -1577,16 +1855,15 @@ export class ExecutionEngine {
             line: currentLineNum,
             message: outText,
           },
-          `📢 Printed output to console: "${outText}"`
+          `📢 Printed output: "${outText}"`
         );
 
         i++;
         continue;
       }
 
-      // 14. FUNCTION CALL & RECURSION
-      // e.g. int result = factorial(4); or factorial(n - 1)
-      const funcCallAssignMatch = trimmed.match(/^(?:(?:int|double|String|var)\s+)?([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\(([^)]*)\);?$/);
+      // 13. FUNCTION CALL
+      const funcCallAssignMatch = trimmed.match(/^(?:(?:int|double|String|var|Node)\s+)?([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\(([^)]*)\);?$/);
       if (funcCallAssignMatch && this.functions[funcCallAssignMatch[2]]) {
         const destVar = funcCallAssignMatch[1];
         const funcName = funcCallAssignMatch[2];
@@ -1594,11 +1871,10 @@ export class ExecutionEngine {
         const funcDef = this.functions[funcName];
 
         const evaluatedArgs: Record<string, any> = {};
-        funcDef.params.forEach((paramName, idx) => {
-          evaluatedArgs[paramName] = this.evaluateExpr(argStrings[idx]) ?? 0;
+        funcDef.params.forEach((param, pIdx) => {
+          evaluatedArgs[param.name] = this.evaluateExpr(argStrings[pIdx]) ?? 0;
         });
 
-        // Depth check
         if (this.callStack.length > 30) {
           throw {
             type: 'RuntimeError',
@@ -1607,22 +1883,18 @@ export class ExecutionEngine {
           };
         }
 
-        const newFrame: CallFrame = {
+        this.callStack.push({
           id: `frame-${this.callStack.length + 1}`,
           functionName: `${funcName}(${Object.values(evaluatedArgs).join(', ')})`,
           arguments: evaluatedArgs,
           localVariables: {},
           line: funcDef.startLine,
           depth: this.callStack.length + 1,
-        };
+        });
 
-        this.callStack.push(newFrame);
-
-        // Create scope for function
-        const parentScope = this.currentScope;
-        this.currentScope = new Scope(funcName, parentScope);
+        const childScope = new Scope(funcName, this.currentScope);
         for (const [pName, pVal] of Object.entries(evaluatedArgs)) {
-          this.currentScope.set(pName, {
+          childScope.set(pName, {
             name: pName,
             type: typeof pVal === 'number' ? 'int' : 'Object',
             value: pVal,
@@ -1632,6 +1904,9 @@ export class ExecutionEngine {
           });
         }
 
+        const parentScope = this.currentScope;
+        this.currentScope = childScope;
+
         this.recordStep(
           currentLineNum,
           {
@@ -1640,21 +1915,19 @@ export class ExecutionEngine {
             functionName: funcName,
             arguments: evaluatedArgs,
           },
-          `📞 Call \`${funcName}(${Object.entries(evaluatedArgs).map(([k, v]) => `${k}=${v}`).join(', ')})\` (Call stack depth: ${this.callStack.length})`
+          `📞 Call \`${funcName}(${Object.entries(evaluatedArgs).map(([k, v]) => `${k}=${v}`).join(', ')})\``
         );
 
-        // Execute function body
-        const returnVal = this.executeFunctionBody(funcDef.body, funcDef.startLine);
+        const subRes = this.executeBlock(funcDef.body, 0, funcDef.body.length, funcDef.startLine);
 
-        // Pop frame & revert scope
         this.callStack.pop();
         this.currentScope = parentScope;
 
-        if (destVar) {
+        if (destVar && subRes.value !== undefined) {
           this.currentScope.set(destVar, {
             name: destVar,
-            type: typeof returnVal === 'number' ? 'int' : 'Object',
-            value: returnVal,
+            type: typeof subRes.value === 'number' ? 'int' : 'Object',
+            value: subRes.value,
             scope: this.currentScope.name,
             isReference: false,
             estimatedBytes: 4,
@@ -1667,17 +1940,16 @@ export class ExecutionEngine {
             type: 'FUNCTION_RETURN',
             line: currentLineNum,
             functionName: funcName,
-            returnValue: returnVal,
+            returnValue: subRes.value,
           },
-          `🔙 \`${funcName}\` returned \`${returnVal}\`. Popped stack frame.`
+          `🔙 \`${funcName}\` returned \`${subRes.value}\`.`
         );
 
         i++;
         continue;
       }
 
-      // 15. PRIMITIVE VARIABLE DECLARATION / UPDATE
-      // e.g. int temp = arr[i]; or left++; or x = 10;
+      // 14. PRIMITIVE VARIABLE DECLARATION: int count = 0; or int count=0;
       const primDeclMatch = trimmed.match(/^(?:int|double|boolean|char|String|long)\s+([a-zA-Z_]\w*)\s*=\s*([^;]+);?$/);
       if (primDeclMatch) {
         const vName = primDeclMatch[1];
@@ -1685,15 +1957,14 @@ export class ExecutionEngine {
         const val = this.evaluateExpr(vExpr);
         const vType = typeof val === 'number' ? 'int' : typeof val === 'boolean' ? 'boolean' : 'String';
 
-        const varInfo: VariableInfo = {
+        this.currentScope.set(vName, {
           name: vName,
           type: vType,
           value: val,
           scope: this.currentScope.name,
           isReference: false,
           estimatedBytes: estimateSize(vType, val),
-        };
-        this.currentScope.set(vName, varInfo);
+        });
 
         this.recordStep(
           currentLineNum,
@@ -1704,14 +1975,41 @@ export class ExecutionEngine {
             dataType: vType,
             value: val,
           },
-          `Declared variable \`${vName}\` = ${val}`
+          `Declared \`${vName} = ${val}\``
         );
 
         i++;
         continue;
       }
 
-      // Simple assignment: x = y; or x++; or x--;
+      // 15. SIMPLE ASSIGNMENT OR INCREMENT / DECREMENT
+      const incDecMatch = trimmed.match(/^([a-zA-Z_]\w*)(\+\+|--);?$/);
+      if (incDecMatch) {
+        const vName = incDecMatch[1];
+        const op = incDecMatch[2];
+        const existing = this.currentScope.get(vName);
+        if (existing) {
+          const oldVal = existing.value;
+          const newVal = op === '++' ? oldVal + 1 : oldVal - 1;
+          this.currentScope.set(vName, { ...existing, value: newVal });
+
+          this.recordStep(
+            currentLineNum,
+            {
+              type: 'VARIABLE_UPDATE',
+              line: currentLineNum,
+              variable: vName,
+              oldValue: oldVal,
+              newValue: newVal,
+            },
+            `Incremented \`${vName}\`: ${oldVal} ➔ ${newVal}`
+          );
+        }
+
+        i++;
+        continue;
+      }
+
       const assignMatch = trimmed.match(/^([a-zA-Z_]\w*)\s*=\s*([^;]+);?$/);
       if (assignMatch) {
         const vName = assignMatch[1];
@@ -1760,131 +2058,10 @@ export class ExecutionEngine {
         continue;
       }
 
-      const incDecMatch = trimmed.match(/^([a-zA-Z_]\w*)(\+\+|--);?$/);
-      if (incDecMatch) {
-        const vName = incDecMatch[1];
-        const op = incDecMatch[2];
-        const existing = this.currentScope.get(vName);
-        if (existing) {
-          const oldVal = existing.value;
-          const newVal = op === '++' ? oldVal + 1 : oldVal - 1;
-          this.currentScope.set(vName, { ...existing, value: newVal });
-
-          this.recordStep(
-            currentLineNum,
-            {
-              type: 'VARIABLE_UPDATE',
-              line: currentLineNum,
-              variable: vName,
-              oldValue: oldVal,
-              newValue: newVal,
-            },
-            `Incremented \`${vName}\`: ${oldVal} ➔ ${newVal}`
-          );
-        }
-
-        i++;
-        continue;
-      }
-
-      // Default: move to next line
+      // Default: advance to next line
       i++;
     }
-  }
 
-  private executeFunctionBody(lines: string[], startLine: number): any {
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      const currentLineNum = startLine + i + 1;
-
-      // Handle return
-      const retMatch = line.match(/^return(?:\s+([^;]+))?;?$/);
-      if (retMatch) {
-        const retExpr = retMatch[1];
-        // Recursive call in return: e.g. return n * factorial(n - 1);
-        const recCallMatch = retExpr ? retExpr.match(/([a-zA-Z_]\w*)\(([^)]*)\)/) : null;
-        if (recCallMatch && this.functions[recCallMatch[1]]) {
-          const recFuncName = recCallMatch[1];
-          const recArgStr = recCallMatch[2];
-          const recArgVal = this.evaluateExpr(recArgStr);
-
-          // Recursively invoke
-          const newFrame: CallFrame = {
-            id: `frame-${this.callStack.length + 1}`,
-            functionName: `${recFuncName}(${recArgVal})`,
-            arguments: { [this.functions[recFuncName].params[0] || 'n']: recArgVal },
-            localVariables: {},
-            line: this.functions[recFuncName].startLine,
-            depth: this.callStack.length + 1,
-          };
-          this.callStack.push(newFrame);
-
-          const childScope = new Scope(recFuncName, this.currentScope);
-          childScope.set(this.functions[recFuncName].params[0] || 'n', {
-            name: this.functions[recFuncName].params[0] || 'n',
-            type: 'int',
-            value: recArgVal,
-            scope: recFuncName,
-            isReference: false,
-            estimatedBytes: 4,
-          });
-
-          const prevScope = this.currentScope;
-          this.currentScope = childScope;
-
-          this.recordStep(
-            currentLineNum,
-            {
-              type: 'FUNCTION_CALL',
-              line: currentLineNum,
-              functionName: recFuncName,
-              arguments: { n: recArgVal },
-            },
-            `📞 Recursive call: \`${recFuncName}(${recArgVal})\``
-          );
-
-          const subResult = this.executeFunctionBody(this.functions[recFuncName].body, this.functions[recFuncName].startLine);
-
-          this.callStack.pop();
-          this.currentScope = prevScope;
-
-          // Replace recursive call in expression
-          const combinedExpr = retExpr.replace(recCallMatch[0], String(subResult));
-          const finalVal = this.evaluateExpr(combinedExpr);
-          return finalVal;
-        }
-
-        const evaluated = retExpr ? this.evaluateExpr(retExpr) : undefined;
-        return evaluated;
-      }
-
-      // If condition inside function
-      const ifMatch = line.match(/^if\s*\(([^)]+)\)\s*\{?([^}]*)\}?$/);
-      if (ifMatch) {
-        const cond = ifMatch[1];
-        const inlineBody = ifMatch[2].trim();
-        const { result, comparison } = this.evaluateCondition(cond, currentLineNum);
-
-        this.recordStep(
-          currentLineNum,
-          {
-            type: 'CONDITION_EVALUATE',
-            line: currentLineNum,
-            condition: cond,
-            conditionResult: result,
-          },
-          comparison.explanation,
-          comparison
-        );
-
-        if (result) {
-          if (inlineBody.startsWith('return')) {
-            const valExpr = inlineBody.replace(/^return\s*/, '').replace(/;$/, '');
-            return this.evaluateExpr(valExpr);
-          }
-        }
-      }
-    }
-    return undefined;
+    return { returned: false, value: undefined };
   }
 }
