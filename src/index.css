@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #21262d;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #30363d;
+}
+
+/* Smooth transitions for elements */
+.transition-all-200 {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.transition-all-300 {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Pulse animation for active pointer */
+@keyframes activePointerPulse {
+  0%, 100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 4px #58a6ff);
+  }
+  50% {
+    transform: translateY(-4px);
+    filter: drop-shadow(0 0 10px #58a6ff);
+  }
+}
+
+.animate-pointer {
+  animation: activePointerPulse 1.2s ease-in-out infinite;
+}
+
+/* Glowing border highlights */
+.glow-accent {
+  box-shadow: 0 0 15px rgba(88, 166, 255, 0.35);
+}
+
+.glow-success {
+  box-shadow: 0 0 15px rgba(63, 185, 80, 0.35);
+}
+
+.glow-warning {
+  box-shadow: 0 0 15px rgba(210, 153, 34, 0.35);
+}
+
+.glow-error {
+  box-shadow: 0 0 15px rgba(248, 81, 73, 0.45);
+}
+
+/* Glassmorphism panel styling */
+.glass-panel {
+  background: rgba(22, 27, 34, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+}
