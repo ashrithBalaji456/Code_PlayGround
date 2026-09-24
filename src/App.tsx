@@ -10,8 +10,9 @@ import { ConsolePanel } from './components/panels/ConsolePanel';
 import { LearningModePanel } from './components/panels/LearningModePanel';
 import { HelpModal } from './components/HelpModal';
 import { CODE_PRESETS } from './presets';
-import { CodePreset, SupportedLanguage, ExecutionStep } from './types/execution';
+import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
+import { reconstructExecutionSteps } from './engine/stateReconstructor';
 import { Variable, Cpu, Layers, Terminal } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -22,6 +23,10 @@ export function App() {
 
   const [steps, setSteps] = useState<ExecutionStep[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(-1);
+  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>('IDLE');
+  const [workerName, setWorkerName] = useState<string>('Java 22.0.1 (JVM Sandboxed)');
+  const [compilationError, setCompilationError] = useState<{ line: number; message: string; detail: string } | null>(null);
+
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(1);
@@ -40,17 +45,100 @@ export function App() {
       ? steps[currentStepIndex]
       : null;
 
-  // Run interpreter on current code
-  const handleRun = useCallback(() => {
-    const engine = new ExecutionEngine();
-    const recordedSteps = engine.execute(code, language);
-    setSteps(recordedSteps);
+  // Active line
+  const activeLine: number | null = currentStep ? currentStep.line : (compilationError ? compilationError.line : null);
 
-    if (recordedSteps.length > 0) {
-      setCurrentStepIndex(0);
-      setIsRunning(true);
-      setIsPaused(false);
-      setConsoleOutput(recordedSteps[0].consoleOutput || []);
+  // Run via real Java execution worker with graceful client fallback
+  const handleRun = useCallback(async () => {
+    setExecutionStatus('COMPILING');
+    setCompilationError(null);
+    setIsRunning(true);
+    setIsPaused(false);
+    if (playTimerRef.current) clearInterval(playTimerRef.current);
+
+    try {
+      const response = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, language }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && Array.isArray(result.events)) {
+        const recordedSteps = reconstructExecutionSteps(result.events, code);
+        setSteps(recordedSteps);
+        setWorkerName(result.worker || 'Java 22.0.1 (JVM Sandboxed)');
+        setExecutionStatus('RUNNING');
+
+        if (recordedSteps.length > 0) {
+          setCurrentStepIndex(0);
+          setConsoleOutput(recordedSteps[0].consoleOutput || []);
+        } else {
+          setCurrentStepIndex(-1);
+          setExecutionStatus('COMPLETED');
+          setIsRunning(false);
+        }
+      } else if (result.error) {
+        // Genuine compilation or runtime error from javac / java
+        setExecutionStatus('ERROR');
+        setIsRunning(false);
+        setIsPaused(false);
+        setCompilationError({
+          line: result.error.line || 1,
+          message: result.error.message || 'Execution error',
+          detail: result.error.detail || '',
+        });
+
+        const errorStep: ExecutionStep = {
+          stepIndex: 0,
+          totalSteps: 1,
+          line: result.error.line || 1,
+          event: {
+            type: 'EXCEPTION',
+            line: result.error.line || 1,
+            message: result.error.message,
+            detail: result.error.detail,
+          },
+          explanation: `${result.error.type || 'Error'} on Line ${result.error.line}: ${result.error.message}`,
+          variables: {},
+          callStack: [],
+          structures: {},
+          heap: [],
+          consoleOutput: [result.error.detail || result.error.message],
+          activePointers: {},
+          comparison: null,
+          error: {
+            type: result.error.type?.includes('Compilation') ? 'SyntaxError' : 'RuntimeError',
+            line: result.error.line || 1,
+            message: result.error.message,
+            detail: result.error.detail,
+          },
+          memoryStats: { stackBytes: 0, heapBytes: 0, totalBytes: 0 },
+        };
+        setSteps([errorStep]);
+        setCurrentStepIndex(0);
+        setConsoleOutput([result.error.detail || result.error.message]);
+      } else {
+        throw new Error('Unknown response structure');
+      }
+    } catch (err: any) {
+      // Offline fallback: Use client-side ExecutionEngine
+      console.warn('Backend unavailable, using client-side execution engine fallback:', err);
+      const engine = new ExecutionEngine();
+      const recordedSteps = engine.execute(code, language);
+      setSteps(recordedSteps);
+      setWorkerName('Client Engine Fallback');
+      setExecutionStatus('RUNNING');
+
+      if (recordedSteps.length > 0) {
+        setCurrentStepIndex(0);
+        setConsoleOutput(recordedSteps[0].consoleOutput || []);
+      }
     }
   }, [code, language]);
 
@@ -65,6 +153,7 @@ export function App() {
       if (next === steps.length - 1) {
         setIsRunning(false);
         setIsPaused(false);
+        setExecutionStatus('COMPLETED');
         if (steps[next].event.type !== 'EXCEPTION') {
           confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
         }
@@ -79,16 +168,19 @@ export function App() {
 
   const handlePause = useCallback(() => {
     setIsPaused(true);
+    setExecutionStatus('PAUSED');
     if (playTimerRef.current) clearInterval(playTimerRef.current);
   }, []);
 
   const handleResume = useCallback(() => {
     setIsPaused(false);
+    setExecutionStatus('RUNNING');
   }, []);
 
   const handleStop = useCallback(() => {
     setIsRunning(false);
     setIsPaused(false);
+    setExecutionStatus('STOPPED');
     if (playTimerRef.current) clearInterval(playTimerRef.current);
   }, []);
 
@@ -97,6 +189,7 @@ export function App() {
       setCurrentStepIndex(0);
       setIsRunning(false);
       setIsPaused(false);
+      setExecutionStatus('IDLE');
       if (playTimerRef.current) clearInterval(playTimerRef.current);
     }
   }, [steps]);
@@ -120,13 +213,14 @@ export function App() {
     setCurrentStepIndex(-1);
     setIsRunning(false);
     setIsPaused(false);
+    setExecutionStatus('IDLE');
+    setCompilationError(null);
     setConsoleOutput([]);
     if (playTimerRef.current) clearInterval(playTimerRef.current);
   }, []);
 
   const handleLanguageChange = useCallback((newLang: SupportedLanguage) => {
     setLanguage(newLang);
-    // Find first preset matching new language
     const match = CODE_PRESETS.find((p) => p.language === newLang);
     if (match) {
       handleSelectPreset(match);
@@ -221,6 +315,9 @@ export function App() {
       <ExecutionControls
         isRunning={isRunning}
         isPaused={isPaused}
+        executionStatus={executionStatus}
+        currentLine={activeLine}
+        workerName={workerName}
         currentStepIndex={currentStepIndex}
         totalSteps={steps.length}
         speed={speed}
@@ -245,7 +342,7 @@ export function App() {
           <CodeEditor
             code={code}
             language={language}
-            currentLine={currentStep ? currentStep.line : null}
+            currentLine={activeLine}
             breakpoints={breakpoints}
             onChange={setCode}
             onToggleBreakpoint={handleToggleBreakpoint}
@@ -355,7 +452,10 @@ export function App() {
                 {/* Panel Tab View */}
                 <div className="flex-1 overflow-hidden p-2 bg-[#0d1117]/60">
                   {activeBottomTab === 'variables' && (
-                    <VariablesPanel variables={currentStep?.variables || {}} />
+                    <VariablesPanel
+                      variables={currentStep?.variables || {}}
+                      lastEvent={currentStep?.event}
+                    />
                   )}
                   {activeBottomTab === 'memory' && (
                     <MemoryPanel

@@ -1,8 +1,16 @@
-// Execution Event Model and Snapshot Types
+export type ExecutionStatus =
+  | 'IDLE'
+  | 'COMPILING'
+  | 'RUNNING'
+  | 'PAUSED'
+  | 'COMPLETED'
+  | 'ERROR'
+  | 'STOPPED';
 
 export type EventType =
   | 'PROGRAM_START'
   | 'PROGRAM_END'
+  | 'LINE_EXECUTE'
   | 'VARIABLE_CREATE'
   | 'VARIABLE_UPDATE'
   | 'VARIABLE_DELETE'
@@ -11,6 +19,7 @@ export type EventType =
   | 'ARRAY_UPDATE'
   | 'ARRAY_SWAP'
   | 'ARRAY_HIGHLIGHT'
+  | 'CONSOLE_OUTPUT'
   | 'REFERENCE_CREATE'
   | 'REFERENCE_UPDATE'
   | 'REFERENCE_NULL'
@@ -73,6 +82,9 @@ export interface ExecutionEvent {
   condition?: string;
   conditionResult?: boolean;
   message?: string;
+  arrayId?: string;
+  step?: number;
+  detail?: string;
   meta?: Record<string, any>;
 }
 

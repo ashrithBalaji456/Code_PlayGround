@@ -126,6 +126,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                     key={st.id}
                     structure={st}
                     pointers={currentStep.activePointers}
+                    lastEvent={currentStep.event}
                   />
                 );
               case 'stack':

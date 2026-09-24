@@ -10,11 +10,17 @@ import {
   CornerDownRight,
   CornerUpRight,
   ArrowRight,
+  Cpu,
+  Loader2,
 } from 'lucide-react';
+import { ExecutionStatus } from '../types/execution';
 
 interface ExecutionControlsProps {
   isRunning: boolean;
   isPaused: boolean;
+  executionStatus?: ExecutionStatus;
+  currentLine?: number | null;
+  workerName?: string;
   currentStepIndex: number;
   totalSteps: number;
   speed: number;
@@ -35,6 +41,9 @@ interface ExecutionControlsProps {
 export const ExecutionControls: React.FC<ExecutionControlsProps> = ({
   isRunning,
   isPaused,
+  executionStatus = 'IDLE',
+  currentLine,
+  workerName,
   currentStepIndex,
   totalSteps,
   speed,
@@ -163,10 +172,47 @@ export const ExecutionControls: React.FC<ExecutionControlsProps> = ({
         </button>
       </div>
 
-      {/* Timeline Scrubber & Counter */}
-      <div className="flex items-center gap-3 flex-1 max-w-md mx-2">
+      {/* Timeline Scrubber, Step Counter & Line Indicator */}
+      <div className="flex items-center gap-3 flex-1 max-w-lg mx-2">
+        {/* Status indicator */}
+        <div className="flex items-center gap-1.5">
+          {executionStatus === 'COMPILING' ? (
+            <span className="flex items-center gap-1 text-[11px] font-mono font-bold bg-[#d29922]/20 text-[#d29922] border border-[#d29922]/40 px-2 py-0.5 rounded-full animate-pulse">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Compiling
+            </span>
+          ) : executionStatus === 'RUNNING' ? (
+            <span className="flex items-center gap-1 text-[11px] font-mono font-bold bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/40 px-2 py-0.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950] animate-ping" />
+              Running
+            </span>
+          ) : executionStatus === 'PAUSED' ? (
+            <span className="text-[11px] font-mono font-bold bg-[#d29922]/20 text-[#d29922] border border-[#d29922]/40 px-2 py-0.5 rounded-full">
+              Paused
+            </span>
+          ) : executionStatus === 'COMPLETED' ? (
+            <span className="text-[11px] font-mono font-bold bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40 px-2 py-0.5 rounded-full">
+              Completed
+            </span>
+          ) : executionStatus === 'ERROR' ? (
+            <span className="text-[11px] font-mono font-bold bg-[#f85149]/20 text-[#f85149] border border-[#f85149]/40 px-2 py-0.5 rounded-full">
+              Error
+            </span>
+          ) : (
+            <span className="text-[11px] font-mono text-[#8b949e] bg-[#21262d] px-2 py-0.5 rounded-full">
+              Idle
+            </span>
+          )}
+
+          {currentLine && currentLine > 0 && (
+            <span className="text-[11px] font-mono font-bold text-[#58a6ff] bg-[#58a6ff]/10 border border-[#58a6ff]/30 px-2 py-0.5 rounded">
+              Line {currentLine}
+            </span>
+          )}
+        </div>
+
         <span className="text-xs font-mono text-[#8b949e] whitespace-nowrap min-w-[70px] text-right">
-          {hasSteps ? `${currentStepIndex + 1} / ${totalSteps}` : '0 / 0'}
+          {hasSteps ? `Step ${currentStepIndex + 1} / ${totalSteps}` : '0 / 0'}
         </span>
 
         <input
@@ -179,6 +225,13 @@ export const ExecutionControls: React.FC<ExecutionControlsProps> = ({
           className="w-full h-1.5 bg-[#21262d] rounded-lg appearance-none cursor-pointer accent-[#58a6ff] disabled:opacity-30"
           title="Drag to jump to any execution step"
         />
+
+        {workerName && (
+          <span className="hidden lg:flex items-center gap-1 text-[10px] font-mono text-[#3fb950] bg-[#3fb950]/10 border border-[#3fb950]/30 px-2 py-0.5 rounded whitespace-nowrap">
+            <Cpu className="w-3 h-3 text-[#3fb950]" />
+            {workerName}
+          </span>
+        )}
       </div>
 
       {/* Speed Slider */}

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { DataStructureState } from '../../types/execution';
-import { BarChart2, Layers } from 'lucide-react';
+import { DataStructureState, ExecutionEvent } from '../../types/execution';
+import { BarChart2, Layers, ArrowRight } from 'lucide-react';
 
 interface ArrayVisualizerProps {
   structure: DataStructureState;
   pointers: Record<string, any>;
   comparisonIndices?: number[];
   activeIndices?: number[];
+  lastEvent?: ExecutionEvent;
 }
 
 export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   structure,
   pointers,
+  lastEvent,
 }) => {
   const [viewMode, setViewMode] = useState<'boxes' | 'bars'>('boxes');
 
@@ -109,12 +111,23 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               const isComparing = structure.comparingIndices?.includes(idx);
               const isSwapping = structure.swappingIndices?.includes(idx);
 
+              const isUpdated =
+                lastEvent &&
+                lastEvent.type === 'ARRAY_UPDATE' &&
+                (lastEvent.structureId === structure.id || lastEvent.arrayId === structure.name) &&
+                lastEvent.index === idx;
+
               let borderColor = 'border-[#30363d]';
               let bgColor = 'bg-[#0d1117]';
               let textColor = 'text-[#f0f6fc]';
               let ringClass = '';
 
-              if (isActive) {
+              if (isUpdated) {
+                borderColor = 'border-[#3fb950]';
+                bgColor = 'bg-[#3fb950]/20';
+                textColor = 'text-[#3fb950]';
+                ringClass = 'ring-2 ring-[#3fb950] ring-offset-2 ring-offset-[#0d1117] animate-pulse';
+              } else if (isActive) {
                 borderColor = 'border-[#58a6ff]';
                 bgColor = 'bg-[#58a6ff]/20';
                 textColor = 'text-[#58a6ff]';
@@ -153,9 +166,21 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
 
                   {/* Array Cell */}
                   <div
-                    className={`w-14 h-14 rounded-lg flex items-center justify-center font-mono text-lg font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105`}
+                    className={`w-14 h-14 rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105`}
                   >
-                    {val}
+                    {isUpdated && lastEvent.oldValue !== undefined ? (
+                      <div className="flex flex-col items-center justify-center leading-none">
+                        <span className="text-[10px] text-[#8b949e] line-through font-mono">
+                          {lastEvent.oldValue}
+                        </span>
+                        <div className="flex items-center gap-0.5 text-xs text-[#3fb950] font-mono font-bold mt-0.5">
+                          <span>↓</span>
+                          <span>{val}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      val
+                    )}
                   </div>
 
                   {/* Index below cell */}
