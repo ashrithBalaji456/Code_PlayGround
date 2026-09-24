@@ -177,12 +177,26 @@ export class ExecutionEngine {
     this.functions = {};
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
+
+      // Skip helper data class blocks: class Node { ... }
+      if (line.match(/^(?:public\s+|private\s+|static\s+)?class\s+(?:Node|ListNode|TreeNode)\b.*\{?$/)) {
+        let depth = line.includes('{') ? 1 : 0;
+        let j = i + 1;
+        while (j < lines.length && depth > 0) {
+          if (lines[j].includes('{')) depth++;
+          if (lines[j].includes('}')) depth--;
+          j++;
+        }
+        i = j - 1;
+        continue;
+      }
+
       const funcMatchJava = line.match(
         /^(?:public\s+|private\s+|protected\s+|static\s+)*(void|int|double|boolean|String|Node|ListNode|TreeNode)\s+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*\{?$/
       );
       const funcMatchPy = line.match(/^def\s+([a-zA-Z_]\w*)\s*\(([^)]*)\)\s*:/);
 
-      if (funcMatchJava && !line.includes('main(')) {
+      if (funcMatchJava) {
         const returnType = funcMatchJava[1];
         const funcName = funcMatchJava[2];
         const rawParamStrings = funcMatchJava[3].split(',').map((p) => p.trim()).filter(Boolean);
@@ -246,6 +260,18 @@ export class ExecutionEngine {
     if ((expr.startsWith('"') && expr.endsWith('"')) || (expr.startsWith("'") && expr.endsWith("'"))) {
       return expr.slice(1, -1);
     }
+
+    // String concatenation: e.g. "Kth node from last: " + result.data
+    if (expr.includes('+') && (expr.includes('"') || expr.includes("'"))) {
+      const parts = expr.split('+');
+      return parts
+        .map((p) => {
+          const val = this.evaluateExpr(p.trim());
+          return val !== undefined ? String(val) : '';
+        })
+        .join('');
+    }
+
     // Numbers
     if (/^-?\d+$/.test(expr)) return parseInt(expr, 10);
     if (/^-?\d+\.\d+$/.test(expr)) return parseFloat(expr);
@@ -291,27 +317,56 @@ export class ExecutionEngine {
       return st && st.stackData ? st.stackData.length === 0 : true;
     }
 
-    // Node property: node.val, node.data, or node.next
-    const nodeProp = expr.match(/^([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)$/);
-    if (nodeProp) {
-      const varName = nodeProp[1];
-      const prop = nodeProp[2];
-      const v = this.currentScope.get(varName);
-      if (v && (v.value === null || v.refTargetId === undefined)) {
-        throw {
-          type: 'NullPointerException',
-          message: `Attempted to access field '${prop}' on null reference '${varName}'`,
-          variableName: varName,
-          detail: `Variable '${varName}' currently points to null. There is no object in memory to access.`,
-          brokenReference: { source: varName, target: null },
-        };
-      }
-      if (v && v.refTargetId) {
-        const heapObj = this.heap.find((h) => h.id === v.refTargetId);
-        if (heapObj && heapObj.fields) {
-          if (prop === 'data' && 'val' in heapObj.fields) return heapObj.fields.val;
-          if (prop === 'val' && 'data' in heapObj.fields) return heapObj.fields.data;
-          if (prop in heapObj.fields) return heapObj.fields[prop];
+    // Chained node property: e.g. curr.next.data or result.data or curr.val
+    if (expr.includes('.')) {
+      const parts = expr.split('.');
+      const rootVarName = parts[0];
+      const rootVar = this.currentScope.get(rootVarName);
+
+      if (rootVar) {
+        if (rootVar.value === null || !rootVar.refTargetId) {
+          throw {
+            type: 'NullPointerException',
+            message: `Attempted to access field '${parts[1]}' on null reference '${rootVarName}'`,
+            variableName: rootVarName,
+            detail: `Variable '${rootVarName}' currently points to null. There is no object in memory to access.`,
+            brokenReference: { source: rootVarName, target: null },
+          };
+        }
+
+        let currTargetId = rootVar.refTargetId;
+        for (let p = 1; p < parts.length; p++) {
+          const prop = parts[p];
+          const heapObj = this.heap.find((h) => h.id === currTargetId);
+          if (!heapObj || !heapObj.fields) {
+            throw {
+              type: 'NullPointerException',
+              message: `Attempted to access field '${prop}' on null reference`,
+              variableName: parts.slice(0, p + 1).join('.'),
+              detail: `Node reference is null.`,
+              brokenReference: { source: parts.slice(0, p + 1).join('.'), target: null },
+            };
+          }
+
+          if (p === parts.length - 1) {
+            // Leaf property
+            if ((prop === 'data' || prop === 'val') && ('data' in heapObj.fields || 'val' in heapObj.fields)) {
+              return heapObj.fields.data ?? heapObj.fields.val;
+            }
+            if (prop in heapObj.fields) return heapObj.fields[prop];
+          } else {
+            // Intermediate traversal
+            currTargetId = heapObj.fields[prop];
+            if (!currTargetId) {
+              throw {
+                type: 'NullPointerException',
+                message: `Attempted to access field '${parts[p + 1]}' on null reference`,
+                variableName: parts.slice(0, p + 1).join('.'),
+                detail: `Node reference is null.`,
+                brokenReference: { source: parts.slice(0, p + 1).join('.'), target: null },
+              };
+            }
+          }
         }
       }
     }
@@ -423,57 +478,72 @@ export class ExecutionEngine {
 
     this.extractFunctions(cleanedLines);
 
-    // Determine if user code has top-level executable statements outside function/class declarations
-    let hasTopLevelCode = false;
-    for (let i = 0; i < cleanedLines.length; i++) {
-      const trimmed = cleanedLines[i].trim();
-      if (
-        !trimmed ||
-        trimmed.startsWith('//') ||
-        trimmed.startsWith('#') ||
-        trimmed.startsWith('/*') ||
-        trimmed.startsWith('*') ||
-        trimmed.startsWith('package ') ||
-        trimmed.startsWith('import ') ||
-        trimmed.startsWith('public class ') ||
-        trimmed.startsWith('class ') ||
-        trimmed.startsWith('interface ') ||
-        trimmed === '{' ||
-        trimmed === '}'
-      ) {
-        continue;
-      }
-      // Check if it's the start of a function definition
-      if (
-        trimmed.match(
-          /^(?:public\s+|private\s+|protected\s+|static\s+)*(?:void|int|double|boolean|String|Node|ListNode|TreeNode)\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*\{?$/
-        ) ||
-        trimmed.startsWith('def ')
-      ) {
-        let depth = trimmed.includes('{') ? 1 : 0;
-        i++;
-        while (i < cleanedLines.length && depth > 0) {
-          if (cleanedLines[i].includes('{')) depth++;
-          if (cleanedLines[i].includes('}')) depth--;
-          i++;
-        }
-        continue;
-      }
-
-      hasTopLevelCode = true;
-      break;
-    }
-
     try {
-      if (!hasTopLevelCode && Object.keys(this.functions).length > 0) {
-        // Auto-harness: The user pasted a standalone method (e.g. LeetCode / GeeksForGeeks style)
-        const primaryFuncName = Object.keys(this.functions)[0];
-        const primaryFunc = this.functions[primaryFuncName];
-
-        this.synthesizeTestInputAndExecute(primaryFunc);
+      // 1. If main method exists, execute main method as entry point
+      if (this.functions['main']) {
+        const mainFunc = this.functions['main'];
+        this.recordStep(
+          mainFunc.startLine,
+          {
+            type: 'FUNCTION_CALL',
+            line: mainFunc.startLine,
+            functionName: 'main',
+            arguments: {},
+          },
+          '🚀 Entering public static void main(String[] args) entry point.'
+        );
+        this.executeBlock(mainFunc.body, 0, mainFunc.body.length, mainFunc.startLine);
       } else {
-        // Normal top-level execution
-        this.executeBlock(cleanedLines, 0, cleanedLines.length, 1);
+        // 2. Determine if user code has top-level executable statements outside function/class declarations
+        let hasTopLevelCode = false;
+        for (let i = 0; i < cleanedLines.length; i++) {
+          const trimmed = cleanedLines[i].trim();
+          if (
+            !trimmed ||
+            trimmed.startsWith('//') ||
+            trimmed.startsWith('#') ||
+            trimmed.startsWith('/*') ||
+            trimmed.startsWith('*') ||
+            trimmed.startsWith('package ') ||
+            trimmed.startsWith('import ') ||
+            trimmed.startsWith('public class ') ||
+            trimmed.startsWith('class ') ||
+            trimmed.startsWith('interface ') ||
+            trimmed === '{' ||
+            trimmed === '}'
+          ) {
+            continue;
+          }
+          // Check if it's the start of a function definition
+          if (
+            trimmed.match(
+              /^(?:public\s+|private\s+|protected\s+|static\s+)*(?:void|int|double|boolean|String|Node|ListNode|TreeNode)\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*\{?$/
+            ) ||
+            trimmed.startsWith('def ')
+          ) {
+            let depth = trimmed.includes('{') ? 1 : 0;
+            i++;
+            while (i < cleanedLines.length && depth > 0) {
+              if (cleanedLines[i].includes('{')) depth++;
+              if (cleanedLines[i].includes('}')) depth--;
+              i++;
+            }
+            continue;
+          }
+
+          hasTopLevelCode = true;
+          break;
+        }
+
+        if (!hasTopLevelCode && Object.keys(this.functions).length > 0) {
+          // Auto-harness: The user pasted a standalone method without main
+          const primaryFuncName = Object.keys(this.functions)[0];
+          const primaryFunc = this.functions[primaryFuncName];
+          this.synthesizeTestInputAndExecute(primaryFunc);
+        } else {
+          // Normal top-level execution
+          this.executeBlock(cleanedLines, 0, cleanedLines.length, 1);
+        }
       }
     } catch (err: any) {
       const errLine = err.line || 1;
@@ -527,7 +597,6 @@ export class ExecutionEngine {
       const pName = param.name;
 
       if (pType.includes('node') || pType.includes('listnode')) {
-        // Construct Linked List 10 -> 20 -> 30 -> 40 -> 50
         const values = [10, 20, 30, 40, 50];
         let headId: string | null = null;
         let prevNode: LinkedListNode | null = null;
@@ -579,7 +648,6 @@ export class ExecutionEngine {
 
         inputDescriptions.push(`${pName} = [10 ➔ 20 ➔ 30 ➔ 40 ➔ 50]`);
       } else if (pType.includes('tree') || pType.includes('treenode')) {
-        // Construct 5-node BST
         const rootId = this.allocateHeapId('TreeNode');
         const lId = this.allocateHeapId('TreeNode');
         const rId = this.allocateHeapId('TreeNode');
@@ -706,7 +774,6 @@ export class ExecutionEngine {
       `⚡ Auto-harness initialized test inputs: ${inputDescriptions.join(', ')} and invoked \`${funcDef.name}()\`.`
     );
 
-    // Call frame
     this.callStack.push({
       id: `frame-${this.callStack.length + 1}`,
       functionName: `${funcDef.name}(${Object.values(evaluatedArgs).join(', ')})`,
@@ -800,21 +867,14 @@ export class ExecutionEngine {
       if (
         trimmed.match(
           /^(?:public\s+|private\s+|protected\s+|static\s+)*(?:void|int|double|boolean|String|Node|ListNode|TreeNode)\s+[a-zA-Z_]\w*\s*\([^)]*\)\s*\{?$/
-        ) &&
-        !trimmed.includes('main(')
+        ) ||
+        trimmed.startsWith('def ')
       ) {
         let depth = trimmed.includes('{') ? 1 : 0;
         i++;
         while (i < endIdx && depth > 0) {
           if (lines[i].includes('{')) depth++;
           if (lines[i].includes('}')) depth--;
-          i++;
-        }
-        continue;
-      }
-      if (trimmed.startsWith('def ')) {
-        i++;
-        while (i < endIdx && (lines[i].startsWith('  ') || lines[i].startsWith('\t') || !lines[i].trim())) {
           i++;
         }
         continue;
@@ -1134,7 +1194,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 5. ARRAY ELEMENT UPDATE: arr[i] = ...
+      // 5. ARRAY ELEMENT UPDATE
       const arrayUpdateMatch = trimmed.match(/^([a-zA-Z_]\w*)\[([^\]]+)\]\s*=\s*([^;]+);?$/);
       if (arrayUpdateMatch) {
         const arrName = arrayUpdateMatch[1];
@@ -1443,8 +1503,13 @@ export class ExecutionEngine {
       }
 
       // 9. LINKED LIST NODE CREATION & REFERENCE ASSIGNMENTS
-      // 9a. new Node(val) instantiation: Node head = new Node(10); or ans = new Node(curr2.data);
-      const nodeNewMatch = trimmed.match(/^(?:Node\s+)?([a-zA-Z_]\w*(?:\.next)?)\s*=\s*new\s+Node\(([^)]*)\);?$/);
+      // Supports single and multi-level chained allocation:
+      // Node head = new Node(10);
+      // head.next = new Node(20);
+      // head.next.next = new Node(30);
+      // head.next.next.next = new Node(40);
+      // head.next.next.next.next = new Node(50);
+      const nodeNewMatch = trimmed.match(/^(?:Node\s+)?([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\s*=\s*new\s+Node\(([^)]*)\);?$/);
       if (nodeNewMatch) {
         const targetRef = nodeNewMatch[1];
         const nodeVal = this.evaluateExpr(nodeNewMatch[2]) ?? 0;
@@ -1483,24 +1548,42 @@ export class ExecutionEngine {
           llState.linkedListData.nodes[nodeId] = newNode;
         }
 
-        if (targetRef.includes('.next')) {
-          const parentName = targetRef.split('.next')[0];
-          const parentVar = this.currentScope.get(parentName);
-          if (!parentVar || !parentVar.refTargetId) {
+        if (targetRef.includes('.')) {
+          const parts = targetRef.split('.');
+          const rootVarName = parts[0];
+          const rootVar = this.currentScope.get(rootVarName);
+
+          if (!rootVar || !rootVar.refTargetId) {
             throw {
               type: 'NullPointerException',
-              message: `Cannot assign .next because '${parentName}' is null`,
-              variableName: parentName,
-              detail: `Target variable '${parentName}' holds null address.`,
-              brokenReference: { source: parentName, target: null },
+              message: `Cannot assign property because '${rootVarName}' is null`,
+              variableName: rootVarName,
+              detail: `'${rootVarName}' holds null reference.`,
+              brokenReference: { source: rootVarName, target: null },
             };
           }
 
-          const parentNode = llState.linkedListData?.nodes[parentVar.refTargetId];
+          let currTargetId = rootVar.refTargetId;
+          for (let p = 1; p < parts.length - 1; p++) {
+            const prop = parts[p];
+            const currHeap = this.heap.find((h) => h.id === currTargetId);
+            if (!currHeap || !currHeap.fields[prop]) {
+              throw {
+                type: 'NullPointerException',
+                message: `Cannot read field '${prop}' on null reference`,
+                variableName: parts.slice(0, p + 1).join('.'),
+                detail: `Intermediate node pointer is null.`,
+                brokenReference: { source: parts.slice(0, p + 1).join('.'), target: null },
+              };
+            }
+            currTargetId = currHeap.fields[prop];
+          }
+
+          const parentNode = llState.linkedListData?.nodes[currTargetId];
           if (parentNode) {
             parentNode.nextId = nodeId;
           }
-          const parentHeap = this.heap.find((h) => h.id === parentVar.refTargetId);
+          const parentHeap = this.heap.find((h) => h.id === currTargetId);
           if (parentHeap) {
             parentHeap.fields.next = nodeId;
             parentHeap.referencesTo.push(nodeId);
@@ -1514,7 +1597,7 @@ export class ExecutionEngine {
               variable: targetRef,
               value: nodeVal,
             },
-            `🔗 Linked \`${parentName}.next ➔ ${nodeId} [val: ${nodeVal}]\``
+            `🔗 Linked \`${targetRef} ➔ ${nodeId} [val: ${nodeVal}]\``
           );
         } else {
           if (llState.linkedListData && !llState.linkedListData.headId) {
@@ -1546,7 +1629,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 9b. Pointer traversal: curr = curr.next; or head = head.next;
+      // 9b. Pointer traversal: curr = curr.next; or curr2 = curr2.next;
       const pointerAdvanceMatch = trimmed.match(/^([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\.next;?$/);
       if (pointerAdvanceMatch) {
         const destPtr = pointerAdvanceMatch[1];
@@ -1862,8 +1945,8 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 13. FUNCTION CALL
-      const funcCallAssignMatch = trimmed.match(/^(?:(?:int|double|String|var|Node)\s+)?([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\(([^)]*)\);?$/);
+      // 13. FUNCTION CALL: Node result = findKthFromLast(head, K);
+      const funcCallAssignMatch = trimmed.match(/^(?:(?:int|double|String|var|Node|ListNode)\s+)?([a-zA-Z_]\w*)\s*=\s*([a-zA-Z_]\w*)\(([^)]*)\);?$/);
       if (funcCallAssignMatch && this.functions[funcCallAssignMatch[2]]) {
         const destVar = funcCallAssignMatch[1];
         const funcName = funcCallAssignMatch[2];
@@ -1894,13 +1977,17 @@ export class ExecutionEngine {
 
         const childScope = new Scope(funcName, this.currentScope);
         for (const [pName, pVal] of Object.entries(evaluatedArgs)) {
+          const isRef = typeof pVal === 'string' && (pVal.startsWith('ref ->') || pVal.includes('#'));
+          const targetId = isRef ? (pVal.match(/Node#\d+/) ? pVal.match(/Node#\d+/)![0] : pVal.replace('ref -> ', '')) : undefined;
+
           childScope.set(pName, {
             name: pName,
-            type: typeof pVal === 'number' ? 'int' : 'Object',
+            type: isRef ? 'Node' : typeof pVal === 'number' ? 'int' : 'Object',
             value: pVal,
             scope: funcName,
-            isReference: false,
-            estimatedBytes: 4,
+            isReference: isRef,
+            refTargetId: targetId,
+            estimatedBytes: isRef ? 8 : 4,
           });
         }
 
@@ -1924,13 +2011,17 @@ export class ExecutionEngine {
         this.currentScope = parentScope;
 
         if (destVar && subRes.value !== undefined) {
+          const isRef = typeof subRes.value === 'string' && (subRes.value.startsWith('ref ->') || subRes.value.includes('#'));
+          const targetId = isRef ? (subRes.value.match(/Node#\d+/) ? subRes.value.match(/Node#\d+/)![0] : subRes.value.replace('ref -> ', '')) : undefined;
+
           this.currentScope.set(destVar, {
             name: destVar,
-            type: typeof subRes.value === 'number' ? 'int' : 'Object',
+            type: isRef ? 'Node' : typeof subRes.value === 'number' ? 'int' : 'Object',
             value: subRes.value,
             scope: this.currentScope.name,
-            isReference: false,
-            estimatedBytes: 4,
+            isReference: isRef,
+            refTargetId: targetId,
+            estimatedBytes: isRef ? 8 : 4,
           });
         }
 
@@ -1949,7 +2040,7 @@ export class ExecutionEngine {
         continue;
       }
 
-      // 14. PRIMITIVE VARIABLE DECLARATION: int count = 0; or int count=0;
+      // 14. PRIMITIVE VARIABLE DECLARATION: int count = 0;
       const primDeclMatch = trimmed.match(/^(?:int|double|boolean|char|String|long)\s+([a-zA-Z_]\w*)\s*=\s*([^;]+);?$/);
       if (primDeclMatch) {
         const vName = primDeclMatch[1];
