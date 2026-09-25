@@ -19,6 +19,9 @@ export type EventType =
   | 'ARRAY_UPDATE'
   | 'ARRAY_SWAP'
   | 'ARRAY_HIGHLIGHT'
+  | 'MATRIX_CREATE'
+  | 'MATRIX_UPDATE'
+  | 'MATRIX_ACCESS'
   | 'CONSOLE_OUTPUT'
   | 'REFERENCE_CREATE'
   | 'REFERENCE_UPDATE'
@@ -515,9 +518,13 @@ export interface DataStructureState {
     cycleEdges?: string[];
   };
   metadata?: Record<string, any>;
+  createdAtStep?: number;
+  lastUpdatedStep?: number;
+  stateCategory?: 'RUNTIME_STATE' | 'CONCEPTUAL_VIEW';
   // Visual indicators
   activeIndices?: number[];
   comparingIndices?: number[];
+  highlightedIndices?: any[];
   swappingIndices?: [number, number];
   pointers?: Record<string, number | string>; // e.g. { i: 2, top: 1, head: "node-1" }
   pointerBadges?: Record<number, string[]>; // e.g. { 0: ['L', 'start'], 4: ['R', 'end'] }

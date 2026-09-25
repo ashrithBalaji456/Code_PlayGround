@@ -370,6 +370,45 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      case 'MATRIX_CREATE': {
+        const matId = ev.structureId || ev.variable || 'matrix';
+        const mat = Array.isArray(ev.values) ? ev.values : [];
+        const rows = mat.length;
+        const cols = rows > 0 && Array.isArray(mat[0]) ? mat[0].length : 0;
+        nextStructures[matId] = {
+          id: matId,
+          name: ev.variable || matId,
+          type: 'matrix',
+          dataType: ev.dataType || 'int[][]',
+          size: rows * cols,
+          matrixData: mat.map((r: any[]) => [...r]),
+          createdAtStep: ev.step || 0,
+          lastUpdatedStep: ev.step || 0,
+          lastOperation: `Allocated int[${rows}][${cols}]`,
+          stateCategory: 'RUNTIME_STATE',
+        };
+        if (nextVariables[matId]) {
+          nextVariables[matId].value = `[${rows}x${cols} Matrix]`;
+        }
+        explanation = `Initialized 2D Matrix ${matId} [${rows}x${cols}]`;
+        break;
+      }
+
+      case 'MATRIX_UPDATE': {
+        const matId = ev.structureId || ev.variable || 'matrix';
+        const st = nextStructures[matId];
+        const r = ev.row ?? 0;
+        const c = ev.col ?? 0;
+        if (st && st.matrixData) {
+          if (!st.matrixData[r]) st.matrixData[r] = [];
+          st.matrixData[r][c] = ev.newValue;
+          st.lastUpdatedStep = ev.step || 0;
+          st.lastOperation = `${matId}[${r}][${c}] = ${ev.newValue}`;
+        }
+        explanation = `Updated matrix ${matId}[${r}][${c}] from ${ev.oldValue} to ${ev.newValue}`;
+        break;
+      }
+
       // === STACK ===
       case 'STACK_CREATE': {
         nextStructures[stId] = {
@@ -3263,10 +3302,35 @@ export function reconstructExecutionSteps(
         nextAlgorithmState.category = 'Dynamic Programming';
         const rows = ev.dimensions?.[0] ?? ev.low ?? 10;
         const cols = ev.dimensions?.[1] ?? ev.high ?? 0;
+        const structId = ev.dpId || ev.structureId || 'dp';
         if (cols > 0) {
           nextAlgorithmState.dpTable2D = Array.from({ length: rows }, () => Array(cols).fill(0));
+          nextStructures[structId] = {
+            id: structId,
+            name: structId,
+            type: 'matrix',
+            dataType: 'int[][] (DP Table)',
+            size: rows * cols,
+            matrixData: nextAlgorithmState.dpTable2D.map(row => [...row]),
+            createdAtStep: ev.step || 0,
+            lastUpdatedStep: ev.step || 0,
+            lastOperation: `Allocated 2D DP Table [${rows}x${cols}]`,
+            stateCategory: 'RUNTIME_STATE',
+          };
         } else {
           nextAlgorithmState.dpTable1D = Array(rows).fill(0);
+          nextStructures[structId] = {
+            id: structId,
+            name: structId,
+            type: 'array',
+            dataType: 'int[] (DP Table)',
+            size: rows,
+            arrayData: [...nextAlgorithmState.dpTable1D],
+            createdAtStep: ev.step || 0,
+            lastUpdatedStep: ev.step || 0,
+            lastOperation: `Allocated 1D DP Table [${rows}]`,
+            stateCategory: 'RUNTIME_STATE',
+          };
         }
         explanation = `Initialized DP state table (${nextAlgorithmState.dpType}: ${rows}${cols > 0 ? `x${cols}` : ' cells'})`;
         break;
@@ -3277,6 +3341,10 @@ export function reconstructExecutionSteps(
         const r = ev.row ?? (ev.stateKey !== undefined ? parseInt(String(ev.stateKey).replace(/[^0-9]/g, '')) : 0);
         const c = ev.col ?? 0;
         nextAlgorithmState.dpCurrentCell = [r, c];
+        const structId = ev.dpId || ev.structureId || 'dp';
+        if (nextStructures[structId]) {
+          nextStructures[structId].activeIndices = [r * ((nextStructures[structId].matrixData?.[0]?.length) || 1) + c];
+        }
         explanation = `Read DP state at [${r}${c > 0 ? `,${c}` : ''}]: ${ev.value}`;
         break;
       }
@@ -3297,6 +3365,19 @@ export function reconstructExecutionSteps(
           try {
             nextAlgorithmState.dpPreviousCells = typeof ev.path === 'string' ? JSON.parse(ev.path) : ev.path;
           } catch (_) {}
+        }
+        const structId = ev.dpId || ev.structureId || 'dp';
+        if (nextStructures[structId]) {
+          const st = nextStructures[structId];
+          st.lastUpdatedStep = ev.step || 0;
+          st.lastOperation = `dp[${r}][${c}] = ${ev.value}`;
+          if (nextAlgorithmState.dpTable2D) {
+            st.matrixData = nextAlgorithmState.dpTable2D.map(row => [...row]);
+            st.highlightedIndices = [r * (st.matrixData[0]?.length || 1) + c];
+          } else if (nextAlgorithmState.dpTable1D) {
+            st.arrayData = [...nextAlgorithmState.dpTable1D];
+            st.highlightedIndices = [r];
+          }
         }
         explanation = `DP Transition: dp[${r}${c > 0 ? `,${c}` : ''}] = ${ev.transitionFormula || ev.value} => ${ev.value}`;
         break;
@@ -3333,6 +3414,17 @@ export function reconstructExecutionSteps(
           nextAlgorithmState.dpTable2D[br][bc] = ev.value;
         } else if (nextAlgorithmState.dpTable1D) {
           nextAlgorithmState.dpTable1D[br] = ev.value;
+        }
+        const structId = ev.dpId || ev.structureId || 'dp';
+        if (nextStructures[structId]) {
+          const st = nextStructures[structId];
+          st.lastUpdatedStep = ev.step || 0;
+          st.lastOperation = `Base Case [${br}, ${bc}] = ${ev.value}`;
+          if (nextAlgorithmState.dpTable2D) {
+            st.matrixData = nextAlgorithmState.dpTable2D.map(row => [...row]);
+          } else if (nextAlgorithmState.dpTable1D) {
+            st.arrayData = [...nextAlgorithmState.dpTable1D];
+          }
         }
         explanation = `DP Base Case: dp[${br}${bc > 0 ? `,${bc}` : ''}] = ${ev.value}`;
         break;

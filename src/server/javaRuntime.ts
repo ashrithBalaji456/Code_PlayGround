@@ -83,6 +83,33 @@ public class CodeFlowTracer {
         recordEvent("{\\"type\\":\\"ARRAY_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"arrayId\\":\\"" + name + "\\",\\"structureId\\":\\"" + name + "\\",\\"index\\":" + index + ",\\"value\\":" + val + "}");
     }
 
+    public static void matrixCreate(String name, int[][] mat, int line) {
+        StringBuilder sb = new StringBuilder("[");
+        if (mat != null) {
+            for (int i = 0; i < mat.length; i++) {
+                if (i > 0) sb.append(",");
+                sb.append("[");
+                if (mat[i] != null) {
+                    for (int j = 0; j < mat[i].length; j++) {
+                        if (j > 0) sb.append(",");
+                        sb.append(mat[i][j]);
+                    }
+                }
+                sb.append("]");
+            }
+        }
+        sb.append("]");
+        recordEvent("{\\"type\\":\\"MATRIX_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"matrix\\",\\"dataType\\":\\"int[][]\\",\\"values\\":" + sb.toString() + "}");
+    }
+
+    public static void matrixUpdate(String name, int r, int c, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"MATRIX_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"matrix\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void matrixAccess(String name, int r, int c, int val, int line) {
+        recordEvent("{\\"type\\":\\"MATRIX_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"matrix\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"value\\":" + val + "}");
+    }
+
     // === STACK ===
     public static void stackCreate(String name, String type, int line) {
         recordEvent("{\\"type\\":\\"STACK_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"stack\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");

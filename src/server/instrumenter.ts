@@ -867,6 +867,33 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     }
 
     // 3. PRIMITIVE ARRAYS (Phase 1)
+    // 3b. 2D MATRIX / GRID
+    const matrixDeclMatch = trimmed.match(/^(?:int|long|double|float)\[\]\[\]\s+([a-zA-Z_0-9]+)\s*=\s*(.+);$/);
+    if (matrixDeclMatch) {
+      const matName = matrixDeclMatch[1];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.matrixCreate("${matName}", ${matName}, ${lineNum});`);
+      continue;
+    }
+
+    const matrixAssignMatch = trimmed.match(/^([a-zA-Z_0-9]+)\[([^\]]+)\]\[([^\]]+)\]\s*=\s*(.+);$/);
+    if (matrixAssignMatch) {
+      const matName = matrixAssignMatch[1];
+      const rExpr = matrixAssignMatch[2].trim();
+      const cExpr = matrixAssignMatch[3].trim();
+      const valExpr = matrixAssignMatch[4].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      int _r = (${rExpr});`);
+      outputLines.push(`      int _c = (${cExpr});`);
+      outputLines.push(`      int _oldVal = ${matName}[_r][_c];`);
+      outputLines.push(`      ${matName}[_r][_c] = (${valExpr});`);
+      outputLines.push(`      CodeFlowTracer.matrixUpdate("${matName}", _r, _c, _oldVal, ${matName}[_r][_c], ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
     const arrayDeclMatch = trimmed.match(/^(?:int|long|double|float)\[\]\s+([a-zA-Z_0-9]+)\s*=\s*(.+);$/);
     if (arrayDeclMatch) {
       const arrName = arrayDeclMatch[1];
