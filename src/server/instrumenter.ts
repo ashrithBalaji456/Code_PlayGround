@@ -69,7 +69,35 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       mainMethodDepth += openCount - closeCount;
     }
 
+    // Pass through explicit CodeFlowTracer calls
+    if (trimmed.startsWith('CodeFlowTracer.')) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
     // 1. DATA STRUCTURE DECLARATIONS
+    // AVLTree avl = new AVLTree();
+    const avlDeclMatch = trimmed.match(/^(?:AVLTree)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:AVLTree)\(\);?$/);
+    if (avlDeclMatch) {
+      const varName = avlDeclMatch[1];
+      varTypes.set(varName, 'AVLTree');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.avlCreate("${varName}", "AVLTree", ${lineNum});`);
+      continue;
+    }
+
+    // DisjointSet dsu = new DisjointSet(n);
+    const dsuDeclMatch = trimmed.match(/^(?:DisjointSet)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:DisjointSet)\((.+)\);?$/);
+    if (dsuDeclMatch) {
+      const varName = dsuDeclMatch[1];
+      varTypes.set(varName, 'DisjointSet');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
     // Stack<Integer> stack = new Stack<>();
     const stackDeclMatch = trimmed.match(/^(?:Stack|java\.util\.Stack)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:Stack|java\.util\.Stack)<.*?>\(\);?$/);
     if (stackDeclMatch) {
@@ -601,6 +629,20 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`      var _v = (${valArg});`);
       outputLines.push(`      ${varName}.delete(_v);`);
       outputLines.push(`      CodeFlowTracer.bstDelete("${varName}", "Node#" + _v, _v, "Deleted " + _v, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // avl.insert(val)
+    const avlInsertMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.insert\((\d+|[a-zA-Z_0-9]+)\);?$/);
+    if (avlInsertMatch && varTypes.get(avlInsertMatch[1]) === 'AVLTree') {
+      const varName = avlInsertMatch[1];
+      const valArg = avlInsertMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      var _v = (${valArg});`);
+      outputLines.push(`      ${varName}.insert(_v);`);
+      outputLines.push(`      CodeFlowTracer.avlInsert("${varName}", "Node#" + _v, _v, ${lineNum});`);
       outputLines.push(`    }`);
       continue;
     }

@@ -1044,6 +1044,388 @@ public class CodeFlowTracer {
         recordEvent("{\\"type\\":\\"DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"value\\":" + rStr + "}");
     }
 
+    // === PHASE 6: ADVANCED ALGORITHMS ===
+    // --- Bellman-Ford ---
+    public static void bellmanFordStart(String graphId, String srcNode, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"startNodeId\\":\\"" + srcNode + "\\"}");
+    }
+
+    public static void bellmanFordPassStart(String graphId, int pass, int totalPasses, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_PASS_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"pass\\":" + pass + ",\\"totalPasses\\":" + totalPasses + "}");
+    }
+
+    public static void bellmanFordEdgeRelax(String graphId, String u, String v, double weight, double distU, double distV, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_EDGE_RELAX\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + ",\\"oldDistance\\":" + formatDouble(distV) + "}");
+    }
+
+    public static void bellmanFordCompare(String graphId, String u, String v, double candidate, double current, boolean canRelax, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"candidateDistance\\":" + formatDouble(candidate) + ",\\"oldDistance\\":" + formatDouble(current) + ",\\"conditionResult\\":" + canRelax + "}");
+    }
+
+    public static void bellmanFordDistanceUpdate(String graphId, String v, double oldDist, double newDist, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_DISTANCE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"oldDistance\\":" + formatDouble(oldDist) + ",\\"newDistance\\":" + formatDouble(newDist) + "}");
+    }
+
+    public static void bellmanFordPassEnd(String graphId, int pass, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_PASS_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"pass\\":" + pass + "}");
+    }
+
+    public static void bellmanFordNegativeCycle(String graphId, String u, String v, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_NEGATIVE_CYCLE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"cycle\\":true}");
+    }
+
+    public static void bellmanFordEnd(String graphId, int line) {
+        recordEvent("{\\"type\\":\\"BELLMAN_FORD_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\"}");
+    }
+
+    // --- Floyd-Warshall ---
+    public static void floydWarshallStart(String graphId, String labelsJson, String matrixJson, int line) {
+        recordEvent("{\\"type\\":\\"FLOYD_WARSHALL_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"path\\":" + labelsJson + ",\\"values\\":" + matrixJson + "}");
+    }
+
+    public static void floydKUpdate(String graphId, Object k, int line) {
+        String kStr = formatValue(k);
+        recordEvent("{\\"type\\":\\"FLOYD_K_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"k\\":" + kStr + "}");
+    }
+
+    public static void floydDistanceCompare(String graphId, Object i, Object j, Object k, Object currentDist, Object candidateDist, boolean updateNeeded, int line) {
+        String iStr = formatValue(i);
+        String jStr = formatValue(j);
+        String kStr = formatValue(k);
+        String curStr = formatValue(currentDist);
+        String canStr = formatValue(candidateDist);
+        recordEvent("{\\"type\\":\\"FLOYD_DISTANCE_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"iNode\\":" + iStr + ",\\"jNode\\":" + jStr + ",\\"k\\":" + kStr + ",\\"oldDistance\\":" + curStr + ",\\"candidateDistance\\":" + canStr + ",\\"conditionResult\\":" + updateNeeded + "}");
+    }
+
+    public static void floydDistanceUpdate(String graphId, Object i, Object j, Object k, Object oldDist, Object newDist, int line) {
+        String iStr = formatValue(i);
+        String jStr = formatValue(j);
+        String kStr = formatValue(k);
+        String oldStr = formatValue(oldDist);
+        String newStr = formatValue(newDist);
+        recordEvent("{\\"type\\":\\"FLOYD_DISTANCE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"iNode\\":" + iStr + ",\\"jNode\\":" + jStr + ",\\"k\\":" + kStr + ",\\"oldDistance\\":" + oldStr + ",\\"newDistance\\":" + newStr + "}");
+    }
+
+    public static void floydWarshallEnd(String graphId, int line) {
+        recordEvent("{\\"type\\":\\"FLOYD_WARSHALL_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\"}");
+    }
+
+    // --- Minimum Spanning Tree: Prim ---
+    public static void primStart(String graphId, String startNode, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"startNodeId\\":\\"" + startNode + "\\"}");
+    }
+
+    public static void primNodeSelect(String graphId, String node, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_NODE_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void primEdgeConsider(String graphId, String u, String v, double weight, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_EDGE_CONSIDER\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + "}");
+    }
+
+    public static void primEdgeCompare(String graphId, String u, String v, double weight, boolean isBetter, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_EDGE_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + ",\\"conditionResult\\":" + isBetter + "}");
+    }
+
+    public static void primEdgeAccept(String graphId, String u, String v, double weight, double totalWeight, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_EDGE_ACCEPT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + ",\\"distance\\":" + totalWeight + "}");
+    }
+
+    public static void primEdgeReject(String graphId, String u, String v, double weight, String reason, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_EDGE_REJECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + ",\\"message\\":\\"" + reason + "\\"}");
+    }
+
+    public static void primQueueInsert(String graphId, String u, String v, double weight, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_QUEUE_INSERT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + "}");
+    }
+
+    public static void primQueueRemove(String graphId, String u, String v, double weight, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_QUEUE_REMOVE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + "}");
+    }
+
+    public static void primEnd(String graphId, double totalMstWeight, int line) {
+        recordEvent("{\\"type\\":\\"PRIM_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"distance\\":" + totalMstWeight + "}");
+    }
+
+    // --- Minimum Spanning Tree: Kruskal ---
+    public static void kruskalStart(String graphId, int totalEdges, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"size\\":" + totalEdges + "}");
+    }
+
+    public static void kruskalEdgeSelect(String graphId, String u, String v, double weight, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_EDGE_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + "}");
+    }
+
+    public static void kruskalEdgeCompare(String graphId, String u, String v, double weight, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_EDGE_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + "}");
+    }
+
+    public static void kruskalFind(String graphId, String node, String root, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_FIND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"parentNodeId\\":\\"" + root + "\\"}");
+    }
+
+    public static void kruskalCycleCheck(String graphId, String u, String v, boolean causesCycle, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_CYCLE_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"cycle\\":" + causesCycle + "}");
+    }
+
+    public static void kruskalUnion(String graphId, String u, String v, String newRoot, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_UNION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"parentNodeId\\":\\"" + newRoot + "\\"}");
+    }
+
+    public static void kruskalEdgeAccept(String graphId, String u, String v, double weight, double totalWeight, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_EDGE_ACCEPT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + ",\\"distance\\":" + totalWeight + "}");
+    }
+
+    public static void kruskalEdgeReject(String graphId, String u, String v, double weight, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_EDGE_REJECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"weight\\":" + weight + "}");
+    }
+
+    public static void kruskalEnd(String graphId, double totalMstWeight, int line) {
+        recordEvent("{\\"type\\":\\"KRUSKAL_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"distance\\":" + totalMstWeight + "}");
+    }
+
+    // --- Topological Sort ---
+    public static void topologicalSortStart(String graphId, String algorithm, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_SORT_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"algorithmName\\":\\"" + algorithm + "\\"}");
+    }
+
+    public static void indegreeInitialize(String graphId, String indegreesJson, int line) {
+        recordEvent("{\\"type\\":\\"INDEGREE_INITIALIZE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"arguments\\":" + indegreesJson + "}");
+    }
+
+    public static void topologicalNodeEnqueue(String graphId, String node, int inDegree, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_NODE_ENQUEUE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"value\\":" + inDegree + "}");
+    }
+
+    public static void topologicalNodeDequeue(String graphId, String node, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_NODE_DEQUEUE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void topologicalEdgeProcess(String graphId, String u, String v, int newInDegree, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_EDGE_PROCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\",\\"value\\":" + newInDegree + "}");
+    }
+
+    public static void indegreeUpdate(String graphId, String node, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"INDEGREE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void topologicalNodeOutput(String graphId, String node, int outputIndex, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_NODE_OUTPUT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"index\\":" + outputIndex + "}");
+    }
+
+    public static void topologicalCycleDetected(String graphId, int processedCount, int totalNodes, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_CYCLE_DETECTED\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"cycle\\":true,\\"size\\":" + processedCount + "}");
+    }
+
+    public static void topologicalSortEnd(String graphId, String orderJson, int line) {
+        recordEvent("{\\"type\\":\\"TOPOLOGICAL_SORT_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"path\\":" + orderJson + "}");
+    }
+
+    // --- Strongly Connected Components: Kosaraju ---
+    public static void kosarajuStart(String graphId, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\"}");
+    }
+
+    public static void kosarajuFirstDfs(String graphId, String node, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_FIRST_DFS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void kosarajuFinish(String graphId, String node, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_FINISH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void kosarajuStackPush(String graphId, String node, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_STACK_PUSH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void kosarajuTranspose(String graphId, String transposeGraphId, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_TRANSPOSE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"variable\\":\\"" + transposeGraphId + "\\"}");
+    }
+
+    public static void kosarajuSecondDfs(String graphId, String node, int componentId, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_SECOND_DFS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"componentId\\":" + componentId + "}");
+    }
+
+    public static void kosarajuSccStart(String graphId, int componentId, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_SCC_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"componentId\\":" + componentId + "}");
+    }
+
+    public static void kosarajuSccNode(String graphId, int componentId, String node, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_SCC_NODE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"componentId\\":" + componentId + ",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void kosarajuSccEnd(String graphId, int componentId, String nodesJson, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_SCC_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"componentId\\":" + componentId + ",\\"path\\":" + nodesJson + "}");
+    }
+
+    public static void kosarajuEnd(String graphId, int totalComponents, int line) {
+        recordEvent("{\\"type\\":\\"KOSARAJU_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"size\\":" + totalComponents + "}");
+    }
+
+    // --- Strongly Connected Components: Tarjan ---
+    public static void tarjanStart(String graphId, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\"}");
+    }
+
+    public static void tarjanDiscover(String graphId, String node, int dfn, int low, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_DISCOVER\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"fromIndex\\":" + dfn + ",\\"toIndex\\":" + low + "}");
+    }
+
+    public static void tarjanStackPush(String graphId, String node, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_STACK_PUSH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void tarjanEdgeProcess(String graphId, String u, String v, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_EDGE_PROCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"sourceNodeId\\":\\"" + u + "\\",\\"targetNodeId\\":\\"" + v + "\\"}");
+    }
+
+    public static void tarjanLowLinkUpdate(String graphId, String u, int oldLow, int newLow, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_LOWLINK_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + u + "\\",\\"oldValue\\":" + oldLow + ",\\"newValue\\":" + newLow + "}");
+    }
+
+    public static void tarjanSccStart(String graphId, int componentId, String rootNode, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_SCC_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"componentId\\":" + componentId + ",\\"nodeId\\":\\"" + rootNode + "\\"}");
+    }
+
+    public static void tarjanStackPop(String graphId, String node, int componentId, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_STACK_POP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"nodeId\\":\\"" + node + "\\",\\"componentId\\":" + componentId + "}");
+    }
+
+    public static void tarjanSccNode(String graphId, int componentId, String node, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_SCC_NODE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"componentId\\":" + componentId + ",\\"nodeId\\":\\"" + node + "\\"}");
+    }
+
+    public static void tarjanSccEnd(String graphId, int componentId, String nodesJson, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_SCC_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"componentId\\":" + componentId + ",\\"path\\":" + nodesJson + "}");
+    }
+
+    public static void tarjanEnd(String graphId, int totalComponents, int line) {
+        recordEvent("{\\"type\\":\\"TARJAN_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + graphId + "\\",\\"size\\":" + totalComponents + "}");
+    }
+
+    // --- AVL Tree ---
+    public static void avlCreate(String treeId, String type, int line) {
+        recordEvent("{\\"type\\":\\"AVL_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"structureType\\":\\"tree\\",\\"dataType\\":\\"" + type + "\\"}");
+    }
+
+    public static void avlInsert(String treeId, String nodeId, Object value, int line) {
+        String vStr = formatValue(value);
+        recordEvent("{\\"type\\":\\"AVL_INSERT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + vStr + "}");
+    }
+
+    public static void avlDelete(String treeId, String nodeId, Object value, int line) {
+        String vStr = formatValue(value);
+        recordEvent("{\\"type\\":\\"AVL_DELETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + vStr + "}");
+    }
+
+    public static void avlHeightUpdate(String treeId, String nodeId, int oldHeight, int newHeight, int line) {
+        recordEvent("{\\"type\\":\\"AVL_HEIGHT_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"oldValue\\":" + oldHeight + ",\\"newValue\\":" + newHeight + "}");
+    }
+
+    public static void avlBalanceCheck(String treeId, String nodeId, int leftH, int rightH, int bf, int line) {
+        recordEvent("{\\"type\\":\\"AVL_BALANCE_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"fromIndex\\":" + leftH + ",\\"toIndex\\":" + rightH + ",\\"balanceFactor\\":" + bf + "}");
+    }
+
+    public static void avlRotateLeft(String treeId, String pivotNodeId, String newRootId, int line) {
+        recordEvent("{\\"type\\":\\"AVL_ROTATE_LEFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + pivotNodeId + "\\",\\"childNodeId\\":\\"" + newRootId + "\\",\\"rotationType\\":\\"RR\\"}");
+    }
+
+    public static void avlRotateRight(String treeId, String pivotNodeId, String newRootId, int line) {
+        recordEvent("{\\"type\\":\\"AVL_ROTATE_RIGHT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + pivotNodeId + "\\",\\"childNodeId\\":\\"" + newRootId + "\\",\\"rotationType\\":\\"LL\\"}");
+    }
+
+    public static void avlRotateLeftRight(String treeId, String pivotNodeId, int line) {
+        recordEvent("{\\"type\\":\\"AVL_ROTATE_LEFT_RIGHT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + pivotNodeId + "\\",\\"rotationType\\":\\"LR\\"}");
+    }
+
+    public static void avlRotateRightLeft(String treeId, String pivotNodeId, int line) {
+        recordEvent("{\\"type\\":\\"AVL_ROTATE_RIGHT_LEFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + pivotNodeId + "\\",\\"rotationType\\":\\"RL\\"}");
+    }
+
+    public static void avlRootUpdate(String treeId, String newRootId, int line) {
+        recordEvent("{\\"type\\":\\"AVL_ROOT_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + newRootId + "\\"}");
+    }
+
+    public static void avlEnd(String treeId, int line) {
+        recordEvent("{\\"type\\":\\"AVL_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\"}");
+    }
+
+    // --- Binary Search on Answer ---
+    public static void answerSearchStart(String name, long low, long high, int line) {
+        recordEvent("{\\"type\\":\\"ANSWER_SEARCH_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"low\\":" + low + ",\\"high\\":" + high + "}");
+    }
+
+    public static void answerSearchRange(String name, long low, long high, int line) {
+        recordEvent("{\\"type\\":\\"ANSWER_SEARCH_RANGE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"low\\":" + low + ",\\"high\\":" + high + "}");
+    }
+
+    public static void answerSearchMid(String name, long mid, int line) {
+        recordEvent("{\\"type\\":\\"ANSWER_SEARCH_MID\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"mid\\":" + mid + "}");
+    }
+
+    public static void answerSearchFeasibilityCheck(String name, long mid, boolean feasible, String explanation, int line) {
+        String clean = explanation.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"ANSWER_SEARCH_FEASIBILITY_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"mid\\":" + mid + ",\\"feasible\\":" + feasible + ",\\"message\\":\\"" + clean + "\\"}");
+    }
+
+    public static void answerSearchRangeUpdate(String name, long low, long high, long bestSoFar, int line) {
+        recordEvent("{\\"type\\":\\"ANSWER_SEARCH_RANGE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"low\\":" + low + ",\\"high\\":" + high + ",\\"value\\":" + bestSoFar + "}");
+    }
+
+    public static void answerSearchEnd(String name, long answer, int line) {
+        recordEvent("{\\"type\\":\\"ANSWER_SEARCH_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"value\\":" + answer + "}");
+    }
+
+    // --- Coordinate Compression ---
+    public static void coordCompressStart(String name, int originalCount, int line) {
+        recordEvent("{\\"type\\":\\"COORD_COMPRESS_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"size\\":" + originalCount + "}");
+    }
+
+    public static void coordCompressMap(String name, Object val, int rank, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"COORD_COMPRESS_MAP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"value\\":" + vStr + ",\\"index\\":" + rank + "}");
+    }
+
+    public static void coordCompressApply(String name, int index, Object originalVal, int compressedVal, int line) {
+        String vStr = formatValue(originalVal);
+        recordEvent("{\\"type\\":\\"COORD_COMPRESS_APPLY\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"index\\":" + index + ",\\"oldValue\\":" + vStr + ",\\"newValue\\":" + compressedVal + "}");
+    }
+
+    public static void coordCompressEnd(String name, int uniqueCount, int line) {
+        recordEvent("{\\"type\\":\\"COORD_COMPRESS_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"size\\":" + uniqueCount + "}");
+    }
+
+    // --- Monotonic Stack ---
+    public static void monoStackStart(String name, String monoType, int line) {
+        recordEvent("{\\"type\\":\\"MONO_STACK_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"monoType\\":\\"" + monoType + "\\"}");
+    }
+
+    public static void monoStackCompare(String name, Object topVal, Object currentVal, boolean shouldPop, int line) {
+        String tStr = formatValue(topVal);
+        String cStr = formatValue(currentVal);
+        recordEvent("{\\"type\\":\\"MONO_STACK_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"leftVal\\":" + tStr + ",\\"rightVal\\":" + cStr + ",\\"conditionResult\\":" + shouldPop + "}");
+    }
+
+    public static void monoStackPop(String name, Object poppedVal, int line) {
+        String pStr = formatValue(poppedVal);
+        recordEvent("{\\"type\\":\\"MONO_STACK_POP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + pStr + "}");
+    }
+
+    public static void monoStackPush(String name, Object pushedVal, int line) {
+        String pStr = formatValue(pushedVal);
+        recordEvent("{\\"type\\":\\"MONO_STACK_PUSH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + pStr + "}");
+    }
+
+    public static void monoStackResult(String name, int index, Object val, Object nextGreaterOrSmaller, int line) {
+        String vStr = formatValue(val);
+        String rStr = formatValue(nextGreaterOrSmaller);
+        recordEvent("{\\"type\\":\\"MONO_STACK_RESULT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"index\\":" + index + ",\\"oldValue\\":" + vStr + ",\\"newValue\\":" + rStr + "}");
+    }
+
+    public static void monoStackEnd(String name, int line) {
+        recordEvent("{\\"type\\":\\"MONO_STACK_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\"}");
+    }
+
     // === CONTROL FLOW & UTILITIES ===
     public static void condition(String expr, boolean result, int line) {
         String cleanExpr = expr.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
@@ -1097,8 +1479,26 @@ public class CodeFlowTracer {
         return sb.toString();
     }
 
+    private static String formatDouble(double d) {
+        if (Double.isInfinite(d)) return "\\"Infinity\\"";
+        if (Double.isNaN(d)) return "\\"NaN\\"";
+        return String.valueOf(d);
+    }
+
     private static String formatValue(Object val) {
         if (val == null) return "null";
+        if (val instanceof Double) {
+            Double d = (Double) val;
+            if (d.isInfinite()) return "\\"Infinity\\"";
+            if (d.isNaN()) return "\\"NaN\\"";
+            return String.valueOf(d);
+        }
+        if (val instanceof Float) {
+            Float f = (Float) val;
+            if (f.isInfinite()) return "\\"Infinity\\"";
+            if (f.isNaN()) return "\\"NaN\\"";
+            return String.valueOf(f);
+        }
         if (val instanceof String) {
             String s = ((String) val).replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"").replace("\\n", "\\\\n");
             return "\\"" + s + "\\"";

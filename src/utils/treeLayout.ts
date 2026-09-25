@@ -8,6 +8,8 @@ export interface LayoutNode {
   level: number;
   leftId: string | null;
   rightId: string | null;
+  height?: number;
+  balanceFactor?: number;
 }
 
 export interface TreeEdge {
@@ -126,6 +128,8 @@ export function computeBinaryTreeLayout(
       level: pos.level,
       leftId: nodeData.leftId,
       rightId: nodeData.rightId,
+      height: nodeData.height,
+      balanceFactor: nodeData.balanceFactor,
     });
 
     if (nodeData.leftId && positions.has(nodeData.leftId)) {

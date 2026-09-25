@@ -136,6 +136,10 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
     const isSelected = edge.id === selectedEdgeId;
     const state: GraphEdgeState = edge.state || 'NORMAL';
 
+    const isMST = edge.state === 'MST' || edge.inMST;
+    if (isMST) {
+      return { stroke: '#3fb950', strokeWidth: 4, strokeDasharray: 'none', marker: 'arrow-mst' };
+    }
     if (state === 'CYCLE') {
       return { stroke: '#f85149', strokeWidth: 3.5, strokeDasharray: '6 4', marker: 'arrow-cycle' };
     }
@@ -367,6 +371,16 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
                 >
                   <polygon points="0 0, 8 3, 0 6" fill="#2ea043" />
                 </marker>
+                <marker
+                  id="arrow-mst"
+                  markerWidth="8"
+                  markerHeight="6"
+                  refX="7"
+                  refY="3"
+                  orient="auto"
+                >
+                  <polygon points="0 0, 8 3, 0 6" fill="#3fb950" />
+                </marker>
 
                 {/* Filter for glowing nodes */}
                 <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
@@ -383,6 +397,7 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
                   const edgeStyle = getEdgeStyle(e);
                   const isDirectedEdge = e.directed;
                   const isSelected = e.id === selectedEdgeId;
+                  const isMSTEdge = e.state === 'MST' || e.inMST;
 
                   return (
                     <g
@@ -413,25 +428,25 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
                       {e.weighted && e.weight !== undefined && (
                         <g transform={`translate(${edgeLayout.labelPoint.x}, ${edgeLayout.labelPoint.y})`}>
                           <rect
-                            x="-14"
+                            x={isMSTEdge ? '-18' : '-14'}
                             y="-9"
-                            width="28"
+                            width={isMSTEdge ? '36' : '28'}
                             height="18"
                             rx="5"
                             fill="#161b22"
-                            stroke={edgeStyle.stroke}
-                            strokeWidth="1.2"
+                            stroke={isMSTEdge ? '#3fb950' : edgeStyle.stroke}
+                            strokeWidth={isMSTEdge ? '2' : '1.2'}
                             className="shadow-sm"
                           />
                           <text
                             textAnchor="middle"
                             dy="4"
-                            fill="#f0f6fc"
+                            fill={isMSTEdge ? '#3fb950' : '#f0f6fc'}
                             fontSize="11"
                             fontFamily="monospace"
                             fontWeight="bold"
                           >
-                            {e.weight}
+                            {e.weight}{isMSTEdge ? '★' : ''}
                           </text>
                         </g>
                       )}
@@ -473,16 +488,27 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
                       {/* Vertex Circle */}
                       <circle
                         r={nodeLayout.radius}
-                        fill={nodeStyle.fill}
-                        stroke={nodeStyle.stroke}
+                        fill={n.sccGroup !== undefined ? '#161b22' : nodeStyle.fill}
+                        stroke={n.sccGroup !== undefined ? ['#bc8cff', '#3fb950', '#f0883e', '#38bdf8', '#e3b341'][n.sccGroup % 5] : nodeStyle.stroke}
                         strokeWidth={nodeStyle.strokeWidth}
                         className="transition-all duration-300 filter drop-shadow-md group-hover:stroke-[#79c0ff]"
                       />
 
+                      {/* SCC Group Indicator Badge if discovered */}
+                      {n.sccGroup !== undefined && (
+                        <circle
+                          r={nodeLayout.radius + 3}
+                          fill="none"
+                          stroke={['#bc8cff', '#3fb950', '#f0883e', '#38bdf8', '#e3b341'][n.sccGroup % 5]}
+                          strokeWidth="1.5"
+                          strokeDasharray="3 2"
+                        />
+                      )}
+
                       {/* Vertex Label */}
                       <text
                         textAnchor="middle"
-                        dy={dist !== undefined ? '-2' : '4'}
+                        dy={dist !== undefined || n.inDegree !== undefined || n.lowLink !== undefined ? '-2' : '4'}
                         fill={nodeStyle.textColor}
                         fontSize="13"
                         fontFamily="monospace"
@@ -492,8 +518,8 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
                         {n.label}
                       </text>
 
-                      {/* Distance badge if Dijkstra is calculating */}
-                      {dist !== undefined && (
+                      {/* Distance badge or In-Degree / Low-Link badge */}
+                      {dist !== undefined ? (
                         <text
                           textAnchor="middle"
                           dy="12"
@@ -505,7 +531,31 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
                         >
                           {dist === Infinity || dist === 'Infinity' ? '∞' : dist}
                         </text>
-                      )}
+                      ) : n.inDegree !== undefined ? (
+                        <text
+                          textAnchor="middle"
+                          dy="12"
+                          fill="#58a6ff"
+                          fontSize="9"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                          className="pointer-events-none"
+                        >
+                          in:{n.inDegree}
+                        </text>
+                      ) : n.lowLink !== undefined && n.discoveryIndex !== undefined ? (
+                        <text
+                          textAnchor="middle"
+                          dy="12"
+                          fill="#d29922"
+                          fontSize="8"
+                          fontFamily="monospace"
+                          fontWeight="bold"
+                          className="pointer-events-none"
+                        >
+                          {n.discoveryIndex}/{n.lowLink}
+                        </text>
+                      ) : null}
                     </g>
                   );
                 })}

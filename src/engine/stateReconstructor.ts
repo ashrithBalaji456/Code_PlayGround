@@ -262,6 +262,28 @@ export function reconstructExecutionSteps(
         ? currentAlgorithmState.memoEntries.map((e) => ({ ...e }))
         : undefined,
       candidates: currentAlgorithmState.candidates ? [...currentAlgorithmState.candidates] : undefined,
+      // Phase 6 Deep Cloning for Step Immutability & Leak-Free Backward Replay
+      bellmanDistances: currentAlgorithmState.bellmanDistances ? { ...currentAlgorithmState.bellmanDistances } : undefined,
+      bellmanCurrentEdge: currentAlgorithmState.bellmanCurrentEdge ? { ...currentAlgorithmState.bellmanCurrentEdge } : undefined,
+      floydMatrix: currentAlgorithmState.floydMatrix ? currentAlgorithmState.floydMatrix.map((r) => [...r]) : undefined,
+      floydLabels: currentAlgorithmState.floydLabels ? [...currentAlgorithmState.floydLabels] : undefined,
+      mstEdges: currentAlgorithmState.mstEdges ? currentAlgorithmState.mstEdges.map((e) => ({ ...e })) : undefined,
+      kruskalSortedEdges: currentAlgorithmState.kruskalSortedEdges ? currentAlgorithmState.kruskalSortedEdges.map((e) => ({ ...e })) : undefined,
+      disjointSetParents: currentAlgorithmState.disjointSetParents ? { ...currentAlgorithmState.disjointSetParents } : undefined,
+      disjointSetRanks: currentAlgorithmState.disjointSetRanks ? { ...currentAlgorithmState.disjointSetRanks } : undefined,
+      indegrees: currentAlgorithmState.indegrees ? { ...currentAlgorithmState.indegrees } : undefined,
+      topologicalQueue: currentAlgorithmState.topologicalQueue ? [...currentAlgorithmState.topologicalQueue] : undefined,
+      topologicalOrder: currentAlgorithmState.topologicalOrder ? [...currentAlgorithmState.topologicalOrder] : undefined,
+      sccComponents: currentAlgorithmState.sccComponents ? currentAlgorithmState.sccComponents.map((c) => [...c]) : undefined,
+      currentSCC: currentAlgorithmState.currentSCC ? [...currentAlgorithmState.currentSCC] : undefined,
+      tarjanDiscoveryIndex: currentAlgorithmState.tarjanDiscoveryIndex ? { ...currentAlgorithmState.tarjanDiscoveryIndex } : undefined,
+      tarjanLowLink: currentAlgorithmState.tarjanLowLink ? { ...currentAlgorithmState.tarjanLowLink } : undefined,
+      tarjanStack: currentAlgorithmState.tarjanStack ? [...currentAlgorithmState.tarjanStack] : undefined,
+      kosarajuFinishStack: currentAlgorithmState.kosarajuFinishStack ? [...currentAlgorithmState.kosarajuFinishStack] : undefined,
+      nodeHeights: currentAlgorithmState.nodeHeights ? { ...currentAlgorithmState.nodeHeights } : undefined,
+      balanceFactors: currentAlgorithmState.balanceFactors ? { ...currentAlgorithmState.balanceFactors } : undefined,
+      coordMapping: currentAlgorithmState.coordMapping ? { ...currentAlgorithmState.coordMapping } : undefined,
+      monoStackElements: currentAlgorithmState.monoStackElements ? [...currentAlgorithmState.monoStackElements] : undefined,
     };
 
     let explanation = `Executing step ${i + 1}`;
@@ -3449,6 +3471,879 @@ export function reconstructExecutionSteps(
         const ans = ev.value ?? (ev as any).finalAnswer;
         nextAlgorithmState.status = ans !== undefined ? `DP Solved. Final Answer: ${ans}` : 'Completed';
         explanation = `DP completed: Final result = ${ans ?? ''}`;
+        break;
+      }
+
+      // === PHASE 6: ADVANCED ALGORITHMS ===
+      // --- Bellman-Ford ---
+      case 'BELLMAN_FORD_START': {
+        nextAlgorithmState.algorithmName = 'Bellman-Ford';
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.bellmanDistances = {};
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes) {
+          for (const nid of Object.keys(g.graphData.nodes)) {
+            nextAlgorithmState.bellmanDistances[nid] = (nid === ev.startNodeId) ? 0 : 'Infinity';
+            g.graphData.nodes[nid].distance = (nid === ev.startNodeId) ? 0 : 'Infinity';
+          }
+        } else if (ev.startNodeId) {
+          nextAlgorithmState.bellmanDistances[ev.startNodeId] = 0;
+        }
+        nextAlgorithmState.negativeCycleDetected = false;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(V * E)', space: 'O(V)' };
+        explanation = `Started Bellman-Ford algorithm from source node: ${ev.startNodeId || 'start'}`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_PASS_START': {
+        nextAlgorithmState.bellmanPass = ev.pass;
+        nextAlgorithmState.bellmanTotalPasses = ev.totalPasses;
+        explanation = `Bellman-Ford: Starting relaxation pass ${ev.pass} of ${ev.totalPasses}`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_EDGE_RELAX': {
+        nextAlgorithmState.bellmanCurrentEdge = { from: ev.sourceNodeId!, to: ev.targetNodeId!, weight: ev.weight || 0 };
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if (e.source === ev.sourceNodeId && e.target === ev.targetNodeId) {
+              e.state = 'ACTIVE';
+            }
+          }
+        }
+        explanation = `Evaluating edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId} (weight: ${ev.weight})`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_COMPARE': {
+        nextMetrics.comparisons++;
+        nextComparison = {
+          left: `dist[${ev.sourceNodeId}] + ${ev.weight ?? ''} = ${ev.candidateDistance}`,
+          right: `dist[${ev.targetNodeId}] = ${ev.oldDistance}`,
+          operator: '<',
+          result: !!ev.conditionResult,
+          explanation: ev.conditionResult
+            ? `Candidate distance ${ev.candidateDistance} is shorter than current ${ev.oldDistance} ➔ Relax edge!`
+            : `Candidate distance ${ev.candidateDistance} is NOT shorter than ${ev.oldDistance} ➔ Keep current`,
+        };
+        explanation = `Relaxation test: ${ev.candidateDistance} < ${ev.oldDistance} ➔ ${ev.conditionResult ? 'TRUE (Relax)' : 'FALSE'}`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_DISTANCE_UPDATE': {
+        nextMetrics.assignments++;
+        if (!nextAlgorithmState.bellmanDistances) nextAlgorithmState.bellmanDistances = {};
+        nextAlgorithmState.bellmanDistances[ev.targetNodeId!] = ev.newDistance!;
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.targetNodeId!]) {
+          g.graphData.nodes[ev.targetNodeId!].distance = ev.newDistance;
+        }
+        explanation = `Relaxed distance to ${ev.targetNodeId}: ${ev.oldDistance} ➔ ${ev.newDistance}`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_PASS_END': {
+        explanation = `Completed relaxation pass ${ev.pass}`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_NEGATIVE_CYCLE': {
+        nextAlgorithmState.negativeCycleDetected = true;
+        nextAlgorithmState.status = 'Negative Cycle Detected!';
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if (e.source === ev.sourceNodeId && e.target === ev.targetNodeId) {
+              e.state = 'CYCLE';
+            }
+          }
+        }
+        explanation = `NEGATIVE CYCLE DETECTED! Edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId} can still be reduced.`;
+        break;
+      }
+
+      case 'BELLMAN_FORD_END': {
+        nextAlgorithmState.status = nextAlgorithmState.negativeCycleDetected ? 'Negative Cycle' : 'Completed';
+        explanation = `Bellman-Ford algorithm completed${nextAlgorithmState.negativeCycleDetected ? ' (Negative cycle identified)' : ''}`;
+        break;
+      }
+
+      // --- Floyd-Warshall ---
+      case 'FLOYD_WARSHALL_START': {
+        nextAlgorithmState.algorithmName = 'Floyd-Warshall';
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.floydLabels = Array.isArray(ev.path) ? ev.path : [];
+        nextAlgorithmState.floydMatrix = Array.isArray(ev.values) ? ev.values : [];
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(V³)', space: 'O(V²)' };
+        explanation = 'Initialized Floyd-Warshall all-pairs shortest paths';
+        break;
+      }
+
+      case 'FLOYD_K_UPDATE': {
+        nextAlgorithmState.floydK = ev.k;
+        explanation = `Testing intermediate vertex k = ${ev.k}`;
+        break;
+      }
+
+      case 'FLOYD_DISTANCE_COMPARE': {
+        nextMetrics.comparisons++;
+        nextAlgorithmState.floydI = ev.iNode;
+        nextAlgorithmState.floydJ = ev.jNode;
+        nextAlgorithmState.floydOldDistance = ev.oldDistance;
+        nextAlgorithmState.floydCandidateDistance = ev.candidateDistance;
+        nextComparison = {
+          left: `dist[${ev.iNode}][${ev.k}] + dist[${ev.k}][${ev.jNode}] = ${ev.candidateDistance}`,
+          right: `dist[${ev.iNode}][${ev.jNode}] = ${ev.oldDistance}`,
+          operator: '<',
+          result: !!ev.conditionResult,
+          explanation: ev.conditionResult ? `Shorter path found via ${ev.k}!` : `Existing path is shorter or equal.`,
+        };
+        explanation = `Compare: dist[${ev.iNode}][${ev.k}] + dist[${ev.k}][${ev.jNode}] (${ev.candidateDistance}) < dist[${ev.iNode}][${ev.jNode}] (${ev.oldDistance}) ➔ ${ev.conditionResult ? 'TRUE' : 'FALSE'}`;
+        break;
+      }
+
+      case 'FLOYD_DISTANCE_UPDATE': {
+        nextMetrics.assignments++;
+        nextAlgorithmState.floydI = ev.iNode;
+        nextAlgorithmState.floydJ = ev.jNode;
+        const r = typeof ev.iNode === 'number' ? ev.iNode : (nextAlgorithmState.floydLabels ? nextAlgorithmState.floydLabels.indexOf(String(ev.iNode)) : -1);
+        const c = typeof ev.jNode === 'number' ? ev.jNode : (nextAlgorithmState.floydLabels ? nextAlgorithmState.floydLabels.indexOf(String(ev.jNode)) : -1);
+        if (r >= 0 && c >= 0 && nextAlgorithmState.floydMatrix) {
+          if (!nextAlgorithmState.floydMatrix[r]) nextAlgorithmState.floydMatrix[r] = [];
+          nextAlgorithmState.floydMatrix[r][c] = ev.newDistance !== undefined ? ev.newDistance : (ev.candidateDistance !== undefined ? ev.candidateDistance : 0);
+        }
+        explanation = `Updated dist[${ev.iNode}][${ev.jNode}]: ${ev.oldDistance} ➔ ${ev.newDistance}`;
+        break;
+      }
+
+      case 'FLOYD_WARSHALL_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = 'Floyd-Warshall all-pairs shortest path matrix computed';
+        break;
+      }
+
+      // --- Prim's Algorithm (MST) ---
+      case 'PRIM_START': {
+        nextAlgorithmState.algorithmName = "Prim's MST";
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.mstEdges = [];
+        nextAlgorithmState.mstTotalWeight = 0;
+        nextAlgorithmState.primCurrentNode = ev.startNodeId;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(E log V)', space: 'O(V + E)' };
+        explanation = `Started Prim's MST from node ${ev.startNodeId || 'root'}`;
+        break;
+      }
+
+      case 'PRIM_NODE_SELECT': {
+        nextAlgorithmState.primCurrentNode = ev.nodeId;
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].state = 'FINALIZED';
+          g.graphData.nodes[ev.nodeId!].visited = true;
+        }
+        explanation = `Selected node ${ev.nodeId} into MST cut; inspecting adjacent edges`;
+        break;
+      }
+
+      case 'PRIM_EDGE_CONSIDER': {
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if ((e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)) {
+              e.state = 'ACTIVE';
+            }
+          }
+        }
+        explanation = `Considering edge ${ev.sourceNodeId}-${ev.targetNodeId} (weight: ${ev.weight})`;
+        break;
+      }
+
+      case 'PRIM_EDGE_COMPARE': {
+        nextMetrics.comparisons++;
+        explanation = `Evaluated edge ${ev.sourceNodeId}-${ev.targetNodeId} against cut candidates`;
+        break;
+      }
+
+      case 'PRIM_EDGE_ACCEPT': {
+        if (!nextAlgorithmState.mstEdges) nextAlgorithmState.mstEdges = [];
+        nextAlgorithmState.mstEdges.push({ from: ev.sourceNodeId!, to: ev.targetNodeId!, weight: ev.weight || 0 });
+        nextAlgorithmState.mstTotalWeight = ev.distance !== undefined ? Number(ev.distance) : (nextAlgorithmState.mstTotalWeight || 0) + (ev.weight || 0);
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if ((e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)) {
+              e.state = 'MST';
+              e.inMST = true;
+            }
+          }
+        }
+        explanation = `ACCEPTED edge ${ev.sourceNodeId}-${ev.targetNodeId} into MST (Weight: ${ev.weight}, Total MST: ${nextAlgorithmState.mstTotalWeight})`;
+        break;
+      }
+
+      case 'PRIM_EDGE_REJECT': {
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if ((e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)) {
+              e.state = 'REJECTED';
+            }
+          }
+        }
+        explanation = `REJECTED edge ${ev.sourceNodeId}-${ev.targetNodeId}: ${ev.message || 'Target already in MST'}`;
+        break;
+      }
+
+      case 'PRIM_QUEUE_INSERT': {
+        nextMetrics.functionCalls++;
+        explanation = `Enqueued edge (${ev.sourceNodeId}-${ev.targetNodeId}, w=${ev.weight}) into PriorityQueue`;
+        break;
+      }
+
+      case 'PRIM_QUEUE_REMOVE': {
+        explanation = `Extracted minimum edge (${ev.sourceNodeId}-${ev.targetNodeId}, w=${ev.weight}) from PriorityQueue`;
+        break;
+      }
+
+      case 'PRIM_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Prim's MST completed with total weight ${ev.distance ?? nextAlgorithmState.mstTotalWeight}`;
+        break;
+      }
+
+      // --- Kruskal's Algorithm (MST) ---
+      case 'KRUSKAL_START': {
+        nextAlgorithmState.algorithmName = "Kruskal's MST";
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.mstEdges = [];
+        nextAlgorithmState.mstTotalWeight = 0;
+        nextAlgorithmState.disjointSetParents = {};
+        nextAlgorithmState.disjointSetRanks = {};
+        nextAlgorithmState.kruskalSortedEdges = [];
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(E log E)', space: 'O(V + E)' };
+        explanation = `Started Kruskal's MST on ${ev.size || 'all'} sorted edges`;
+        break;
+      }
+
+      case 'KRUSKAL_EDGE_SELECT': {
+        if (!nextAlgorithmState.kruskalSortedEdges) nextAlgorithmState.kruskalSortedEdges = [];
+        const existing = nextAlgorithmState.kruskalSortedEdges.find(
+          (e) => (e.from === ev.sourceNodeId && e.to === ev.targetNodeId) || (e.from === ev.targetNodeId && e.to === ev.sourceNodeId)
+        );
+        if (!existing) {
+          nextAlgorithmState.kruskalSortedEdges.push({ from: ev.sourceNodeId!, to: ev.targetNodeId!, weight: ev.weight || 0, status: 'PENDING' });
+        }
+        explanation = `Selecting next lightest edge: ${ev.sourceNodeId}-${ev.targetNodeId} (weight: ${ev.weight})`;
+        break;
+      }
+
+      case 'KRUSKAL_EDGE_COMPARE': {
+        nextMetrics.comparisons++;
+        explanation = `Inspecting edge ${ev.sourceNodeId}-${ev.targetNodeId} for cycle check`;
+        break;
+      }
+
+      case 'KRUSKAL_FIND': {
+        if (!nextAlgorithmState.disjointSetParents) nextAlgorithmState.disjointSetParents = {};
+        if (ev.nodeId && ev.parentNodeId) {
+          nextAlgorithmState.disjointSetParents[ev.nodeId] = ev.parentNodeId;
+        }
+        explanation = `DSU find(${ev.nodeId}) ➔ root component: ${ev.parentNodeId}`;
+        break;
+      }
+
+      case 'KRUSKAL_CYCLE_CHECK': {
+        explanation = ev.cycle
+          ? `Cycle detected! Both ${ev.sourceNodeId} and ${ev.targetNodeId} belong to the same component`
+          : `No cycle: ${ev.sourceNodeId} and ${ev.targetNodeId} belong to different components`;
+        break;
+      }
+
+      case 'KRUSKAL_UNION': {
+        if (!nextAlgorithmState.disjointSetParents) nextAlgorithmState.disjointSetParents = {};
+        nextAlgorithmState.disjointSetParents[ev.sourceNodeId!] = ev.parentNodeId!;
+        nextAlgorithmState.disjointSetParents[ev.targetNodeId!] = ev.parentNodeId!;
+        explanation = `DSU union(${ev.sourceNodeId}, ${ev.targetNodeId}) ➔ connected under parent ${ev.parentNodeId}`;
+        break;
+      }
+
+      case 'KRUSKAL_EDGE_ACCEPT': {
+        if (!nextAlgorithmState.mstEdges) nextAlgorithmState.mstEdges = [];
+        nextAlgorithmState.mstEdges.push({ from: ev.sourceNodeId!, to: ev.targetNodeId!, weight: ev.weight || 0 });
+        nextAlgorithmState.mstTotalWeight = ev.distance !== undefined ? Number(ev.distance) : (nextAlgorithmState.mstTotalWeight || 0) + (ev.weight || 0);
+
+        if (!nextAlgorithmState.kruskalSortedEdges) nextAlgorithmState.kruskalSortedEdges = [];
+        const acceptEntry = nextAlgorithmState.kruskalSortedEdges.find(
+          (e) => (e.from === ev.sourceNodeId && e.to === ev.targetNodeId) || (e.from === ev.targetNodeId && e.to === ev.sourceNodeId)
+        );
+        if (acceptEntry) {
+          acceptEntry.status = 'ACCEPTED';
+        } else {
+          nextAlgorithmState.kruskalSortedEdges.push({ from: ev.sourceNodeId!, to: ev.targetNodeId!, weight: ev.weight || 0, status: 'ACCEPTED' });
+        }
+
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if ((e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)) {
+              e.state = 'MST';
+              e.inMST = true;
+            }
+          }
+        }
+        explanation = `ACCEPTED edge ${ev.sourceNodeId}-${ev.targetNodeId} into MST (Weight: ${ev.weight}, Total MST: ${nextAlgorithmState.mstTotalWeight})`;
+        break;
+      }
+
+      case 'KRUSKAL_EDGE_REJECT': {
+        if (!nextAlgorithmState.kruskalSortedEdges) nextAlgorithmState.kruskalSortedEdges = [];
+        const rejEntry = nextAlgorithmState.kruskalSortedEdges.find(
+          (e) => (e.from === ev.sourceNodeId && e.to === ev.targetNodeId) || (e.from === ev.targetNodeId && e.to === ev.sourceNodeId)
+        );
+        if (rejEntry) {
+          rejEntry.status = 'REJECTED';
+        } else {
+          nextAlgorithmState.kruskalSortedEdges.push({ from: ev.sourceNodeId!, to: ev.targetNodeId!, weight: ev.weight || 0, status: 'REJECTED' });
+        }
+
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData) {
+          for (const e of Object.values(g.graphData.edges)) {
+            if ((e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)) {
+              e.state = 'REJECTED';
+            }
+          }
+        }
+        explanation = `REJECTED edge ${ev.sourceNodeId}-${ev.targetNodeId} (would create a cycle!)`;
+        break;
+      }
+
+      case 'KRUSKAL_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Kruskal's MST completed with total weight ${ev.distance ?? nextAlgorithmState.mstTotalWeight}`;
+        break;
+      }
+
+      // --- Topological Sort ---
+      case 'TOPOLOGICAL_SORT_START': {
+        nextAlgorithmState.algorithmName = 'Topological Sort';
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.indegrees = {};
+        nextAlgorithmState.topologicalQueue = [];
+        nextAlgorithmState.topologicalOrder = [];
+        nextAlgorithmState.topologicalCycle = false;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(V + E)', space: 'O(V)' };
+        explanation = `Starting Topological Sort (${ev.algorithmName || "Kahn's Algorithm"})`;
+        break;
+      }
+
+      case 'INDEGREE_INITIALIZE': {
+        nextAlgorithmState.indegrees = ev.arguments || {};
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && ev.arguments) {
+          for (const [nid, deg] of Object.entries(ev.arguments)) {
+            if (g.graphData.nodes[nid]) {
+              g.graphData.nodes[nid].inDegree = Number(deg);
+            }
+          }
+        }
+        explanation = 'Computed in-degrees for all vertices';
+        break;
+      }
+
+      case 'TOPOLOGICAL_NODE_ENQUEUE': {
+        if (!nextAlgorithmState.topologicalQueue) nextAlgorithmState.topologicalQueue = [];
+        nextAlgorithmState.topologicalQueue.push(ev.nodeId!);
+        explanation = `Node ${ev.nodeId} has in-degree 0 ➔ Enqueued`;
+        break;
+      }
+
+      case 'TOPOLOGICAL_NODE_DEQUEUE': {
+        if (nextAlgorithmState.topologicalQueue) {
+          nextAlgorithmState.topologicalQueue = nextAlgorithmState.topologicalQueue.filter(x => x !== ev.nodeId);
+        }
+        explanation = `Dequeued node ${ev.nodeId} for processing`;
+        break;
+      }
+
+      case 'TOPOLOGICAL_EDGE_PROCESS': {
+        if (!nextAlgorithmState.indegrees) nextAlgorithmState.indegrees = {};
+        if (ev.targetNodeId && ev.value !== undefined) {
+          nextAlgorithmState.indegrees[ev.targetNodeId] = Number(ev.value);
+          const g = nextStructures[ev.structureId || 'graph'];
+          if (g && g.graphData && g.graphData.nodes[ev.targetNodeId]) {
+            g.graphData.nodes[ev.targetNodeId].inDegree = Number(ev.value);
+          }
+        }
+        explanation = `Processed edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId}, new in-degree: ${ev.value}`;
+        break;
+      }
+
+      case 'INDEGREE_UPDATE': {
+        if (!nextAlgorithmState.indegrees) nextAlgorithmState.indegrees = {};
+        nextAlgorithmState.indegrees[ev.nodeId!] = ev.newValue;
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].inDegree = ev.newValue;
+        }
+        explanation = `Updated in-degree of ${ev.nodeId}: ${ev.oldValue} ➔ ${ev.newValue}`;
+        break;
+      }
+
+      case 'TOPOLOGICAL_NODE_OUTPUT': {
+        if (!nextAlgorithmState.topologicalOrder) nextAlgorithmState.topologicalOrder = [];
+        nextAlgorithmState.topologicalOrder.push(ev.nodeId!);
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].state = 'FINALIZED';
+        }
+        explanation = `Appended node ${ev.nodeId} to topological order`;
+        break;
+      }
+
+      case 'TOPOLOGICAL_CYCLE_DETECTED': {
+        nextAlgorithmState.topologicalCycle = true;
+        nextAlgorithmState.status = 'Cycle Detected (Not a DAG)';
+        explanation = 'CYCLE DETECTED: Graph contains directed cycles! Cannot complete topological sort.';
+        break;
+      }
+
+      case 'TOPOLOGICAL_SORT_END': {
+        nextAlgorithmState.status = nextAlgorithmState.topologicalCycle ? 'Cycle Detected' : 'Completed';
+        explanation = `Topological sort completed. Result: [${(nextAlgorithmState.topologicalOrder || []).join(' ➔ ')}]`;
+        break;
+      }
+
+      // --- Strongly Connected Components: Kosaraju ---
+      case 'KOSARAJU_START': {
+        nextAlgorithmState.algorithmName = "Kosaraju's SCC";
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.kosarajuFinishStack = [];
+        nextAlgorithmState.sccComponents = [];
+        nextAlgorithmState.isTransposePhase = false;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(V + E)', space: 'O(V)' };
+        explanation = "Started Kosaraju's algorithm for Strongly Connected Components";
+        break;
+      }
+
+      case 'KOSARAJU_FIRST_DFS': {
+        explanation = `First DFS pass: Visiting node ${ev.nodeId}`;
+        break;
+      }
+
+      case 'KOSARAJU_FINISH': {
+        explanation = `Node ${ev.nodeId} finished in First DFS`;
+        break;
+      }
+
+      case 'KOSARAJU_STACK_PUSH': {
+        if (!nextAlgorithmState.kosarajuFinishStack) nextAlgorithmState.kosarajuFinishStack = [];
+        nextAlgorithmState.kosarajuFinishStack.push(ev.nodeId!);
+        explanation = `Pushed node ${ev.nodeId} to finish order stack`;
+        break;
+      }
+
+      case 'KOSARAJU_TRANSPOSE': {
+        nextAlgorithmState.isTransposePhase = true;
+        explanation = 'Constructed transpose graph G^T (All edges reversed)';
+        break;
+      }
+
+      case 'KOSARAJU_SECOND_DFS': {
+        explanation = `Second DFS on G^T from stack top: ${ev.nodeId} (SCC #${ev.componentId})`;
+        break;
+      }
+
+      case 'KOSARAJU_SCC_START': {
+        nextAlgorithmState.currentSCC = [];
+        explanation = `Discovered new Strongly Connected Component #${ev.componentId}`;
+        break;
+      }
+
+      case 'KOSARAJU_SCC_NODE': {
+        if (!nextAlgorithmState.currentSCC) nextAlgorithmState.currentSCC = [];
+        nextAlgorithmState.currentSCC.push(ev.nodeId!);
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].sccGroup = Number(ev.componentId);
+        }
+        explanation = `Added node ${ev.nodeId} to SCC #${ev.componentId}`;
+        break;
+      }
+
+      case 'KOSARAJU_SCC_END': {
+        if (!nextAlgorithmState.sccComponents) nextAlgorithmState.sccComponents = [];
+        const nodes = typeof ev.path === 'string' ? JSON.parse(ev.path) : (nextAlgorithmState.currentSCC || []);
+        nextAlgorithmState.sccComponents.push(nodes);
+        explanation = `Formed SCC #${ev.componentId}: {${nodes.join(', ')}}`;
+        break;
+      }
+
+      case 'KOSARAJU_END': {
+        nextAlgorithmState.status = `Found ${ev.size || nextAlgorithmState.sccComponents?.length} SCCs`;
+        explanation = `Kosaraju complete: Discovered ${ev.size || nextAlgorithmState.sccComponents?.length} strongly connected components`;
+        break;
+      }
+
+      // --- Strongly Connected Components: Tarjan ---
+      case 'TARJAN_START': {
+        nextAlgorithmState.algorithmName = "Tarjan's SCC";
+        nextAlgorithmState.category = 'Advanced Graph';
+        nextAlgorithmState.tarjanDiscoveryIndex = {};
+        nextAlgorithmState.tarjanLowLink = {};
+        nextAlgorithmState.tarjanStack = [];
+        nextAlgorithmState.sccComponents = [];
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(V + E)', space: 'O(V)' };
+        explanation = "Started Tarjan's Single-Pass SCC algorithm";
+        break;
+      }
+
+      case 'TARJAN_DISCOVER': {
+        if (!nextAlgorithmState.tarjanDiscoveryIndex) nextAlgorithmState.tarjanDiscoveryIndex = {};
+        if (!nextAlgorithmState.tarjanLowLink) nextAlgorithmState.tarjanLowLink = {};
+        nextAlgorithmState.tarjanDiscoveryIndex[ev.nodeId!] = ev.fromIndex!;
+        nextAlgorithmState.tarjanLowLink[ev.nodeId!] = ev.toIndex!;
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].discoveryIndex = ev.fromIndex;
+          g.graphData.nodes[ev.nodeId!].lowLink = ev.toIndex;
+          g.graphData.nodes[ev.nodeId!].onStack = true;
+        }
+        explanation = `Discovered node ${ev.nodeId}: dfn = ${ev.fromIndex}, low = ${ev.toIndex}`;
+        break;
+      }
+
+      case 'TARJAN_STACK_PUSH': {
+        if (!nextAlgorithmState.tarjanStack) nextAlgorithmState.tarjanStack = [];
+        nextAlgorithmState.tarjanStack.push(ev.nodeId!);
+        explanation = `Pushed node ${ev.nodeId} onto Tarjan recursion stack`;
+        break;
+      }
+
+      case 'TARJAN_EDGE_PROCESS': {
+        explanation = `Tarjan: Inspecting edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId}`;
+        break;
+      }
+
+      case 'TARJAN_LOWLINK_UPDATE': {
+        if (!nextAlgorithmState.tarjanLowLink) nextAlgorithmState.tarjanLowLink = {};
+        nextAlgorithmState.tarjanLowLink[ev.nodeId!] = ev.newValue!;
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].lowLink = ev.newValue;
+        }
+        explanation = `Updated low-link for node ${ev.nodeId}: ${ev.oldValue} ➔ ${ev.newValue}`;
+        break;
+      }
+
+      case 'TARJAN_SCC_START': {
+        explanation = `Root of SCC identified at node ${ev.nodeId} (dfn == low)`;
+        break;
+      }
+
+      case 'TARJAN_STACK_POP': {
+        if (nextAlgorithmState.tarjanStack) {
+          nextAlgorithmState.tarjanStack = nextAlgorithmState.tarjanStack.filter(x => x !== ev.nodeId);
+        }
+        const g = nextStructures[ev.structureId || 'graph'];
+        if (g && g.graphData && g.graphData.nodes[ev.nodeId!]) {
+          g.graphData.nodes[ev.nodeId!].onStack = false;
+          g.graphData.nodes[ev.nodeId!].sccGroup = Number(ev.componentId);
+        }
+        explanation = `Popped node ${ev.nodeId} from stack into SCC #${ev.componentId}`;
+        break;
+      }
+
+      case 'TARJAN_SCC_END': {
+        if (!nextAlgorithmState.sccComponents) nextAlgorithmState.sccComponents = [];
+        const nodes = typeof ev.path === 'string' ? JSON.parse(ev.path) : [];
+        nextAlgorithmState.sccComponents.push(nodes);
+        explanation = `Formed SCC #${ev.componentId}: {${nodes.join(', ')}}`;
+        break;
+      }
+
+      case 'TARJAN_END': {
+        nextAlgorithmState.status = `Found ${ev.size || nextAlgorithmState.sccComponents?.length} SCCs`;
+        explanation = `Tarjan complete: Discovered ${ev.size || nextAlgorithmState.sccComponents?.length} strongly connected components`;
+        break;
+      }
+
+      // --- AVL Tree ---
+      case 'AVL_CREATE': {
+        const treeId = ev.structureId || 'avl';
+        nextStructures[treeId] = {
+          id: treeId,
+          name: treeId,
+          type: 'tree',
+          dataType: 'AVLTree',
+          size: 0,
+          treeData: {
+            rootId: null,
+            nodes: {},
+          },
+          lastOperation: 'new AVLTree()',
+        };
+        nextAlgorithmState.algorithmName = 'AVL Tree';
+        nextAlgorithmState.category = 'Advanced Tree';
+        nextAlgorithmState.avlRotationsCount = 0;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(log N)', space: 'O(N)' };
+        explanation = 'Initialized self-balancing AVL Tree';
+        break;
+      }
+
+      case 'AVL_INSERT': {
+        const treeId = ev.structureId || 'avl';
+        const st = nextStructures[treeId];
+        if (st && st.treeData) {
+          const nid = ev.nodeId || `Node#${ev.value}`;
+          st.treeData.nodes[nid] = {
+            id: nid,
+            value: ev.value,
+            leftId: null,
+            rightId: null,
+            height: 1,
+            balanceFactor: 0,
+          };
+          if (!st.treeData.rootId) {
+            st.treeData.rootId = nid;
+          }
+          st.size = Object.keys(st.treeData.nodes).length;
+          st.lastOperation = `insert(${ev.value})`;
+        }
+        explanation = `Inserted value ${ev.value} into AVL Tree`;
+        break;
+      }
+
+      case 'AVL_DELETE': {
+        const treeId = ev.structureId || 'avl';
+        const st = nextStructures[treeId];
+        if (st && st.treeData && ev.nodeId) {
+          delete st.treeData.nodes[ev.nodeId];
+          st.size = Object.keys(st.treeData.nodes).length;
+          st.lastOperation = `delete(${ev.value})`;
+        }
+        explanation = `Deleted value ${ev.value} from AVL Tree`;
+        break;
+      }
+
+      case 'AVL_HEIGHT_UPDATE': {
+        if (!nextAlgorithmState.nodeHeights) nextAlgorithmState.nodeHeights = {};
+        nextAlgorithmState.nodeHeights[ev.nodeId!] = ev.newValue!;
+        const st = nextStructures[ev.structureId || 'avl'];
+        if (st && st.treeData && st.treeData.nodes[ev.nodeId!]) {
+          st.treeData.nodes[ev.nodeId!].height = ev.newValue;
+        }
+        explanation = `Updated height of ${ev.nodeId}: ${ev.oldValue} ➔ ${ev.newValue}`;
+        break;
+      }
+
+      case 'AVL_BALANCE_CHECK': {
+        if (!nextAlgorithmState.balanceFactors) nextAlgorithmState.balanceFactors = {};
+        nextAlgorithmState.balanceFactors[ev.nodeId!] = ev.balanceFactor!;
+        const st = nextStructures[ev.structureId || 'avl'];
+        if (st && st.treeData && st.treeData.nodes[ev.nodeId!]) {
+          st.treeData.nodes[ev.nodeId!].balanceFactor = ev.balanceFactor;
+        }
+        explanation = `Balance check on ${ev.nodeId}: leftH=${ev.fromIndex}, rightH=${ev.toIndex} ➔ Balance Factor = ${ev.balanceFactor}`;
+        break;
+      }
+
+      case 'AVL_ROTATE_LEFT': {
+        nextAlgorithmState.lastRotationType = 'RR';
+        nextAlgorithmState.avlRotationsCount = (nextAlgorithmState.avlRotationsCount || 0) + 1;
+        const st = nextStructures[ev.structureId || 'avl'];
+        if (st && st.treeData && ev.nodeId && ev.childNodeId) {
+          const oldRoot = st.treeData.nodes[ev.nodeId];
+          const newRoot = st.treeData.nodes[ev.childNodeId];
+          if (oldRoot && newRoot) {
+            oldRoot.rightId = newRoot.leftId;
+            newRoot.leftId = oldRoot.id;
+            if (st.treeData.rootId === oldRoot.id) {
+              st.treeData.rootId = newRoot.id;
+            }
+          }
+        }
+        explanation = `Executed LEFT ROTATION (RR) on node ${ev.nodeId} (New subtree root: ${ev.childNodeId})`;
+        break;
+      }
+
+      case 'AVL_ROTATE_RIGHT': {
+        nextAlgorithmState.lastRotationType = 'LL';
+        nextAlgorithmState.avlRotationsCount = (nextAlgorithmState.avlRotationsCount || 0) + 1;
+        const st = nextStructures[ev.structureId || 'avl'];
+        if (st && st.treeData && ev.nodeId && ev.childNodeId) {
+          const oldRoot = st.treeData.nodes[ev.nodeId];
+          const newRoot = st.treeData.nodes[ev.childNodeId];
+          if (oldRoot && newRoot) {
+            oldRoot.leftId = newRoot.rightId;
+            newRoot.rightId = oldRoot.id;
+            if (st.treeData.rootId === oldRoot.id) {
+              st.treeData.rootId = newRoot.id;
+            }
+          }
+        }
+        explanation = `Executed RIGHT ROTATION (LL) on node ${ev.nodeId} (New subtree root: ${ev.childNodeId})`;
+        break;
+      }
+
+      case 'AVL_ROTATE_LEFT_RIGHT': {
+        nextAlgorithmState.lastRotationType = 'LR';
+        nextAlgorithmState.avlRotationsCount = (nextAlgorithmState.avlRotationsCount || 0) + 1;
+        explanation = `Executed LEFT-RIGHT ROTATION (LR Double Rotation) on node ${ev.nodeId}`;
+        break;
+      }
+
+      case 'AVL_ROTATE_RIGHT_LEFT': {
+        nextAlgorithmState.lastRotationType = 'RL';
+        nextAlgorithmState.avlRotationsCount = (nextAlgorithmState.avlRotationsCount || 0) + 1;
+        explanation = `Executed RIGHT-LEFT ROTATION (RL Double Rotation) on node ${ev.nodeId}`;
+        break;
+      }
+
+      case 'AVL_ROOT_UPDATE': {
+        const st = nextStructures[ev.structureId || 'avl'];
+        if (st && st.treeData) {
+          st.treeData.rootId = ev.nodeId!;
+        }
+        explanation = `AVL Tree root updated to node ${ev.nodeId}`;
+        break;
+      }
+
+      case 'AVL_END': {
+        nextAlgorithmState.status = 'Tree Balanced';
+        explanation = 'AVL Tree operation finished: All nodes adhere to AVL balance condition (-1 <= BF <= 1)';
+        break;
+      }
+
+      // --- Binary Search on Answer ---
+      case 'ANSWER_SEARCH_START': {
+        nextAlgorithmState.algorithmName = 'Binary Search on Answer';
+        nextAlgorithmState.category = 'Advanced Search / Optimization';
+        nextAlgorithmState.searchLow = Number(ev.low);
+        nextAlgorithmState.searchHigh = Number(ev.high);
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(log(Range) * Check)', space: 'O(1)' };
+        explanation = `Started Binary Search on Answer in range [${ev.low}, ${ev.high}]`;
+        break;
+      }
+
+      case 'ANSWER_SEARCH_RANGE': {
+        nextAlgorithmState.searchLow = Number(ev.low);
+        nextAlgorithmState.searchHigh = Number(ev.high);
+        explanation = `Search space refined: [low = ${ev.low}, high = ${ev.high}]`;
+        break;
+      }
+
+      case 'ANSWER_SEARCH_MID': {
+        nextAlgorithmState.searchMid = Number(ev.mid);
+        explanation = `Testing candidate solution mid = ${ev.mid}`;
+        break;
+      }
+
+      case 'ANSWER_SEARCH_FEASIBILITY_CHECK': {
+        nextMetrics.comparisons++;
+        nextAlgorithmState.answerFeasibility = !!ev.feasible;
+        explanation = `Feasibility check for ${ev.mid}: ${ev.feasible ? 'FEASIBLE ✓' : 'INFEASIBLE ✗'} ${ev.message ? `(${ev.message})` : ''}`;
+        break;
+      }
+
+      case 'ANSWER_SEARCH_RANGE_UPDATE': {
+        nextAlgorithmState.searchLow = Number(ev.low);
+        nextAlgorithmState.searchHigh = Number(ev.high);
+        explanation = `Updated search bounds: [${ev.low}, ${ev.high}], optimal feasible so far = ${ev.value}`;
+        break;
+      }
+
+      case 'ANSWER_SEARCH_END': {
+        nextAlgorithmState.status = `Optimal Answer = ${ev.value}`;
+        explanation = `Binary Search on Answer complete: Optimal answer is ${ev.value}`;
+        break;
+      }
+
+      // --- Coordinate Compression ---
+      case 'COORD_COMPRESS_START': {
+        nextAlgorithmState.algorithmName = 'Coordinate Compression';
+        nextAlgorithmState.category = 'Advanced Search / Optimization';
+        nextAlgorithmState.coordMapping = {};
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N log N)', space: 'O(N)' };
+        explanation = `Started Coordinate Compression on ${ev.size} elements`;
+        break;
+      }
+
+      case 'COORD_COMPRESS_MAP': {
+        if (!nextAlgorithmState.coordMapping) nextAlgorithmState.coordMapping = {};
+        nextAlgorithmState.coordMapping[String(ev.value)] = Number(ev.index);
+        explanation = `Mapped coordinate value ${ev.value} ➔ compressed rank ${ev.index}`;
+        break;
+      }
+
+      case 'COORD_COMPRESS_APPLY': {
+        nextMetrics.assignments++;
+        explanation = `Applied compressed coordinate: arr[${ev.index}] ${ev.oldValue} ➔ ${ev.newValue}`;
+        break;
+      }
+
+      case 'COORD_COMPRESS_END': {
+        nextAlgorithmState.status = `Compressed ${ev.size} unique values`;
+        explanation = `Coordinate Compression finished (${ev.size} unique ranks)`;
+        break;
+      }
+
+      // --- Monotonic Stack ---
+      case 'MONO_STACK_START': {
+        nextAlgorithmState.algorithmName = 'Monotonic Stack';
+        nextAlgorithmState.category = 'Advanced Search / Optimization';
+        nextAlgorithmState.monoStackType = (ev.monoType as any) || 'DECREASING';
+        nextAlgorithmState.monoStackElements = [];
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N)', space: 'O(N)' };
+        explanation = `Initialized ${ev.monoType || 'Monotonic'} Stack pattern`;
+        break;
+      }
+
+      case 'MONO_STACK_COMPARE': {
+        nextMetrics.comparisons++;
+        const mType = ev.monoType || nextAlgorithmState.monoStackType || 'DECREASING';
+        nextComparison = {
+          left: `Stack Top: ${ev.leftVal}`,
+          right: `Current: ${ev.rightVal}`,
+          operator: mType === 'INCREASING' ? '>=' : '<=',
+          result: !!ev.conditionResult,
+          explanation: ev.conditionResult
+            ? `Top element violates monotonicity with respect to incoming element ➔ POP stack!`
+            : `Incoming element preserves monotonicity ➔ Proceed to PUSH`,
+        };
+        explanation = `Comparing stack top (${ev.leftVal}) with current (${ev.rightVal}) ➔ ${ev.conditionResult ? 'Violates monotonicity: POP needed' : 'Maintains order: Ready to PUSH'}`;
+        break;
+      }
+
+      case 'MONO_STACK_POP': {
+        if (nextAlgorithmState.monoStackElements) {
+          nextAlgorithmState.monoStackElements.pop();
+        }
+        explanation = `Popped ${ev.value} from monotonic stack`;
+        break;
+      }
+
+      case 'MONO_STACK_PUSH': {
+        if (!nextAlgorithmState.monoStackElements) nextAlgorithmState.monoStackElements = [];
+        nextAlgorithmState.monoStackElements.push(ev.value);
+        explanation = `Pushed ${ev.value} onto monotonic stack`;
+        break;
+      }
+
+      case 'MONO_STACK_RESULT': {
+        explanation = `Assigned result for index ${ev.index} (${ev.oldValue}): Next = ${ev.newValue}`;
+        break;
+      }
+
+      case 'MONO_STACK_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = 'Monotonic stack processing completed';
         break;
       }
 

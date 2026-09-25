@@ -319,6 +319,104 @@ public class Graph {
       fs.writeFileSync(path.join(pkgDir, 'Graph.java'), `package com.codeflow;\n${graphSrc}`, 'utf8');
     }
 
+    if (!userCode.includes('class AVLTree') && userCode.includes('AVLTree')) {
+      const avlSrc = `public class AVLTree {
+    public static class AVLNode {
+        public int val;
+        public int height;
+        public AVLNode left;
+        public AVLNode right;
+        public AVLNode(int val) {
+            this.val = val;
+            this.height = 1;
+        }
+    }
+    public AVLNode root;
+    public int height(AVLNode n) {
+        return n == null ? 0 : n.height;
+    }
+    public int getBalance(AVLNode n) {
+        return n == null ? 0 : height(n.left) - height(n.right);
+    }
+    public AVLNode rightRotate(AVLNode y) {
+        AVLNode x = y.left;
+        AVLNode T2 = x.right;
+        x.right = y;
+        y.left = T2;
+        y.height = Math.max(height(y.left), height(y.right)) + 1;
+        x.height = Math.max(height(x.left), height(x.right)) + 1;
+        return x;
+    }
+    public AVLNode leftRotate(AVLNode x) {
+        AVLNode y = x.right;
+        AVLNode T2 = y.left;
+        y.left = x;
+        x.right = T2;
+        x.height = Math.max(height(x.left), height(x.right)) + 1;
+        y.height = Math.max(height(y.left), height(y.right)) + 1;
+        return y;
+    }
+    public void insert(int val) {
+        root = insertRec(root, val);
+    }
+    private AVLNode insertRec(AVLNode node, int val) {
+        if (node == null) return new AVLNode(val);
+        if (val < node.val) node.left = insertRec(node.left, val);
+        else if (val > node.val) node.right = insertRec(node.right, val);
+        else return node;
+
+        node.height = 1 + Math.max(height(node.left), height(node.right));
+        int balance = getBalance(node);
+
+        if (balance > 1 && val < node.left.val) return rightRotate(node);
+        if (balance < -1 && val > node.right.val) return leftRotate(node);
+        if (balance > 1 && val > node.left.val) {
+            node.left = leftRotate(node.left);
+            return rightRotate(node);
+        }
+        if (balance < -1 && val < node.right.val) {
+            node.right = rightRotate(node.right);
+            return leftRotate(node);
+        }
+        return node;
+    }
+}`;
+      fs.writeFileSync(path.join(sandboxDir, 'AVLTree.java'), avlSrc, 'utf8');
+      fs.writeFileSync(path.join(pkgDir, 'AVLTree.java'), `package com.codeflow;\n${avlSrc}`, 'utf8');
+    }
+
+    if (!userCode.includes('class DisjointSet') && userCode.includes('DisjointSet')) {
+      const dsuSrc = `public class DisjointSet {
+    public int[] parent;
+    public int[] rank;
+    public DisjointSet(int n) {
+        parent = new int[n];
+        rank = new int[n];
+        for (int i = 0; i < n; i++) parent[i] = i;
+    }
+    public int find(int i) {
+        if (parent[i] == i) return i;
+        return parent[i] = find(parent[i]);
+    }
+    public boolean union(int i, int j) {
+        int rootI = find(i);
+        int rootJ = find(j);
+        if (rootI == rootJ) return false;
+        if (rank[rootI] < rank[rootJ]) {
+            parent[rootI] = rootJ;
+        } else if (rank[rootI] > rank[rootJ]) {
+            parent[rootJ] = rootI;
+        } else {
+            parent[rootJ] = rootI;
+            rank[rootI]++;
+        }
+        return true;
+    }
+}`;
+      fs.writeFileSync(path.join(sandboxDir, 'DisjointSet.java'), dsuSrc, 'utf8');
+      fs.writeFileSync(path.join(pkgDir, 'DisjointSet.java'), `package com.codeflow;\n${dsuSrc}`, 'utf8');
+    }
+
     // 3. Test compile the RAW user code first to catch genuine javac compilation errors
     const rawJavaFile = path.join(sandboxDir, `${className}.java`);
     fs.writeFileSync(rawJavaFile, userCode, 'utf8');

@@ -223,6 +223,32 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
                   className="filter drop-shadow-md"
                 />
 
+                {/* Balance Factor / Height badge for AVL nodes */}
+                {node.balanceFactor !== undefined && (
+                  <g transform="translate(14, -14)">
+                    <rect
+                      x="-10"
+                      y="-7"
+                      width="20"
+                      height="14"
+                      rx="4"
+                      fill="#161b22"
+                      stroke={Math.abs(node.balanceFactor) > 1 ? '#f85149' : '#3fb950'}
+                      strokeWidth="1.2"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="3.5"
+                      fill={Math.abs(node.balanceFactor) > 1 ? '#f85149' : '#3fb950'}
+                      fontSize="9"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                    >
+                      {node.balanceFactor > 0 ? `+${node.balanceFactor}` : node.balanceFactor}
+                    </text>
+                  </g>
+                )}
+
                 {/* Node Value (Value vs Reference distinction) */}
                 <text
                   textAnchor="middle"
@@ -244,6 +270,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
                   fontFamily="monospace"
                 >
                   {isRoot ? '★ root' : node.id.length > 10 ? node.id.substring(0, 8) + '..' : node.id}
+                  {node.height !== undefined ? ` (h:${node.height})` : ''}
                 </text>
               </g>
             );
@@ -291,6 +318,24 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
                 {inspectedNode.rightId ? `➔ ${nodes[inspectedNode.rightId]?.value ?? inspectedNode.rightId}` : 'null'}
               </span>
             </div>
+
+            {inspectedNode.height !== undefined && (
+              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]/80 flex flex-col">
+                <span className="text-[10px] text-[#8b949e]">NODE HEIGHT:</span>
+                <span className="text-xs font-bold text-[#d29922]">
+                  {inspectedNode.height}
+                </span>
+              </div>
+            )}
+
+            {inspectedNode.balanceFactor !== undefined && (
+              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]/80 flex flex-col">
+                <span className="text-[10px] text-[#8b949e]">BALANCE FACTOR:</span>
+                <span className={`text-xs font-bold ${Math.abs(inspectedNode.balanceFactor) > 1 ? 'text-[#f85149]' : 'text-[#3fb950]'}`}>
+                  {inspectedNode.balanceFactor} {Math.abs(inspectedNode.balanceFactor) > 1 ? '(Unbalanced)' : '(Balanced)'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}

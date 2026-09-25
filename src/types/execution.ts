@@ -256,6 +256,105 @@ export type EventType =
   | 'DP_CACHE_MISS'
   | 'DP_BASE_CASE'
   | 'DP_END'
+  // Phase 6 Advanced Algorithm Events
+  // Bellman-Ford
+  | 'BELLMAN_FORD_START'
+  | 'BELLMAN_FORD_PASS_START'
+  | 'BELLMAN_FORD_EDGE_RELAX'
+  | 'BELLMAN_FORD_COMPARE'
+  | 'BELLMAN_FORD_DISTANCE_UPDATE'
+  | 'BELLMAN_FORD_PASS_END'
+  | 'BELLMAN_FORD_NEGATIVE_CYCLE'
+  | 'BELLMAN_FORD_END'
+  // Floyd-Warshall
+  | 'FLOYD_WARSHALL_START'
+  | 'FLOYD_K_UPDATE'
+  | 'FLOYD_DISTANCE_COMPARE'
+  | 'FLOYD_DISTANCE_UPDATE'
+  | 'FLOYD_WARSHALL_END'
+  // Prim's Algorithm (MST)
+  | 'PRIM_START'
+  | 'PRIM_NODE_SELECT'
+  | 'PRIM_EDGE_CONSIDER'
+  | 'PRIM_EDGE_COMPARE'
+  | 'PRIM_EDGE_ACCEPT'
+  | 'PRIM_EDGE_REJECT'
+  | 'PRIM_QUEUE_INSERT'
+  | 'PRIM_QUEUE_REMOVE'
+  | 'PRIM_END'
+  // Kruskal's Algorithm (MST)
+  | 'KRUSKAL_START'
+  | 'KRUSKAL_EDGE_SELECT'
+  | 'KRUSKAL_EDGE_COMPARE'
+  | 'KRUSKAL_CYCLE_CHECK'
+  | 'KRUSKAL_EDGE_ACCEPT'
+  | 'KRUSKAL_EDGE_REJECT'
+  | 'KRUSKAL_UNION'
+  | 'KRUSKAL_FIND'
+  | 'KRUSKAL_END'
+  // Topological Sort
+  | 'TOPOLOGICAL_SORT_START'
+  | 'INDEGREE_INITIALIZE'
+  | 'TOPOLOGICAL_NODE_ENQUEUE'
+  | 'TOPOLOGICAL_NODE_DEQUEUE'
+  | 'TOPOLOGICAL_EDGE_PROCESS'
+  | 'INDEGREE_UPDATE'
+  | 'TOPOLOGICAL_NODE_OUTPUT'
+  | 'TOPOLOGICAL_CYCLE_DETECTED'
+  | 'TOPOLOGICAL_SORT_END'
+  // Strongly Connected Components: Kosaraju
+  | 'KOSARAJU_START'
+  | 'KOSARAJU_FIRST_DFS'
+  | 'KOSARAJU_FINISH'
+  | 'KOSARAJU_STACK_PUSH'
+  | 'KOSARAJU_TRANSPOSE'
+  | 'KOSARAJU_SECOND_DFS'
+  | 'KOSARAJU_SCC_START'
+  | 'KOSARAJU_SCC_NODE'
+  | 'KOSARAJU_SCC_END'
+  | 'KOSARAJU_END'
+  // Strongly Connected Components: Tarjan
+  | 'TARJAN_START'
+  | 'TARJAN_DISCOVER'
+  | 'TARJAN_LOWLINK_UPDATE'
+  | 'TARJAN_STACK_PUSH'
+  | 'TARJAN_EDGE_PROCESS'
+  | 'TARJAN_SCC_START'
+  | 'TARJAN_SCC_NODE'
+  | 'TARJAN_STACK_POP'
+  | 'TARJAN_SCC_END'
+  | 'TARJAN_END'
+  // AVL Tree
+  | 'AVL_CREATE'
+  | 'AVL_INSERT'
+  | 'AVL_DELETE'
+  | 'AVL_HEIGHT_UPDATE'
+  | 'AVL_BALANCE_CHECK'
+  | 'AVL_ROTATE_LEFT'
+  | 'AVL_ROTATE_RIGHT'
+  | 'AVL_ROTATE_LEFT_RIGHT'
+  | 'AVL_ROTATE_RIGHT_LEFT'
+  | 'AVL_ROOT_UPDATE'
+  | 'AVL_END'
+  // Binary Search on Answer
+  | 'ANSWER_SEARCH_START'
+  | 'ANSWER_SEARCH_RANGE'
+  | 'ANSWER_SEARCH_MID'
+  | 'ANSWER_SEARCH_FEASIBILITY_CHECK'
+  | 'ANSWER_SEARCH_RANGE_UPDATE'
+  | 'ANSWER_SEARCH_END'
+  // Coordinate Compression
+  | 'COORD_COMPRESS_START'
+  | 'COORD_COMPRESS_MAP'
+  | 'COORD_COMPRESS_APPLY'
+  | 'COORD_COMPRESS_END'
+  // Monotonic Stack
+  | 'MONO_STACK_START'
+  | 'MONO_STACK_COMPARE'
+  | 'MONO_STACK_POP'
+  | 'MONO_STACK_PUSH'
+  | 'MONO_STACK_RESULT'
+  | 'MONO_STACK_END'
   | 'FUNCTION_CALL'
   | 'FUNCTION_RETURN'
   | 'LOOP_START'
@@ -361,6 +460,22 @@ export interface ExecutionEvent {
   stateKey?: any;
   dimensions?: number[];
   args?: Record<string, any>;
+  // Phase 6 Advanced Algorithm fields
+  pass?: number;
+  totalPasses?: number;
+  from?: string;
+  to?: string;
+  k?: string | number;
+  iNode?: string | number;
+  jNode?: string | number;
+  candidateDistance?: number | string;
+  componentId?: number | string;
+  componentNodes?: string[];
+  balanceFactor?: number;
+  height?: number;
+  rotationType?: 'LL' | 'RR' | 'LR' | 'RL';
+  feasible?: boolean;
+  monoType?: 'INCREASING' | 'DECREASING';
 }
 
 export interface VariableInfo {
@@ -400,6 +515,7 @@ export interface TreeNodeData {
   isLeft?: boolean;
   highlighted?: boolean;
   color?: string;
+  height?: number;
   balanceFactor?: number;
 }
 
@@ -427,12 +543,17 @@ export interface GraphNodeData {
   highlighted?: boolean;
   color?: string;
   degree?: number;
+  inDegree?: number;
+  sccGroup?: number;
+  lowLink?: number;
+  discoveryIndex?: number;
+  onStack?: boolean;
   inNeighbors?: string[];
   outNeighbors?: string[];
   metadata?: Record<string, any>;
 }
 
-export type GraphEdgeState = 'NORMAL' | 'ACTIVE' | 'TRAVERSED' | 'SELECTED' | 'RELAXED' | 'REJECTED' | 'CYCLE' | 'PATH';
+export type GraphEdgeState = 'NORMAL' | 'ACTIVE' | 'TRAVERSED' | 'SELECTED' | 'RELAXED' | 'REJECTED' | 'CYCLE' | 'PATH' | 'MST';
 
 export interface GraphEdgeData {
   id: string;
@@ -444,6 +565,7 @@ export interface GraphEdgeData {
   state?: GraphEdgeState;
   highlighted?: boolean;
   color?: string;
+  inMST?: boolean;
   metadata?: Record<string, any>;
 }
 
@@ -594,7 +716,10 @@ export type AlgorithmCategory =
   | 'Backtracking'
   | 'Divide & Conquer'
   | 'Greedy'
-  | 'Dynamic Programming';
+  | 'Dynamic Programming'
+  | 'Advanced Graph'
+  | 'Advanced Tree'
+  | 'Advanced Search / Optimization';
 
 export interface AlgorithmState {
   algorithmName?: string;
@@ -652,6 +777,52 @@ export interface AlgorithmState {
   candidates?: any[];
   chosenCandidate?: any;
   greedyDecision?: 'ACCEPTED' | 'REJECTED' | 'PENDING';
+  // Phase 6 Advanced Graph
+  // Bellman-Ford
+  bellmanPass?: number;
+  bellmanTotalPasses?: number;
+  bellmanDistances?: Record<string, number | string>;
+  bellmanCurrentEdge?: { from: string; to: string; weight: number };
+  negativeCycleDetected?: boolean;
+  negativeCycleEdges?: string[];
+  // Floyd-Warshall
+  floydK?: string | number;
+  floydI?: string | number;
+  floydJ?: string | number;
+  floydMatrix?: (number | string)[][];
+  floydLabels?: string[];
+  floydOldDistance?: number | string;
+  floydCandidateDistance?: number | string;
+  // Minimum Spanning Tree (Prim & Kruskal)
+  mstEdges?: { from: string; to: string; weight: number }[];
+  mstTotalWeight?: number;
+  primCurrentNode?: string;
+  kruskalSortedEdges?: { from: string; to: string; weight: number; status?: 'PENDING' | 'ACCEPTED' | 'REJECTED' }[];
+  disjointSetParents?: Record<string, string>;
+  disjointSetRanks?: Record<string, number>;
+  // Topological Sort
+  indegrees?: Record<string, number>;
+  topologicalQueue?: string[];
+  topologicalOrder?: string[];
+  topologicalCycle?: boolean;
+  // Strongly Connected Components (Kosaraju & Tarjan)
+  sccComponents?: string[][];
+  currentSCC?: string[];
+  tarjanDiscoveryIndex?: Record<string, number>;
+  tarjanLowLink?: Record<string, number>;
+  tarjanStack?: string[];
+  kosarajuFinishStack?: string[];
+  isTransposePhase?: boolean;
+  // Phase 6 Advanced Tree: AVL
+  avlRotationsCount?: number;
+  lastRotationType?: 'LL' | 'RR' | 'LR' | 'RL';
+  nodeHeights?: Record<string, number>;
+  balanceFactors?: Record<string, number>;
+  // Phase 6 Advanced Search & Patterns
+  answerFeasibility?: boolean;
+  coordMapping?: Record<string | number, number>;
+  monoStackType?: 'INCREASING' | 'DECREASING';
+  monoStackElements?: any[];
   // Metrics & Complexity
   metrics: AlgorithmMetrics;
   theoreticalComplexity?: {

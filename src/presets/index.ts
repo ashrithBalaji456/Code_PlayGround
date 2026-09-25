@@ -2039,6 +2039,567 @@ public class Main {
 }
 `,
   },
+
+  // ==========================================
+  // PHASE 6: ADVANCED GRAPH ALGORITHMS
+  // ==========================================
+  {
+    id: 'p6-bellman-ford',
+    title: 'Bellman-Ford — Shortest Paths & Negative Edges',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V · E)',
+    spaceComplexity: 'O(V)',
+    description: 'Computes single-source shortest paths on graphs with negative edge weights via iterative relaxation passes.',
+    explanation: 'Performs relaxation across all directed edges for V-1 passes, updating distance values and tracking candidate transitions.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(true, true);
+        g.addEdge("A", "B", 4.0);
+        g.addEdge("A", "C", 5.0);
+        g.addEdge("B", "C", -2.0);
+        g.addEdge("C", "D", 3.0);
+        g.addEdge("B", "D", 6.0);
+
+        CodeFlowTracer.bellmanFordStart("g", "A", 10);
+        CodeFlowTracer.bellmanFordPassStart("g", 1, 3, 11);
+        CodeFlowTracer.bellmanFordEdgeRelax("g", "A", "B", 4.0, 0.0, Double.POSITIVE_INFINITY, 12);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "B", Double.POSITIVE_INFINITY, 4.0, 13);
+        CodeFlowTracer.bellmanFordEdgeRelax("g", "A", "C", 5.0, 0.0, Double.POSITIVE_INFINITY, 14);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "C", Double.POSITIVE_INFINITY, 5.0, 15);
+        CodeFlowTracer.bellmanFordPassEnd("g", 1, 16);
+
+        CodeFlowTracer.bellmanFordPassStart("g", 2, 3, 17);
+        CodeFlowTracer.bellmanFordEdgeRelax("g", "B", "C", -2.0, 4.0, 5.0, 18);
+        CodeFlowTracer.bellmanFordCompare("g", "B", "C", 2.0, 5.0, true, 19);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "C", 5.0, 2.0, 20);
+        CodeFlowTracer.bellmanFordEdgeRelax("g", "C", "D", 3.0, 2.0, Double.POSITIVE_INFINITY, 21);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "D", Double.POSITIVE_INFINITY, 5.0, 22);
+        CodeFlowTracer.bellmanFordPassEnd("g", 2, 23);
+
+        CodeFlowTracer.bellmanFordPassStart("g", 3, 3, 24);
+        CodeFlowTracer.bellmanFordPassEnd("g", 3, 25);
+        CodeFlowTracer.bellmanFordEnd("g", 26);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-bellman-neg-cycle',
+    title: 'Bellman-Ford — Negative Cycle Detection',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(V · E)',
+    spaceComplexity: 'O(V)',
+    description: 'Detects negative-weight cycles where distances decrease indefinitely on further relaxation passes.',
+    explanation: 'Attempts a relaxation pass after V-1 rounds; finding a strictly shorter candidate path proves the presence of a negative cycle.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(true, true);
+        g.addEdge("A", "B", 1.0);
+        g.addEdge("B", "C", -3.0);
+        g.addEdge("C", "A", 1.0);
+
+        CodeFlowTracer.bellmanFordStart("g", "A", 9);
+        CodeFlowTracer.bellmanFordPassStart("g", 1, 2, 10);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "A", Double.POSITIVE_INFINITY, 0.0, 11);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "B", Double.POSITIVE_INFINITY, 1.0, 12);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "C", Double.POSITIVE_INFINITY, -2.0, 13);
+        CodeFlowTracer.bellmanFordPassEnd("g", 1, 14);
+
+        CodeFlowTracer.bellmanFordPassStart("g", 2, 2, 15);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "A", 0.0, -1.0, 16);
+        CodeFlowTracer.bellmanFordNegativeCycle("g", "C", "A", 17);
+        CodeFlowTracer.bellmanFordEnd("g", 18);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-floyd-warshall',
+    title: 'Floyd-Warshall — All-Pairs Shortest Paths',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V³)',
+    spaceComplexity: 'O(V²)',
+    description: 'Dynamic programming matrix algorithm computing shortest paths between all pairs of vertices via intermediate nodes k.',
+    explanation: 'Iterates through intermediate vertex k, comparing dist[i][j] with dist[i][k] + dist[k][j] in a live 2D distance matrix.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(true, true);
+        g.addEdge("A", "B", 3.0);
+        g.addEdge("B", "C", 1.0);
+        g.addEdge("A", "C", 6.0);
+
+        CodeFlowTracer.floydWarshallStart("g", "[\"A\", \"B\", \"C\"]", "[[0, 3, 6], [\"∞\", 0, 1], [\"∞\", \"∞\", 0]]", 9);
+        CodeFlowTracer.floydKUpdate("g", "B", 10);
+        CodeFlowTracer.floydDistanceCompare("g", "A", "C", "B", 6.0, 4.0, true, 11);
+        CodeFlowTracer.floydDistanceUpdate("g", "A", "C", "B", 6.0, 4.0, 12);
+        CodeFlowTracer.floydWarshallEnd("g", 13);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-prim-mst',
+    title: "Prim's Algorithm — Minimum Spanning Tree",
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(E log V)',
+    spaceComplexity: 'O(V)',
+    description: 'Greedy tree-growing algorithm orchestrating a PriorityQueue (Min-Heap) and Visited Set on an undirected weighted graph.',
+    explanation: 'Extracts the minimum-weight incident edge across the tree cut, accepting edges and growing the connected spanning tree.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(false, true);
+        g.addEdge("A", "B", 4.0);
+        g.addEdge("A", "C", 2.0);
+        g.addEdge("B", "C", 1.0);
+        g.addEdge("B", "D", 5.0);
+        g.addEdge("C", "D", 3.0);
+
+        CodeFlowTracer.primStart("g", "A", 10);
+        CodeFlowTracer.primNodeSelect("g", "A", 11);
+        CodeFlowTracer.primQueueInsert("g", "A", "C", 2.0, 12);
+        CodeFlowTracer.primQueueInsert("g", "A", "B", 4.0, 13);
+
+        CodeFlowTracer.primQueueRemove("g", "A", "C", 2.0, 14);
+        CodeFlowTracer.primEdgeAccept("g", "A", "C", 2.0, 2.0, 15);
+        CodeFlowTracer.primNodeSelect("g", "C", 16);
+        CodeFlowTracer.primQueueInsert("g", "C", "B", 1.0, 17);
+        CodeFlowTracer.primQueueInsert("g", "C", "D", 3.0, 18);
+
+        CodeFlowTracer.primQueueRemove("g", "C", "B", 1.0, 19);
+        CodeFlowTracer.primEdgeAccept("g", "C", "B", 1.0, 3.0, 20);
+        CodeFlowTracer.primNodeSelect("g", "B", 21);
+
+        CodeFlowTracer.primQueueRemove("g", "C", "D", 3.0, 22);
+        CodeFlowTracer.primEdgeAccept("g", "C", "D", 3.0, 6.0, 23);
+        CodeFlowTracer.primNodeSelect("g", "D", 24);
+
+        CodeFlowTracer.primEnd("g", 6.0, 25);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-kruskal-mst',
+    title: "Kruskal's Algorithm — MST & Disjoint Set Union",
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(E log E)',
+    spaceComplexity: 'O(V)',
+    description: 'Sorts all edges globally, then greedily unions disjoint components while rejecting edges that form cycles.',
+    explanation: 'Uses Disjoint Set Union (DSU) find() and union() operations with path compression to accept acyclic edges into the MST.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(false, true);
+        g.addEdge("B", "C", 1.0);
+        g.addEdge("A", "C", 2.0);
+        g.addEdge("C", "D", 3.0);
+        g.addEdge("A", "B", 4.0);
+        g.addEdge("B", "D", 5.0);
+
+        DisjointSet dsu = new DisjointSet(4);
+
+        CodeFlowTracer.kruskalStart("g", 5, 12);
+        CodeFlowTracer.kruskalEdgeSelect("g", "B", "C", 1.0, 13);
+        CodeFlowTracer.kruskalCycleCheck("g", "B", "C", false, 14);
+        dsu.union(1, 2);
+        CodeFlowTracer.kruskalUnion("g", "B", "C", "B", 15);
+        CodeFlowTracer.kruskalEdgeAccept("g", "B", "C", 1.0, 1.0, 16);
+
+        CodeFlowTracer.kruskalEdgeSelect("g", "A", "C", 2.0, 17);
+        CodeFlowTracer.kruskalCycleCheck("g", "A", "C", false, 18);
+        dsu.union(0, 2);
+        CodeFlowTracer.kruskalUnion("g", "A", "C", "A", 19);
+        CodeFlowTracer.kruskalEdgeAccept("g", "A", "C", 2.0, 3.0, 20);
+
+        CodeFlowTracer.kruskalEdgeSelect("g", "C", "D", 3.0, 21);
+        CodeFlowTracer.kruskalCycleCheck("g", "C", "D", false, 22);
+        dsu.union(2, 3);
+        CodeFlowTracer.kruskalUnion("g", "C", "D", "A", 23);
+        CodeFlowTracer.kruskalEdgeAccept("g", "C", "D", 3.0, 6.0, 24);
+
+        CodeFlowTracer.kruskalEdgeSelect("g", "A", "B", 4.0, 25);
+        CodeFlowTracer.kruskalCycleCheck("g", "A", "B", true, 26);
+        CodeFlowTracer.kruskalEdgeReject("g", "A", "B", 4.0, 27);
+
+        CodeFlowTracer.kruskalEnd("g", 6.0, 28);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-topo-kahn',
+    title: "Topological Sort — Kahn's BFS Algorithm",
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Computes a linear vertex ordering for Directed Acyclic Graphs (DAGs) using in-degree counters and a FIFO queue.',
+    explanation: 'Enqueues vertices with in-degree 0, decrements neighbors on dequeue, and appends nodes to the linear topological output sequence.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(true, false);
+        g.addEdge("A", "B");
+        g.addEdge("A", "C");
+        g.addEdge("B", "D");
+        g.addEdge("C", "D");
+
+        CodeFlowTracer.topologicalSortStart("g", "Kahn's Algorithm", 9);
+        CodeFlowTracer.indegreeInitialize("g", "{\"A\": 0, \"B\": 1, \"C\": 1, \"D\": 2}", 10);
+        CodeFlowTracer.topologicalNodeEnqueue("g", "A", 0, 11);
+
+        CodeFlowTracer.topologicalNodeDequeue("g", "A", 12);
+        CodeFlowTracer.topologicalNodeOutput("g", "A", 0, 13);
+        CodeFlowTracer.topologicalEdgeProcess("g", "A", "B", 0, 14);
+        CodeFlowTracer.topologicalNodeEnqueue("g", "B", 0, 15);
+        CodeFlowTracer.topologicalEdgeProcess("g", "A", "C", 0, 16);
+        CodeFlowTracer.topologicalNodeEnqueue("g", "C", 0, 17);
+
+        CodeFlowTracer.topologicalNodeDequeue("g", "B", 18);
+        CodeFlowTracer.topologicalNodeOutput("g", "B", 1, 19);
+        CodeFlowTracer.topologicalEdgeProcess("g", "B", "D", 1, 20);
+
+        CodeFlowTracer.topologicalNodeDequeue("g", "C", 21);
+        CodeFlowTracer.topologicalNodeOutput("g", "C", 2, 22);
+        CodeFlowTracer.topologicalEdgeProcess("g", "C", "D", 0, 23);
+        CodeFlowTracer.topologicalNodeEnqueue("g", "D", 0, 24);
+
+        CodeFlowTracer.topologicalNodeDequeue("g", "D", 25);
+        CodeFlowTracer.topologicalNodeOutput("g", "D", 3, 26);
+
+        CodeFlowTracer.topologicalSortEnd("g", "[\"A\", \"B\", \"C\", \"D\"]", 27);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-scc-tarjan',
+    title: "Tarjan's Algorithm — Strongly Connected Components",
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Single-pass DFS algorithm identifying maximal strongly connected components using discovery index and low-link values.',
+    explanation: 'Assigns dfn and low indices during DFS traversal, pushing to an active subtree stack, and pops full SCC groups when low == dfn.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(true, false);
+        g.addEdge("A", "B");
+        g.addEdge("B", "C");
+        g.addEdge("C", "A");
+        g.addEdge("C", "D");
+
+        CodeFlowTracer.tarjanStart("g", 9);
+        CodeFlowTracer.tarjanDiscover("g", "A", 0, 0, 10);
+        CodeFlowTracer.tarjanStackPush("g", "A", 11);
+
+        CodeFlowTracer.tarjanDiscover("g", "B", 1, 1, 12);
+        CodeFlowTracer.tarjanStackPush("g", "B", 13);
+
+        CodeFlowTracer.tarjanDiscover("g", "C", 2, 2, 14);
+        CodeFlowTracer.tarjanStackPush("g", "C", 15);
+
+        CodeFlowTracer.tarjanDiscover("g", "D", 3, 3, 16);
+        CodeFlowTracer.tarjanStackPush("g", "D", 17);
+        CodeFlowTracer.tarjanSccStart("g", 1, "D", 18);
+        CodeFlowTracer.tarjanStackPop("g", "D", 1, 19);
+        CodeFlowTracer.tarjanSccEnd("g", 1, "[\"D\"]", 20);
+
+        CodeFlowTracer.tarjanLowLinkUpdate("g", "C", 2, 0, 21);
+        CodeFlowTracer.tarjanLowLinkUpdate("g", "B", 1, 0, 22);
+
+        CodeFlowTracer.tarjanSccStart("g", 2, "A", 23);
+        CodeFlowTracer.tarjanStackPop("g", "C", 2, 24);
+        CodeFlowTracer.tarjanStackPop("g", "B", 2, 25);
+        CodeFlowTracer.tarjanStackPop("g", "A", 2, 26);
+        CodeFlowTracer.tarjanSccEnd("g", 2, "[\"C\", \"B\", \"A\"]", 27);
+
+        CodeFlowTracer.tarjanEnd("g", 2, 28);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-scc-kosaraju',
+    title: "Kosaraju's Algorithm — Two-Pass DFS & Transpose Graph",
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V + E)',
+    description: 'Two-pass DFS algorithm that computes finish order on the original graph, reverses edges to Gᵀ, and extracts SCC components.',
+    explanation: 'Phase 1 records finish order on a stack; Phase 2 performs DFS in reverse finish order on the transpose graph to collect SCC groups.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Graph g = new Graph(true, false);
+        g.addEdge("A", "B");
+        g.addEdge("B", "C");
+        g.addEdge("C", "A");
+        g.addEdge("D", "C");
+
+        CodeFlowTracer.kosarajuStart("g", 9);
+        CodeFlowTracer.kosarajuFirstDfs("g", "A", 10);
+        CodeFlowTracer.kosarajuFinish("g", "C", 11);
+        CodeFlowTracer.kosarajuStackPush("g", "C", 12);
+        CodeFlowTracer.kosarajuFinish("g", "B", 13);
+        CodeFlowTracer.kosarajuStackPush("g", "B", 14);
+        CodeFlowTracer.kosarajuFinish("g", "A", 15);
+        CodeFlowTracer.kosarajuStackPush("g", "A", 16);
+        CodeFlowTracer.kosarajuFinish("g", "D", 17);
+        CodeFlowTracer.kosarajuStackPush("g", "D", 18);
+
+        CodeFlowTracer.kosarajuTranspose("g", "gT", 19);
+        CodeFlowTracer.kosarajuSccStart("g", 1, 20);
+        CodeFlowTracer.kosarajuSccNode("g", 1, "D", 21);
+        CodeFlowTracer.kosarajuSccEnd("g", 1, "[\"D\"]", 22);
+
+        CodeFlowTracer.kosarajuSccStart("g", 2, 23);
+        CodeFlowTracer.kosarajuSccNode("g", 2, "A", 24);
+        CodeFlowTracer.kosarajuSccNode("g", 2, "C", 25);
+        CodeFlowTracer.kosarajuSccNode("g", 2, "B", 26);
+        CodeFlowTracer.kosarajuSccEnd("g", 2, "[\"A\", \"C\", \"B\"]", 27);
+
+        CodeFlowTracer.kosarajuEnd("g", 2, 28);
+    }
+}
+`,
+  },
+
+  // ==========================================
+  // PHASE 6: ADVANCED TREE ALGORITHMS (AVL)
+  // ==========================================
+  {
+    id: 'p6-avl-tree',
+    title: 'AVL Tree — Balancing & Rotations (LL & RR)',
+    category: 'Trees & Heaps',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Self-balancing Binary Search Tree computing balance factor height(L) - height(R) and executing O(1) LL and RR rotations.',
+    explanation: 'Preserves binary search order while guaranteeing O(log n) tree depth through pointer-based rotations when |BF| > 1.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        AVLTree avl = new AVLTree();
+        CodeFlowTracer.avlCreate("avl", "AVLTree", 4);
+
+        // LL Case: Inserting 30, 20, 10 triggers a Right Rotation
+        avl.insert(30);
+        CodeFlowTracer.avlInsert("avl", "node_30", 30, 8);
+        avl.insert(20);
+        CodeFlowTracer.avlInsert("avl", "node_20", 20, 10);
+        avl.insert(10);
+        CodeFlowTracer.avlInsert("avl", "node_10", 10, 12);
+        CodeFlowTracer.avlBalanceCheck("avl", "node_30", 2, 0, 2, 13);
+        CodeFlowTracer.avlRotateRight("avl", "node_30", "node_20", 14);
+        CodeFlowTracer.avlRootUpdate("avl", "node_20", 15);
+
+        // RR Case: Inserting 40, 50 triggers a Left Rotation
+        avl.insert(40);
+        CodeFlowTracer.avlInsert("avl", "node_40", 40, 18);
+        avl.insert(50);
+        CodeFlowTracer.avlInsert("avl", "node_50", 50, 20);
+        CodeFlowTracer.avlBalanceCheck("avl", "node_30", 0, 2, -2, 21);
+        CodeFlowTracer.avlRotateLeft("avl", "node_30", "node_40", 22);
+
+        CodeFlowTracer.avlEnd("avl", 24);
+    }
+}
+`,
+  },
+
+  // ==========================================
+  // PHASE 6: ADVANCED SEARCH & PATTERNS
+  // ==========================================
+  {
+    id: 'p6-binary-search-answer',
+    title: 'Binary Search on Answer — Feasibility Check',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(log(Range) · Check)',
+    spaceComplexity: 'O(1)',
+    description: 'Binary search optimization over a monotonic solution space with a feasibility predicate function.',
+    explanation: 'Evaluates feasibility of candidate mid values, narrowing the valid range toward the optimal boundary.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        long low = 1;
+        long high = 100;
+        long optimal = -1;
+
+        CodeFlowTracer.answerSearchStart("ans", low, high, 7);
+
+        while (low <= high) {
+            long mid = low + (high - low) / 2;
+            CodeFlowTracer.answerSearchMid("ans", mid, 11);
+
+            boolean feasible = (mid >= 42);
+            CodeFlowTracer.answerSearchFeasibilityCheck("ans", mid, feasible, "Capacity " + mid + (feasible ? " satisfies demand" : " overflows"), 14);
+
+            if (feasible) {
+                optimal = mid;
+                high = mid - 1;
+                CodeFlowTracer.answerSearchRangeUpdate("ans", low, high, optimal, 19);
+            } else {
+                low = mid + 1;
+                CodeFlowTracer.answerSearchRangeUpdate("ans", low, high, optimal, 22);
+            }
+        }
+
+        CodeFlowTracer.answerSearchEnd("ans", optimal, 26);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-coord-compression',
+    title: 'Coordinate Compression — Rank Mapping',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Maps large or sparse coordinate values into compact 0-indexed contiguous ranks preserving relative order.',
+    explanation: 'Sorts unique elements and replaces raw magnitude values with their sorted ordinal ranks.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] original = {100, 500, 1000, 500};
+        CodeFlowTracer.coordCompressStart("coords", original.length, 4);
+
+        int[] sorted = original.clone();
+        java.util.Arrays.sort(sorted);
+
+        java.util.Map<Integer, Integer> rankMap = new java.util.HashMap<>();
+        int rank = 0;
+        for (int val : sorted) {
+            if (!rankMap.containsKey(val)) {
+                rankMap.put(val, rank);
+                CodeFlowTracer.coordCompressMap("coords", val, rank, 13);
+                rank++;
+            }
+        }
+
+        int[] compressed = new int[original.length];
+        for (int i = 0; i < original.length; i++) {
+            compressed[i] = rankMap.get(original[i]);
+            CodeFlowTracer.coordCompressAssign("coords", i, original[i], compressed[i], 20);
+        }
+
+        CodeFlowTracer.coordCompressEnd("coords", rank, 23);
+    }
+}
+`,
+  },
+  {
+    id: 'p6-monotonic-stack',
+    title: 'Monotonic Stack — Next Greater Element',
+    category: 'Stacks & Queues',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(N)',
+    description: 'Maintains elements in decreasing order to find the next greater element for each array entry in linear time.',
+    explanation: 'Pops stack tops that are strictly smaller than the current element, setting their next greater result before pushing.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] arr = {2, 1, 5, 3};
+        int[] nge = new int[arr.length];
+        java.util.Stack<Integer> stack = new java.util.Stack<>();
+
+        CodeFlowTracer.monoStackStart("stack", "DECREASING", 7);
+
+        for (int i = 0; i < arr.length; i++) {
+            while (!stack.isEmpty() && arr[stack.peek()] < arr[i]) {
+                int popped = stack.pop();
+                nge[popped] = arr[i];
+                CodeFlowTracer.monoStackCompare("stack", arr[i], arr[popped], true, 12);
+                CodeFlowTracer.monoStackPop("stack", arr[popped], 13);
+            }
+            stack.push(i);
+            CodeFlowTracer.monoStackPush("stack", arr[i], 16);
+        }
+
+        while (!stack.isEmpty()) {
+            nge[stack.pop()] = -1;
+        }
+
+        CodeFlowTracer.monoStackEnd("stack", 23);
+    }
+}
+`,
+  },
+
+  // ==========================================
+  // PHASE 6: SECTION 63 COMPREHENSIVE FINAL DEMO
+  // ==========================================
+  {
+    id: 'p6-comprehensive-demo',
+    title: 'Phase 6 Final Comprehensive Demo (Multi-Algorithm Integration)',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'Multi-Phase',
+    spaceComplexity: 'Multi-Structure',
+    description: 'Demonstrates Bellman-Ford, Prim MST, Topological Sort, Tarjan SCC, AVL Tree, and Monotonic Stack in a single execution.',
+    explanation: 'Orchestrates multiple independent graph, tree, and stack data structures through the unified Java execution engine.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        // 1. Graph & Bellman-Ford Relaxation
+        Graph g = new Graph(true, true);
+        g.addEdge("A", "B", 4.0);
+        g.addEdge("B", "C", -2.0);
+        CodeFlowTracer.bellmanFordStart("g", "A", 7);
+        CodeFlowTracer.bellmanFordPassStart("g", 1, 2, 8);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "B", Double.POSITIVE_INFINITY, 4.0, 9);
+        CodeFlowTracer.bellmanFordDistanceUpdate("g", "C", Double.POSITIVE_INFINITY, 2.0, 10);
+        CodeFlowTracer.bellmanFordPassEnd("g", 1, 11);
+        CodeFlowTracer.bellmanFordEnd("g", 12);
+
+        // 2. Prim's MST Edge Selection
+        Graph mstGraph = new Graph(false, true);
+        mstGraph.addEdge("A", "C", 2.0);
+        CodeFlowTracer.primStart("mstGraph", "A", 17);
+        CodeFlowTracer.primEdgeAccept("mstGraph", "A", "C", 2.0, 2.0, 18);
+        CodeFlowTracer.primEnd("mstGraph", 2.0, 19);
+
+        // 3. Topological Sort (Kahn's Queue)
+        Graph dag = new Graph(true, false);
+        dag.addEdge("A", "B");
+        CodeFlowTracer.topologicalSortStart("dag", "Kahn", 24);
+        CodeFlowTracer.topologicalNodeEnqueue("dag", "A", 0, 25);
+        CodeFlowTracer.topologicalNodeOutput("dag", "A", 0, 26);
+        CodeFlowTracer.topologicalSortEnd("dag", "[\"A\", \"B\"]", 27);
+
+        // 4. AVL Tree Rotation
+        AVLTree avl = new AVLTree();
+        CodeFlowTracer.avlCreate("avl", "AVLTree", 31);
+        avl.insert(30);
+        CodeFlowTracer.avlInsert("avl", "node_30", 30, 33);
+        avl.insert(20);
+        CodeFlowTracer.avlInsert("avl", "node_20", 20, 35);
+        CodeFlowTracer.avlRotateRight("avl", "node_30", "node_20", 36);
+        CodeFlowTracer.avlEnd("avl", 37);
+
+        // 5. Monotonic Stack
+        CodeFlowTracer.monoStackStart("stack", "DECREASING", 40);
+        CodeFlowTracer.monoStackPush("stack", 2, 41);
+        CodeFlowTracer.monoStackPop("stack", 2, 42);
+        CodeFlowTracer.monoStackPush("stack", 5, 43);
+        CodeFlowTracer.monoStackEnd("stack", 44);
+    }
+}
+`,
+  },
 ];
 
 
