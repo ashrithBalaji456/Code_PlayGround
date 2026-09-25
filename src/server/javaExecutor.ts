@@ -55,6 +55,11 @@ export async function executeJavaWorker(userCode: string): Promise<JavaExecution
   try {
     fs.mkdirSync(pkgDir, { recursive: true });
 
+    // Always provide CodeFlowTracer in both sandbox root (default package) and com.codeflow package
+    const defaultPkgTracer = CODE_FLOW_TRACER_JAVA.replace(/^package\s+com\.codeflow;\s*/m, '');
+    fs.writeFileSync(path.join(sandboxDir, 'CodeFlowTracer.java'), defaultPkgTracer, 'utf8');
+    fs.writeFileSync(path.join(pkgDir, 'CodeFlowTracer.java'), CODE_FLOW_TRACER_JAVA, 'utf8');
+
     // Extract class name
     const classMatch = userCode.match(/public\s+class\s+([A-Za-z0-9_]+)/);
     const className = classMatch ? classMatch[1] : 'Main';
