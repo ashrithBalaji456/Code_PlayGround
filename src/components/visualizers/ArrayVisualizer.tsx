@@ -102,14 +102,49 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
       </div>
 
       {/* Main visualization */}
+      {/* Algorithm active badges & window indicator bar */}
+      {(structure.windowRange || structure.searchRange || structure.pivotIndex !== undefined) && (
+        <div className="flex flex-wrap items-center gap-2 px-2 py-1 bg-[#0d1117] rounded-lg border border-[#30363d]/60 text-xs font-mono">
+          {structure.windowRange && (
+            <div className="flex items-center gap-1.5 text-[#39c5cf] bg-[#39c5cf]/10 px-2 py-0.5 rounded border border-[#39c5cf]/30">
+              <span className="font-bold">Window:</span>
+              <span>[{structure.windowRange[0]} ... {structure.windowRange[1]}]</span>
+              <span className="text-[10px] text-[#8b949e]">({structure.windowRange[1] - structure.windowRange[0] + 1} elements)</span>
+            </div>
+          )}
+          {structure.searchRange && (
+            <div className="flex items-center gap-1.5 text-[#d29922] bg-[#d29922]/10 px-2 py-0.5 rounded border border-[#d29922]/30">
+              <span className="font-bold">Search Scope:</span>
+              <span>[{structure.searchRange[0]} ... {structure.searchRange[1]}]</span>
+            </div>
+          )}
+          {structure.pivotIndex !== undefined && (
+            <div className="flex items-center gap-1.5 text-[#f0883e] bg-[#f0883e]/10 px-2 py-0.5 rounded border border-[#f0883e]/30">
+              <span className="font-bold">Pivot:</span>
+              <span>index {structure.pivotIndex}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {viewMode === 'boxes' ? (
         <div className="overflow-x-auto py-3">
           <div className="flex items-end justify-center min-w-max gap-2 px-2">
             {arr.map((val, idx) => {
               const activePtrs = pointersByIndex[idx] || [];
+              const algoBadges = structure.pointerBadges?.[idx] || [];
+              const allBadges = [...new Set([...activePtrs, ...algoBadges])];
+
               const isActive = structure.activeIndices?.includes(idx);
               const isComparing = structure.comparingIndices?.includes(idx);
               const isSwapping = structure.swappingIndices?.includes(idx);
+              const isPivot = structure.pivotIndex === idx;
+              const isSorted = structure.sortedIndices?.includes(idx);
+
+              // Check if within search range
+              const inSearchRange = !structure.searchRange || (idx >= structure.searchRange[0] && idx <= structure.searchRange[1]);
+              // Check if within window range
+              const inWindowRange = structure.windowRange && (idx >= structure.windowRange[0] && idx <= structure.windowRange[1]);
 
               const isUpdated =
                 lastEvent &&
@@ -118,11 +153,16 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                 lastEvent.index === idx;
 
               let borderColor = 'border-[#30363d]';
-              let bgColor = 'bg-[#0d1117]';
+              let bgColor = inWindowRange ? 'bg-[#39c5cf]/10' : 'bg-[#0d1117]';
               let textColor = 'text-[#f0f6fc]';
               let ringClass = '';
 
-              if (isUpdated) {
+              if (isPivot) {
+                borderColor = 'border-[#f0883e]';
+                bgColor = 'bg-[#f0883e]/20';
+                textColor = 'text-[#f0883e]';
+                ringClass = 'ring-2 ring-[#f0883e] shadow-lg shadow-[#f0883e]/30';
+              } else if (isUpdated) {
                 borderColor = 'border-[#3fb950]';
                 bgColor = 'bg-[#3fb950]/20';
                 textColor = 'text-[#3fb950]';
@@ -142,22 +182,40 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                 bgColor = 'bg-[#bc8cff]/20';
                 textColor = 'text-[#bc8cff]';
                 ringClass = 'ring-2 ring-[#bc8cff]';
+              } else if (isSorted) {
+                borderColor = 'border-[#3fb950]/60';
+                textColor = 'text-[#3fb950]';
               }
 
+              if (inWindowRange && !isPivot && !isComparing && !isSwapping && !isActive) {
+                borderColor = 'border-[#39c5cf]/70';
+              }
+
+              const dimClass = !inSearchRange ? 'opacity-30 grayscale scale-95' : 'opacity-100 scale-100';
+
               return (
-                <div key={idx} className="flex flex-col items-center gap-1.5 transition-all duration-200">
-                  {/* Pointers above cell */}
+                <div key={idx} className={`flex flex-col items-center gap-1.5 transition-all duration-200 ${dimClass}`}>
+                  {/* Pointers & Algorithm Badges above cell */}
                   <div className="h-6 flex items-center justify-center">
-                    {activePtrs.length > 0 ? (
+                    {allBadges.length > 0 ? (
                       <div className="flex gap-1 animate-pointer">
-                        {activePtrs.map((ptr) => (
-                          <span
-                            key={ptr}
-                            className="bg-[#58a6ff] text-[#0d1117] text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shadow"
-                          >
-                            {ptr} ↓
-                          </span>
-                        ))}
+                        {allBadges.map((badge) => {
+                          let badgeBg = 'bg-[#58a6ff] text-[#0d1117]';
+                          if (badge.includes('Pivot')) badgeBg = 'bg-[#f0883e] text-black';
+                          else if (badge.includes('H') || badge.includes('Right') || badge.includes('R')) badgeBg = 'bg-[#bc8cff] text-black';
+                          else if (badge.includes('M') || badge.includes('Mid')) badgeBg = 'bg-[#d29922] text-black';
+                          else if (badge.includes('Win')) badgeBg = 'bg-[#39c5cf] text-black';
+                          else if (badge.includes('Found')) badgeBg = 'bg-[#3fb950] text-black';
+
+                          return (
+                            <span
+                              key={badge}
+                              className={`${badgeBg} text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap`}
+                            >
+                              {badge} ↓
+                            </span>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="h-4" />
@@ -166,8 +224,13 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
 
                   {/* Array Cell */}
                   <div
-                    className={`w-14 h-14 rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105`}
+                    className={`w-14 h-14 rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105 relative`}
                   >
+                    {isSorted && (
+                      <span className="absolute top-0.5 right-1 text-[9px] text-[#3fb950] font-bold">
+                        ✓
+                      </span>
+                    )}
                     {isUpdated && lastEvent.oldValue !== undefined ? (
                       <div className="flex flex-col items-center justify-center leading-none">
                         <span className="text-[10px] text-[#8b949e] line-through font-mono">
@@ -196,19 +259,22 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
           <div className="flex items-end justify-center min-w-max gap-3 h-48 px-2 border-b border-[#30363d]/60 pb-2">
             {arr.map((val, idx) => {
               const activePtrs = pointersByIndex[idx] || [];
+              const algoBadges = structure.pointerBadges?.[idx] || [];
+              const allBadges = [...new Set([...activePtrs, ...algoBadges])];
               const isActive = structure.activeIndices?.includes(idx);
               const numVal = typeof val === 'number' ? val : 10;
               const barHeightPercent = Math.max(12, Math.min(100, (Math.abs(numVal) / maxVal) * 100));
 
               let barColor = 'bg-[#58a6ff]/70';
-              if (isActive) barColor = 'bg-[#3fb950] shadow-lg shadow-[#3fb950]/30';
-              else if (activePtrs.length > 0) barColor = 'bg-[#bc8cff] shadow-lg shadow-[#bc8cff]/30';
+              if (structure.pivotIndex === idx) barColor = 'bg-[#f0883e] shadow-lg shadow-[#f0883e]/30';
+              else if (isActive) barColor = 'bg-[#3fb950] shadow-lg shadow-[#3fb950]/30';
+              else if (allBadges.length > 0) barColor = 'bg-[#bc8cff] shadow-lg shadow-[#bc8cff]/30';
 
               return (
                 <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end">
-                  {activePtrs.length > 0 && (
+                  {allBadges.length > 0 && (
                     <div className="flex gap-1 text-[10px] font-mono font-bold text-[#58a6ff] animate-pointer">
-                      {activePtrs.join(', ')}
+                      {allBadges.join(', ')}
                     </div>
                   )}
 

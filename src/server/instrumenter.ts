@@ -926,13 +926,28 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    CodeFlowTracer.loopStart(${lineNum});`);
       outputLines.push(`    for (int ${iterVar} = ${initVal}; ; ${stepExpr}) {`);
-      outputLines.push(`      boolean _cond = (${condExpr});`);
-      outputLines.push(`      CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond, ${lineNum});`);
-      outputLines.push(`      if (!_cond) {`);
+      outputLines.push(`      boolean _cond_${lineNum} = (${condExpr});`);
+      outputLines.push(`      CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond_${lineNum}, ${lineNum});`);
+      outputLines.push(`      if (!_cond_${lineNum}) {`);
       outputLines.push(`        CodeFlowTracer.loopEnd(${lineNum});`);
       outputLines.push(`        break;`);
       outputLines.push(`      }`);
       outputLines.push(`      CodeFlowTracer.loopIter("${iterVar}", ${iterVar}, ${lineNum});`);
+      continue;
+    }
+
+    const whileLoopMatch = trimmed.match(/^while\s*\((.+)\)\s*\{?$/);
+    if (whileLoopMatch) {
+      const condExpr = whileLoopMatch[1].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.loopStart(${lineNum});`);
+      outputLines.push(`    while (true) {`);
+      outputLines.push(`      boolean _cond_${lineNum} = (${condExpr});`);
+      outputLines.push(`      CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond_${lineNum}, ${lineNum});`);
+      outputLines.push(`      if (!_cond_${lineNum}) {`);
+      outputLines.push(`        CodeFlowTracer.loopEnd(${lineNum});`);
+      outputLines.push(`        break;`);
+      outputLines.push(`      }`);
       continue;
     }
 
@@ -948,8 +963,8 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     }
 
     // 7. METHODS (Phase 1)
-    const methodMatch = trimmed.match(/^static\s+(int|long|double|float|boolean|char|String|void)\s+([a-zA-Z_0-9]+)\s*\(([^)]*)\)\s*\{?$/);
-    if (methodMatch) {
+    const methodMatch = trimmed.match(/^(?:(?:public|private|protected)\s+)?static\s+(int|long|double|float|boolean|char|String|void)\s+([a-zA-Z_0-9]+)\s*\(([^)]*)\)\s*\{?$/);
+    if (methodMatch && methodMatch[2] !== 'main') {
       const fnName = methodMatch[2];
       const paramsStr = methodMatch[3].trim();
       outputLines.push(rawLine);

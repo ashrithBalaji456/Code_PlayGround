@@ -167,6 +167,92 @@ export type EventType =
   | 'DIJKSTRA_QUEUE_REMOVE'
   | 'DIJKSTRA_NODE_FINALIZE'
   | 'DIJKSTRA_END'
+  // Phase 5 Algorithm & Pattern Events
+  // Searching
+  | 'LINEAR_SEARCH_START'
+  | 'LINEAR_SEARCH_ACCESS'
+  | 'LINEAR_SEARCH_COMPARE'
+  | 'LINEAR_SEARCH_MATCH'
+  | 'LINEAR_SEARCH_NOT_FOUND'
+  | 'LINEAR_SEARCH_END'
+  | 'BINARY_SEARCH_START'
+  | 'BINARY_SEARCH_RANGE'
+  | 'BINARY_SEARCH_MID'
+  | 'BINARY_SEARCH_COMPARE'
+  | 'BINARY_SEARCH_RANGE_UPDATE'
+  | 'BINARY_SEARCH_FOUND'
+  | 'BINARY_SEARCH_NOT_FOUND'
+  | 'BINARY_SEARCH_END'
+  // Sorting
+  | 'SORT_START'
+  | 'SORT_COMPARE'
+  | 'SORT_SWAP'
+  | 'SORT_ASSIGN'
+  | 'SORT_RANGE'
+  | 'SORT_PARTITION'
+  | 'SORT_MERGE'
+  | 'SORT_COMPLETE'
+  | 'QUICK_SORT_START'
+  | 'QUICK_SORT_RANGE'
+  | 'QUICK_SORT_PIVOT'
+  | 'QUICK_SORT_COMPARE'
+  | 'QUICK_SORT_PARTITION'
+  | 'QUICK_SORT_SWAP'
+  | 'QUICK_SORT_RECURSE'
+  | 'QUICK_SORT_RETURN'
+  | 'QUICK_SORT_END'
+  // Array Patterns
+  | 'TWO_POINTER_START'
+  | 'TWO_POINTER_COMPARE'
+  | 'TWO_POINTER_MOVE_LEFT'
+  | 'TWO_POINTER_MOVE_RIGHT'
+  | 'TWO_POINTER_UPDATE'
+  | 'TWO_POINTER_END'
+  | 'WINDOW_START'
+  | 'WINDOW_EXPAND'
+  | 'WINDOW_SHRINK'
+  | 'WINDOW_ACCESS'
+  | 'WINDOW_UPDATE'
+  | 'WINDOW_RESULT'
+  | 'WINDOW_END'
+  | 'PREFIX_SUM_START'
+  | 'PREFIX_SUM_ACCESS'
+  | 'PREFIX_SUM_UPDATE'
+  | 'PREFIX_SUM_END'
+  | 'DIFFERENCE_ARRAY_START'
+  | 'DIFFERENCE_ARRAY_UPDATE'
+  | 'DIFFERENCE_ARRAY_RECONSTRUCT'
+  | 'DIFFERENCE_ARRAY_END'
+  | 'KADANE_START'
+  | 'KADANE_UPDATE'
+  | 'KADANE_BEST_UPDATE'
+  | 'KADANE_RANGE_UPDATE'
+  | 'KADANE_END'
+  // Recursion & Backtracking
+  | 'RECURSION_START'
+  | 'RECURSION_CALL'
+  | 'RECURSION_BASE_CASE'
+  | 'RECURSION_RETURN'
+  | 'RECURSION_BACKTRACK'
+  | 'RECURSION_END'
+  | 'BACKTRACK_START'
+  | 'BACKTRACK_CHOICE'
+  | 'BACKTRACK_ENTER'
+  | 'BACKTRACK_SUCCESS'
+  | 'BACKTRACK_FAILURE'
+  | 'BACKTRACK_UNDO'
+  | 'BACKTRACK_RETURN'
+  | 'BACKTRACK_END'
+  // Dynamic Programming
+  | 'DP_START'
+  | 'DP_STATE_CREATE'
+  | 'DP_STATE_ACCESS'
+  | 'DP_STATE_UPDATE'
+  | 'DP_TRANSITION'
+  | 'DP_CACHE_HIT'
+  | 'DP_CACHE_MISS'
+  | 'DP_BASE_CASE'
+  | 'DP_END'
   | 'FUNCTION_CALL'
   | 'FUNCTION_RETURN'
   | 'LOOP_START'
@@ -235,6 +321,43 @@ export interface ExecutionEvent {
   cycle?: boolean;
   startNodeId?: string;
   queueVar?: string;
+  // Phase 5 Algorithm fields
+  algorithmId?: string;
+  algorithmName?: string;
+  target?: any;
+  low?: number;
+  mid?: number;
+  high?: number;
+  rangeStart?: number;
+  rangeEnd?: number;
+  pivotIndex?: number;
+  pivotValue?: any;
+  pointerName?: string;
+  pointerIndex?: number;
+  windowStart?: number;
+  windowEnd?: number;
+  windowSize?: number;
+  currentSum?: any;
+  bestSum?: any;
+  currentStart?: number;
+  bestStart?: number;
+  bestEnd?: number;
+  callId?: string;
+  depth?: number;
+  choice?: string;
+  stateValue?: any;
+  dpId?: string;
+  dpType?: 'MEMOIZATION' | 'TABULATION_1D' | 'TABULATION_2D';
+  row?: number;
+  col?: number;
+  transitionFormula?: string;
+  previousCells?: [number, number][];
+  isHit?: boolean;
+  candidates?: any[];
+  found?: boolean;
+  stateKey?: any;
+  dimensions?: number[];
+  args?: Record<string, any>;
 }
 
 export interface VariableInfo {
@@ -397,6 +520,11 @@ export interface DataStructureState {
   comparingIndices?: number[];
   swappingIndices?: [number, number];
   pointers?: Record<string, number | string>; // e.g. { i: 2, top: 1, head: "node-1" }
+  pointerBadges?: Record<number, string[]>; // e.g. { 0: ['L', 'start'], 4: ['R', 'end'] }
+  windowRange?: [number, number]; // [start, end] for sliding window
+  searchRange?: [number, number]; // [low, high] for binary search
+  pivotIndex?: number; // for quicksort partition
+  sortedIndices?: number[]; // indices guaranteed sorted
   lastOperation?: string;
 }
 
@@ -429,6 +557,105 @@ export interface ExecutionError {
   };
 }
 
+export interface RecursionTreeNode {
+  id: string;
+  parentId: string | null;
+  fnName: string;
+  args: Record<string, any>;
+  depth: number;
+  status: 'CALLING' | 'BASE_CASE' | 'RETURNED' | 'BACKTRACKED';
+  returnValue?: any;
+  children: string[];
+}
+
+export interface AlgorithmMetrics {
+  comparisons: number;
+  swaps: number;
+  accesses: number;
+  assignments: number;
+  functionCalls: number;
+  recursiveCalls: number;
+  cacheHits: number;
+  cacheMisses: number;
+}
+
+export type AlgorithmCategory =
+  | 'Searching'
+  | 'Sorting'
+  | 'Array Patterns'
+  | 'Recursion'
+  | 'Backtracking'
+  | 'Divide & Conquer'
+  | 'Greedy'
+  | 'Dynamic Programming';
+
+export interface AlgorithmState {
+  algorithmName?: string;
+  category?: AlgorithmCategory;
+  status?: string;
+  phase?: string;
+  // Searching
+  target?: any;
+  searchLow?: number;
+  searchMid?: number;
+  searchHigh?: number;
+  searchResult?: 'SEARCHING' | 'FOUND' | 'NOT_FOUND';
+  foundIndex?: number;
+  // Sorting
+  sortRange?: [number, number];
+  pivotIndex?: number;
+  pivotValue?: any;
+  sortedIndices?: number[];
+  partitionLeft?: number;
+  partitionRight?: number;
+  currentMinIndex?: number;
+  currentMinValue?: any;
+  passNumber?: number;
+  // Array Patterns
+  leftPointer?: number;
+  rightPointer?: number;
+  windowStart?: number;
+  windowEnd?: number;
+  windowSize?: number;
+  windowSum?: any;
+  windowBest?: any;
+  kadaneCurrentSum?: number;
+  kadaneBestSum?: number;
+  kadaneCurrentStart?: number;
+  kadaneBestStart?: number;
+  kadaneBestEnd?: number;
+  // Difference Array
+  differenceArray?: number[];
+  reconstructedArray?: number[];
+  // Recursion & Backtracking
+  recursionRootId?: string | null;
+  activeCallId?: string | null;
+  recursionTree?: Record<string, RecursionTreeNode>;
+  currentChoice?: string;
+  choicesHistory?: string[];
+  // Dynamic Programming
+  dpType?: 'MEMOIZATION' | 'TABULATION_1D' | 'TABULATION_2D';
+  dpTable1D?: any[];
+  dpTable2D?: any[][];
+  dpCurrentCell?: [number, number];
+  dpTransitionFormula?: string;
+  dpPreviousCells?: [number, number][];
+  memoEntries?: { key: any; value: any; status: 'HIT' | 'MISS' }[];
+  // Greedy
+  candidates?: any[];
+  chosenCandidate?: any;
+  greedyDecision?: 'ACCEPTED' | 'REJECTED' | 'PENDING';
+  // Metrics & Complexity
+  metrics: AlgorithmMetrics;
+  theoreticalComplexity?: {
+    time: string;
+    space: string;
+    best?: string;
+    average?: string;
+    worst?: string;
+  };
+}
+
 export interface ExecutionStep {
   stepIndex: number;
   totalSteps?: number;
@@ -448,6 +675,7 @@ export interface ExecutionStep {
     heapBytes: number;
     totalBytes: number;
   };
+  algorithmState?: AlgorithmState;
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -455,7 +683,7 @@ export type SupportedLanguage = 'java' | 'python';
 export interface CodePreset {
   id: string;
   title: string;
-  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics';
+  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;

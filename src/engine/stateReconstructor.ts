@@ -9,6 +9,9 @@ import {
   ExecutionError,
   GraphNodeData,
   GraphEdgeData,
+  AlgorithmState,
+  AlgorithmMetrics,
+  RecursionTreeNode,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -38,6 +41,12 @@ function estimateSize(type: string, val: any): number {
   }
 }
 
+function toNumericIndex(idx: number | [number, number] | undefined, defaultVal = 0): number {
+  if (typeof idx === 'number') return idx;
+  if (Array.isArray(idx) && typeof idx[0] === 'number') return idx[0];
+  return defaultVal;
+}
+
 export function reconstructExecutionSteps(
   events: ExecutionEvent[],
   _sourceCode: string
@@ -61,6 +70,21 @@ export function reconstructExecutionSteps(
   let currentComparison: ComparisonInfo | null = null;
   let currentError: ExecutionError | null = null;
   const currentHeap: HeapObject[] = [];
+
+  let currentMetrics: AlgorithmMetrics = {
+    comparisons: 0,
+    swaps: 0,
+    accesses: 0,
+    assignments: 0,
+    functionCalls: 0,
+    recursiveCalls: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+  };
+
+  let currentAlgorithmState: AlgorithmState = {
+    metrics: { ...currentMetrics },
+  };
 
   let currentLine = 1;
 
@@ -179,6 +203,13 @@ export function reconstructExecutionSteps(
         comparingIndices: [],
         swappingIndices: undefined,
         pointers: st.pointers ? { ...st.pointers } : {},
+        pointerBadges: st.pointerBadges
+          ? Object.fromEntries(Object.entries(st.pointerBadges).map(([pk, pv]) => [pk, [...pv]]))
+          : undefined,
+        windowRange: st.windowRange ? [...st.windowRange] : undefined,
+        searchRange: st.searchRange ? [...st.searchRange] : undefined,
+        pivotIndex: st.pivotIndex,
+        sortedIndices: st.sortedIndices ? [...st.sortedIndices] : undefined,
       };
     }
 
@@ -202,6 +233,36 @@ export function reconstructExecutionSteps(
         variableName: currentError.variableName,
       };
     }
+
+    const nextMetrics: AlgorithmMetrics = { ...currentMetrics };
+    const nextAlgorithmState: AlgorithmState = {
+      ...currentAlgorithmState,
+      metrics: nextMetrics,
+      sortRange: currentAlgorithmState.sortRange ? [...currentAlgorithmState.sortRange] : undefined,
+      sortedIndices: currentAlgorithmState.sortedIndices ? [...currentAlgorithmState.sortedIndices] : undefined,
+      differenceArray: currentAlgorithmState.differenceArray ? [...currentAlgorithmState.differenceArray] : undefined,
+      reconstructedArray: currentAlgorithmState.reconstructedArray ? [...currentAlgorithmState.reconstructedArray] : undefined,
+      recursionTree: currentAlgorithmState.recursionTree
+        ? Object.fromEntries(
+            Object.entries(currentAlgorithmState.recursionTree).map(([k, v]) => [
+              k,
+              { ...v, args: { ...v.args }, children: v.children ? [...v.children] : [] },
+            ])
+          )
+        : undefined,
+      choicesHistory: currentAlgorithmState.choicesHistory ? [...currentAlgorithmState.choicesHistory] : undefined,
+      dpTable1D: currentAlgorithmState.dpTable1D ? [...currentAlgorithmState.dpTable1D] : undefined,
+      dpTable2D: currentAlgorithmState.dpTable2D
+        ? currentAlgorithmState.dpTable2D.map((row) => [...row])
+        : undefined,
+      dpPreviousCells: currentAlgorithmState.dpPreviousCells
+        ? currentAlgorithmState.dpPreviousCells.map((c) => [...c] as [number, number])
+        : undefined,
+      memoEntries: currentAlgorithmState.memoEntries
+        ? currentAlgorithmState.memoEntries.map((e) => ({ ...e }))
+        : undefined,
+      candidates: currentAlgorithmState.candidates ? [...currentAlgorithmState.candidates] : undefined,
+    };
 
     let explanation = `Executing step ${i + 1}`;
     const stId = ev.structureId || ev.variable || ev.arrayId || 'struct';
@@ -2399,6 +2460,891 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      // === PHASE 5 ALGORITHM EVENTS ===
+      // --- SEARCHING ---
+      case 'LINEAR_SEARCH_START': {
+        nextAlgorithmState.algorithmName = 'Linear Search';
+        nextAlgorithmState.category = 'Searching';
+        nextAlgorithmState.target = ev.target;
+        nextAlgorithmState.status = 'Searching';
+        nextAlgorithmState.searchResult = 'SEARCHING';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(n)', space: 'O(1)', best: 'O(1)', average: 'O(n)', worst: 'O(n)' };
+        explanation = `Starting Linear Search for target ${ev.target}`;
+        break;
+      }
+
+      case 'LINEAR_SEARCH_ACCESS': {
+        nextMetrics.accesses++;
+        const targetIdx = toNumericIndex(ev.index);
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].activeIndices = [targetIdx];
+        }
+        explanation = `Inspecting index ${targetIdx}: value = ${ev.value}`;
+        break;
+      }
+
+      case 'LINEAR_SEARCH_COMPARE': {
+        nextMetrics.comparisons++;
+        const targetIdx = toNumericIndex(ev.index);
+        nextComparison = {
+          left: ev.value,
+          right: ev.target,
+          operator: '==',
+          result: !!ev.conditionResult,
+          explanation: `arr[${targetIdx}] (${ev.value}) == target (${ev.target})`
+        };
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].comparingIndices = [targetIdx];
+        }
+        explanation = `Comparing arr[${targetIdx}] (${ev.value}) with target (${ev.target}): ${ev.conditionResult ? 'MATCH' : 'NO MATCH'}`;
+        break;
+      }
+
+      case 'LINEAR_SEARCH_MATCH': {
+        const targetIdx = toNumericIndex(ev.index);
+        nextAlgorithmState.searchResult = 'FOUND';
+        nextAlgorithmState.foundIndex = targetIdx;
+        nextAlgorithmState.status = 'Found';
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].activeIndices = [targetIdx];
+          nextStructures[ev.structureId].pointerBadges = { [targetIdx]: ['Target Found'] };
+        }
+        explanation = `Target ${ev.value} found at index ${targetIdx}!`;
+        break;
+      }
+
+      case 'LINEAR_SEARCH_NOT_FOUND': {
+        nextAlgorithmState.searchResult = 'NOT_FOUND';
+        nextAlgorithmState.status = 'Not Found';
+        explanation = `Target ${ev.target} not found in array`;
+        break;
+      }
+
+      case 'LINEAR_SEARCH_END': {
+        const isFound = ev.found ?? ev.conditionResult ?? false;
+        nextAlgorithmState.status = isFound ? 'Completed (Found)' : 'Completed (Not Found)';
+        explanation = `Linear Search finished: ${isFound ? `Found at index ${ev.index}` : 'Target not found'}`;
+        break;
+      }
+
+      // BINARY SEARCH
+      case 'BINARY_SEARCH_START': {
+        nextAlgorithmState.algorithmName = 'Binary Search';
+        nextAlgorithmState.category = 'Searching';
+        nextAlgorithmState.target = ev.target;
+        nextAlgorithmState.status = 'Searching';
+        nextAlgorithmState.searchResult = 'SEARCHING';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(log n)', space: 'O(1)', best: 'O(1)', average: 'O(log n)', worst: 'O(log n)' };
+        explanation = `Starting Binary Search for target ${ev.target}`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_RANGE': {
+        nextAlgorithmState.searchLow = ev.low;
+        nextAlgorithmState.searchHigh = ev.high;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.searchRange = [ev.low ?? 0, ev.high ?? 0];
+          st.pointerBadges = { [ev.low ?? 0]: ['L'], [ev.high ?? 0]: ['H'] };
+        }
+        explanation = `Search range active: [low=${ev.low}, high=${ev.high}]`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_MID': {
+        nextMetrics.accesses++;
+        nextAlgorithmState.searchMid = ev.mid;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.activeIndices = [ev.mid ?? 0];
+          st.pointerBadges = {
+            ...(st.pointerBadges || {}),
+            [ev.mid ?? 0]: [...(st.pointerBadges?.[ev.mid ?? 0] || []), 'M']
+          };
+        }
+        explanation = `Calculated mid index = ${ev.mid}, arr[${ev.mid}] = ${ev.value}`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_COMPARE': {
+        nextMetrics.comparisons++;
+        const op = ev.operator || '==';
+        nextComparison = {
+          left: ev.value,
+          right: ev.target,
+          operator: op,
+          result: !!ev.conditionResult,
+          explanation: `arr[${ev.mid}] (${ev.value}) ${op} target (${ev.target})`
+        };
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].comparingIndices = [ev.mid ?? 0];
+        }
+        explanation = `Comparing mid arr[${ev.mid}] (${ev.value}) ${op} target (${ev.target}): result = ${ev.conditionResult}`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_RANGE_UPDATE': {
+        nextAlgorithmState.searchLow = ev.low;
+        nextAlgorithmState.searchHigh = ev.high;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.searchRange = [ev.low ?? 0, ev.high ?? 0];
+          st.pointerBadges = { [ev.low ?? 0]: ['L'], [ev.high ?? 0]: ['H'] };
+        }
+        explanation = `Updated search range to [low=${ev.low}, high=${ev.high}]`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_FOUND': {
+        const foundIdx = toNumericIndex(ev.index);
+        nextAlgorithmState.searchResult = 'FOUND';
+        nextAlgorithmState.foundIndex = foundIdx;
+        nextAlgorithmState.status = 'Found';
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.activeIndices = [foundIdx];
+          st.pointerBadges = { [foundIdx]: ['Target Found!'] };
+        }
+        explanation = `Binary Search: Target found at index ${foundIdx}!`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_NOT_FOUND': {
+        nextAlgorithmState.searchResult = 'NOT_FOUND';
+        nextAlgorithmState.status = 'Not Found';
+        explanation = `Binary Search: Target ${ev.target} not found (search space empty)`;
+        break;
+      }
+
+      case 'BINARY_SEARCH_END': {
+        const isFound = ev.found ?? ev.conditionResult ?? false;
+        nextAlgorithmState.status = isFound ? 'Completed (Found)' : 'Completed (Not Found)';
+        explanation = `Binary Search completed: ${isFound ? `Found at index ${ev.index}` : 'Not found'}`;
+        break;
+      }
+
+      // --- SORTING ---
+      case 'SORT_START': {
+        const algo = ev.algorithmName || 'Sorting';
+        nextAlgorithmState.algorithmName = algo;
+        nextAlgorithmState.category = 'Sorting';
+        nextAlgorithmState.status = 'Sorting';
+        if (algo.includes('Bubble')) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'O(n²)', space: 'O(1)', best: 'O(n)', average: 'O(n²)', worst: 'O(n²)' };
+        } else if (algo.includes('Selection')) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'O(n²)', space: 'O(1)', best: 'O(n²)', average: 'O(n²)', worst: 'O(n²)' };
+        } else if (algo.includes('Insertion')) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'O(n²)', space: 'O(1)', best: 'O(n)', average: 'O(n²)', worst: 'O(n²)' };
+        } else if (algo.includes('Merge')) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'O(n log n)', space: 'O(n)', best: 'O(n log n)', average: 'O(n log n)', worst: 'O(n log n)' };
+        } else if (algo.includes('Quick')) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'O(n log n)', space: 'O(log n)', best: 'O(n log n)', average: 'O(n log n)', worst: 'O(n²)' };
+        } else if (algo.includes('Heap')) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'O(n log n)', space: 'O(1)', best: 'O(n log n)', average: 'O(n log n)', worst: 'O(n log n)' };
+        }
+        explanation = `Starting ${algo} on ${ev.structureId}`;
+        break;
+      }
+
+      case 'SORT_COMPARE': {
+        nextMetrics.comparisons++;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].comparingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
+        }
+        nextComparison = {
+          left: ev.leftVal,
+          right: ev.rightVal,
+          operator: '>',
+          result: !!ev.conditionResult,
+          explanation: `arr[${ev.fromIndex}] (${ev.leftVal}) > arr[${ev.toIndex}] (${ev.rightVal})`
+        };
+        explanation = `Comparing arr[${ev.fromIndex}] (${ev.leftVal}) > arr[${ev.toIndex}] (${ev.rightVal}): ${ev.conditionResult ? 'TRUE (Swap needed)' : 'FALSE'}`;
+        break;
+      }
+
+      case 'SORT_SWAP': {
+        nextMetrics.swaps++;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.swappingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
+          if (st.arrayData && ev.fromIndex !== undefined && ev.toIndex !== undefined) {
+            const tmp = st.arrayData[ev.fromIndex];
+            st.arrayData[ev.fromIndex] = st.arrayData[ev.toIndex];
+            st.arrayData[ev.toIndex] = tmp;
+          }
+        }
+        explanation = `Swapped arr[${ev.fromIndex}] (${ev.leftVal}) <-> arr[${ev.toIndex}] (${ev.rightVal})`;
+        break;
+      }
+
+      case 'SORT_ASSIGN': {
+        nextMetrics.assignments++;
+        const assignIdx = toNumericIndex(ev.index);
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          if (st.arrayData && ev.index !== undefined) {
+            st.arrayData[assignIdx] = ev.value;
+          }
+          st.activeIndices = [assignIdx];
+        }
+        explanation = `Assigned arr[${assignIdx}] = ${ev.value}`;
+        break;
+      }
+
+      case 'SORT_RANGE': {
+        nextAlgorithmState.sortRange = [ev.rangeStart ?? 0, ev.rangeEnd ?? 0];
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].searchRange = [ev.rangeStart ?? 0, ev.rangeEnd ?? 0];
+        }
+        explanation = `Subarray range: [${ev.rangeStart}..${ev.rangeEnd}]`;
+        break;
+      }
+
+      case 'SORT_PARTITION': {
+        nextAlgorithmState.phase = 'Partitioning';
+        nextAlgorithmState.pivotIndex = ev.pivotIndex;
+        nextAlgorithmState.pivotValue = ev.pivotValue;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.pivotIndex = ev.pivotIndex;
+          st.pointerBadges = { [ev.pivotIndex ?? 0]: ['Pivot'] };
+        }
+        explanation = `Partitioned subarray around pivot ${ev.pivotValue} at index ${ev.pivotIndex}`;
+        break;
+      }
+
+      case 'SORT_MERGE': {
+        nextAlgorithmState.phase = 'Merging';
+        nextAlgorithmState.sortRange = [ev.low ?? 0, ev.high ?? 0];
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].searchRange = [ev.low ?? 0, ev.high ?? 0];
+        }
+        explanation = `Merging sorted halves [${ev.low}..${ev.mid}] and [${(ev.mid ?? 0) + 1}..${ev.high}]`;
+        break;
+      }
+
+      case 'SORT_COMPLETE': {
+        nextAlgorithmState.status = 'Completed';
+        nextAlgorithmState.phase = 'Sorted';
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.sortedIndices = st.arrayData ? st.arrayData.map((_, idx) => idx) : [];
+          st.searchRange = undefined;
+          st.pivotIndex = undefined;
+        }
+        explanation = `Sorting complete! All array elements are in sorted order.`;
+        break;
+      }
+
+      // Quick Sort Specialized
+      case 'QUICK_SORT_START': {
+        nextAlgorithmState.algorithmName = 'Quick Sort';
+        nextAlgorithmState.category = 'Sorting';
+        nextAlgorithmState.status = 'Sorting';
+        nextAlgorithmState.sortRange = [ev.rangeStart ?? 0, ev.rangeEnd ?? 0];
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(n log n)', space: 'O(log n)', best: 'O(n log n)', average: 'O(n log n)', worst: 'O(n²)' };
+        explanation = `QuickSort: Range [${ev.rangeStart}..${ev.rangeEnd}]`;
+        break;
+      }
+
+      case 'QUICK_SORT_RANGE': {
+        nextAlgorithmState.sortRange = [ev.rangeStart ?? 0, ev.rangeEnd ?? 0];
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].searchRange = [ev.rangeStart ?? 0, ev.rangeEnd ?? 0];
+        }
+        explanation = `QuickSort active range: [${ev.rangeStart}..${ev.rangeEnd}]`;
+        break;
+      }
+
+      case 'QUICK_SORT_PIVOT': {
+        nextAlgorithmState.pivotIndex = ev.pivotIndex;
+        nextAlgorithmState.pivotValue = ev.pivotValue;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.pivotIndex = ev.pivotIndex;
+          st.pointerBadges = { [ev.pivotIndex ?? 0]: ['Pivot'] };
+        }
+        explanation = `Pivot selected: arr[${ev.pivotIndex}] = ${ev.pivotValue}`;
+        break;
+      }
+
+      case 'QUICK_SORT_COMPARE': {
+        nextMetrics.comparisons++;
+        const cmpIdx = toNumericIndex(ev.index);
+        nextComparison = {
+          left: ev.value,
+          right: ev.pivotValue,
+          operator: '<',
+          result: !!ev.conditionResult,
+          explanation: `arr[${cmpIdx}] (${ev.value}) < pivot (${ev.pivotValue})`
+        };
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].comparingIndices = [cmpIdx, nextAlgorithmState.pivotIndex ?? 0];
+        }
+        explanation = `Comparing arr[${cmpIdx}] (${ev.value}) < pivot (${ev.pivotValue}): ${ev.conditionResult}`;
+        break;
+      }
+
+      case 'QUICK_SORT_PARTITION': {
+        nextAlgorithmState.pivotIndex = ev.pivotIndex;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.pivotIndex = ev.pivotIndex;
+          st.pointerBadges = { [ev.pivotIndex ?? 0]: ['Pivot Placed'] };
+        }
+        explanation = `Partition done: Pivot placed at final index ${ev.pivotIndex}`;
+        break;
+      }
+
+      case 'QUICK_SORT_SWAP': {
+        nextMetrics.swaps++;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.swappingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
+          if (st.arrayData && ev.fromIndex !== undefined && ev.toIndex !== undefined) {
+            const tmp = st.arrayData[ev.fromIndex];
+            st.arrayData[ev.fromIndex] = st.arrayData[ev.toIndex];
+            st.arrayData[ev.toIndex] = tmp;
+          }
+        }
+        explanation = `QuickSort swap: arr[${ev.fromIndex}] <-> arr[${ev.toIndex}]`;
+        break;
+      }
+
+      case 'QUICK_SORT_RECURSE': {
+        nextMetrics.recursiveCalls++;
+        nextAlgorithmState.sortRange = [ev.rangeStart ?? 0, ev.rangeEnd ?? 0];
+        explanation = `QuickSort recurse on partition [${ev.rangeStart}..${ev.rangeEnd}]`;
+        break;
+      }
+
+      case 'QUICK_SORT_RETURN': {
+        explanation = `QuickSort partition call returned`;
+        break;
+      }
+
+      case 'QUICK_SORT_END': {
+        nextAlgorithmState.status = 'Completed';
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.sortedIndices = st.arrayData ? st.arrayData.map((_, i) => i) : [];
+        }
+        explanation = `Quick Sort completed successfully`;
+        break;
+      }
+
+      // --- ARRAY PATTERNS ---
+      case 'TWO_POINTER_START': {
+        nextAlgorithmState.algorithmName = 'Two Pointers';
+        nextAlgorithmState.category = 'Array Patterns';
+        nextAlgorithmState.leftPointer = ev.low;
+        nextAlgorithmState.rightPointer = ev.high;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(n)', space: 'O(1)', best: 'O(1)', average: 'O(n)', worst: 'O(n)' };
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].pointerBadges = { [ev.low ?? 0]: ['L'], [ev.high ?? 0]: ['R'] };
+        }
+        explanation = `Two Pointers initialized: left=${ev.low}, right=${ev.high}`;
+        break;
+      }
+
+      case 'TWO_POINTER_COMPARE': {
+        nextMetrics.comparisons++;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].comparingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
+        }
+        explanation = `Comparing arr[${ev.fromIndex}] (${ev.leftVal}) with arr[${ev.toIndex}] (${ev.rightVal})`;
+        break;
+      }
+
+      case 'TWO_POINTER_MOVE_LEFT': {
+        nextAlgorithmState.leftPointer = ev.low;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.pointerBadges = { ...(st.pointerBadges || {}), [ev.low ?? 0]: ['L'] };
+        }
+        explanation = `Moved left pointer to index ${ev.low}`;
+        break;
+      }
+
+      case 'TWO_POINTER_MOVE_RIGHT': {
+        nextAlgorithmState.rightPointer = ev.high;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.pointerBadges = { ...(st.pointerBadges || {}), [ev.high ?? 0]: ['R'] };
+        }
+        explanation = `Moved right pointer to index ${ev.high}`;
+        break;
+      }
+
+      case 'TWO_POINTER_UPDATE': {
+        nextAlgorithmState.leftPointer = ev.low;
+        nextAlgorithmState.rightPointer = ev.high;
+        nextAlgorithmState.windowSum = ev.currentSum;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].pointerBadges = { [ev.low ?? 0]: ['L'], [ev.high ?? 0]: ['R'] };
+        }
+        explanation = `Pointers at [${ev.low}, ${ev.high}], sum = ${ev.currentSum}`;
+        break;
+      }
+
+      case 'TWO_POINTER_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Two Pointers finished`;
+        break;
+      }
+
+      case 'WINDOW_START': {
+        const wStart = ev.windowStart ?? (ev as any).start;
+        const wEnd = ev.windowEnd ?? (ev as any).end;
+        const cSum = ev.currentSum ?? (ev as any).sum;
+        nextAlgorithmState.algorithmName = 'Sliding Window';
+        nextAlgorithmState.category = 'Array Patterns';
+        nextAlgorithmState.windowStart = wStart;
+        nextAlgorithmState.windowEnd = wEnd;
+        nextAlgorithmState.windowSum = cSum;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(n)', space: 'O(1)', best: 'O(1)', average: 'O(n)', worst: 'O(n)' };
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.windowRange = [wStart ?? 0, wEnd ?? 0];
+          st.pointerBadges = { [wStart ?? 0]: ['Win Start'], [wEnd ?? 0]: ['Win End'] };
+        }
+        explanation = `Sliding Window initialized: [${wStart}..${wEnd}], sum=${cSum}`;
+        break;
+      }
+
+      case 'WINDOW_EXPAND': {
+        nextMetrics.accesses++;
+        const wEnd = ev.windowEnd ?? (ev as any).newEnd;
+        const cSum = ev.currentSum ?? (ev as any).sum;
+        nextAlgorithmState.windowEnd = wEnd;
+        nextAlgorithmState.windowSum = cSum;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.windowRange = [nextAlgorithmState.windowStart ?? 0, wEnd ?? 0];
+          st.pointerBadges = { [nextAlgorithmState.windowStart ?? 0]: ['Win Start'], [wEnd ?? 0]: ['Win End'] };
+        }
+        explanation = `Expanded window right to ${wEnd} (+${ev.value ?? (ev as any).addedValue}), current sum = ${cSum}`;
+        break;
+      }
+
+      case 'WINDOW_SHRINK': {
+        nextMetrics.accesses++;
+        const wStart = ev.windowStart ?? (ev as any).newStart;
+        const cSum = ev.currentSum ?? (ev as any).sum;
+        nextAlgorithmState.windowStart = wStart;
+        nextAlgorithmState.windowSum = cSum;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.windowRange = [wStart ?? 0, nextAlgorithmState.windowEnd ?? 0];
+          st.pointerBadges = { [wStart ?? 0]: ['Win Start'], [nextAlgorithmState.windowEnd ?? 0]: ['Win End'] };
+        }
+        explanation = `Shrunk window from left to ${wStart} (-${ev.value ?? (ev as any).removedValue}), current sum = ${cSum}`;
+        break;
+      }
+
+      case 'WINDOW_ACCESS': {
+        nextMetrics.accesses++;
+        explanation = `Window accessed arr[${ev.index}] = ${ev.value}`;
+        break;
+      }
+
+      case 'WINDOW_UPDATE': {
+        const wStart = ev.windowStart ?? (ev as any).start;
+        const wEnd = ev.windowEnd ?? (ev as any).end;
+        const cSum = ev.currentSum ?? (ev as any).sum;
+        const bSum = ev.bestSum ?? (ev as any).bestValue;
+        nextAlgorithmState.windowStart = wStart;
+        nextAlgorithmState.windowEnd = wEnd;
+        nextAlgorithmState.windowSize = ev.windowSize;
+        nextAlgorithmState.windowSum = cSum;
+        nextAlgorithmState.windowBest = bSum;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          st.windowRange = [wStart ?? 0, wEnd ?? 0];
+          st.pointerBadges = { [wStart ?? 0]: ['Win Start'], [wEnd ?? 0]: ['Win End'] };
+        }
+        explanation = `Window [${wStart}..${wEnd}] size=${ev.windowSize}: sum=${cSum}, best=${bSum}`;
+        break;
+      }
+
+      case 'WINDOW_RESULT': {
+        const bVal = ev.bestSum ?? (ev as any).bestValue;
+        nextAlgorithmState.windowBest = bVal;
+        explanation = `Best window result updated: ${bVal}`;
+        break;
+      }
+
+      case 'WINDOW_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Sliding Window execution completed`;
+        break;
+      }
+
+      case 'PREFIX_SUM_START': {
+        nextAlgorithmState.algorithmName = 'Prefix Sum';
+        nextAlgorithmState.category = 'Array Patterns';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(n)', space: 'O(n)', best: 'O(n)', average: 'O(n)', worst: 'O(n)' };
+        explanation = `Initialized Prefix Sum array computation`;
+        break;
+      }
+
+      case 'PREFIX_SUM_ACCESS': {
+        nextMetrics.accesses++;
+        const aIdx = toNumericIndex(ev.index);
+        explanation = `Reading original element at index ${aIdx}: ${ev.value}`;
+        break;
+      }
+
+      case 'PREFIX_SUM_UPDATE': {
+        nextMetrics.assignments++;
+        const pIdx = toNumericIndex(ev.index);
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          if (st.arrayData && ev.index !== undefined) {
+            st.arrayData[pIdx] = ev.value;
+          }
+          st.activeIndices = [pIdx];
+        }
+        explanation = `prefix[${pIdx}] = ${ev.leftVal ?? 0} + ${ev.rightVal ?? ev.value} = ${ev.value}`;
+        break;
+      }
+
+      case 'PREFIX_SUM_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Prefix Sum array calculation completed`;
+        break;
+      }
+
+      case 'DIFFERENCE_ARRAY_START': {
+        nextAlgorithmState.algorithmName = 'Difference Array';
+        nextAlgorithmState.category = 'Array Patterns';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(1) updates, O(n) reconstruct', space: 'O(n)' };
+        explanation = `Initialized Difference Array`;
+        break;
+      }
+
+      case 'DIFFERENCE_ARRAY_UPDATE': {
+        nextMetrics.assignments += 2;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          if (st.arrayData && ev.rangeStart !== undefined && ev.rangeEnd !== undefined) {
+            st.arrayData[ev.rangeStart] = (st.arrayData[ev.rangeStart] || 0) + Number(ev.value);
+            if (ev.rangeEnd + 1 < st.arrayData.length) {
+              st.arrayData[ev.rangeEnd + 1] = (st.arrayData[ev.rangeEnd + 1] || 0) - Number(ev.value);
+            }
+          }
+        }
+        explanation = `Range update [${ev.rangeStart}..${ev.rangeEnd}] by ${ev.value}`;
+        break;
+      }
+
+      case 'DIFFERENCE_ARRAY_RECONSTRUCT': {
+        nextMetrics.accesses++;
+        const rIdx = toNumericIndex(ev.index);
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          const st = nextStructures[ev.structureId];
+          if (st.arrayData && ev.index !== undefined) {
+            st.arrayData[rIdx] = ev.value;
+          }
+          st.activeIndices = [rIdx];
+        }
+        explanation = `Reconstructed element [${rIdx}] = ${ev.value}`;
+        break;
+      }
+
+      case 'DIFFERENCE_ARRAY_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Difference Array operations completed`;
+        break;
+      }
+
+      case 'KADANE_START': {
+        nextAlgorithmState.algorithmName = "Kadane's Algorithm";
+        nextAlgorithmState.category = 'Array Patterns';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(n)', space: 'O(1)', best: 'O(n)', average: 'O(n)', worst: 'O(n)' };
+        explanation = `Starting Kadane's maximum subarray search`;
+        break;
+      }
+
+      case 'KADANE_UPDATE': {
+        nextMetrics.accesses++;
+        const kIdx = toNumericIndex(ev.index);
+        nextAlgorithmState.kadaneCurrentSum = Number(ev.currentSum);
+        nextAlgorithmState.kadaneBestSum = Number(ev.bestSum);
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].activeIndices = [kIdx];
+        }
+        explanation = `arr[${kIdx}] (${ev.value}): currentSum=${ev.currentSum}, bestSum=${ev.bestSum}`;
+        break;
+      }
+
+      case 'KADANE_BEST_UPDATE': {
+        nextAlgorithmState.kadaneBestSum = Number(ev.bestSum);
+        nextAlgorithmState.kadaneBestStart = ev.bestStart;
+        nextAlgorithmState.kadaneBestEnd = ev.bestEnd;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].searchRange = [ev.bestStart ?? 0, ev.bestEnd ?? 0];
+        }
+        explanation = `New best subarray found: sum=${ev.bestSum} [${ev.bestStart}..${ev.bestEnd}]`;
+        break;
+      }
+
+      case 'KADANE_RANGE_UPDATE': {
+        nextAlgorithmState.kadaneCurrentStart = ev.currentStart;
+        if (ev.structureId && nextStructures[ev.structureId]) {
+          nextStructures[ev.structureId].windowRange = [ev.currentStart ?? 0, ev.rangeEnd ?? 0];
+        }
+        explanation = `Active subarray range: [${ev.currentStart}..${ev.rangeEnd}]`;
+        break;
+      }
+
+      case 'KADANE_END': {
+        const bSum = ev.bestSum ?? (ev as any).maxSubarraySum ?? nextAlgorithmState.kadaneBestSum;
+        nextAlgorithmState.kadaneBestSum = bSum;
+        if (ev.bestStart !== undefined) nextAlgorithmState.kadaneBestStart = ev.bestStart;
+        if (ev.bestEnd !== undefined) nextAlgorithmState.kadaneBestEnd = ev.bestEnd;
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Kadane completed: Max sum = ${bSum} [${ev.bestStart ?? nextAlgorithmState.kadaneBestStart}..${ev.bestEnd ?? nextAlgorithmState.kadaneBestEnd}]`;
+        break;
+      }
+
+      // --- RECURSION ---
+      case 'RECURSION_START': {
+        nextAlgorithmState.algorithmName = ev.functionName || 'Recursion';
+        nextAlgorithmState.category = 'Recursion';
+        nextAlgorithmState.recursionTree = nextAlgorithmState.recursionTree || {};
+        explanation = `Starting recursive function ${ev.functionName}`;
+        break;
+      }
+
+      case 'RECURSION_CALL': {
+        nextMetrics.recursiveCalls++;
+        nextMetrics.functionCalls++;
+        const callId = ev.callId || `call-${nextMetrics.recursiveCalls}`;
+        if (!nextAlgorithmState.recursionRootId) nextAlgorithmState.recursionRootId = callId;
+        nextAlgorithmState.activeCallId = callId;
+        const parentId = ev.parentNodeId || null;
+        if (!nextAlgorithmState.recursionTree) nextAlgorithmState.recursionTree = {};
+        nextAlgorithmState.recursionTree[callId] = {
+          id: callId,
+          parentId,
+          fnName: ev.functionName || 'func',
+          args: ev.arguments || {},
+          depth: ev.depth || 1,
+          status: 'CALLING',
+          children: [],
+        };
+        if (parentId && nextAlgorithmState.recursionTree[parentId]) {
+          if (!nextAlgorithmState.recursionTree[parentId].children.includes(callId)) {
+            nextAlgorithmState.recursionTree[parentId].children.push(callId);
+          }
+        }
+        explanation = `Recursive call: ${ev.functionName}(${JSON.stringify(ev.arguments || {})}) [depth=${ev.depth || 1}]`;
+        break;
+      }
+
+      case 'RECURSION_BASE_CASE': {
+        nextAlgorithmState.phase = 'Base Case Reached';
+        if (ev.callId && nextAlgorithmState.recursionTree?.[ev.callId]) {
+          nextAlgorithmState.recursionTree[ev.callId].status = 'BASE_CASE';
+          nextAlgorithmState.recursionTree[ev.callId].returnValue = ev.returnValue;
+        } else if (ev.callId) {
+          nextAlgorithmState.recursionTree = nextAlgorithmState.recursionTree || {};
+          nextAlgorithmState.recursionTree[ev.callId] = {
+            id: ev.callId,
+            parentId: null,
+            fnName: ev.functionName || 'fn',
+            args: ev.args || {},
+            depth: ev.depth || 0,
+            status: 'BASE_CASE',
+            returnValue: ev.returnValue,
+            children: []
+          };
+        }
+        explanation = `Base case reached! Returning ${ev.returnValue}`;
+        break;
+      }
+
+      case 'RECURSION_RETURN': {
+        if (ev.callId && nextAlgorithmState.recursionTree?.[ev.callId]) {
+          nextAlgorithmState.recursionTree[ev.callId].status = 'RETURNED';
+          nextAlgorithmState.recursionTree[ev.callId].returnValue = ev.returnValue;
+          nextAlgorithmState.activeCallId = nextAlgorithmState.recursionTree[ev.callId].parentId;
+        }
+        explanation = `Recursive call returned: ${ev.returnValue}`;
+        break;
+      }
+
+      case 'RECURSION_BACKTRACK': {
+        if (ev.callId && nextAlgorithmState.recursionTree?.[ev.callId]) {
+          nextAlgorithmState.recursionTree[ev.callId].status = 'BACKTRACKED';
+        }
+        explanation = `Backtracking from recursion node ${ev.callId}`;
+        break;
+      }
+
+      case 'RECURSION_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Recursion completed: result = ${ev.returnValue}`;
+        break;
+      }
+
+      // --- BACKTRACKING ---
+      case 'BACKTRACK_START': {
+        nextAlgorithmState.algorithmName = ev.algorithmName || 'Backtracking';
+        nextAlgorithmState.category = 'Backtracking';
+        nextAlgorithmState.choicesHistory = [];
+        explanation = `Starting Backtracking search: ${ev.algorithmName}`;
+        break;
+      }
+
+      case 'BACKTRACK_CHOICE': {
+        nextAlgorithmState.currentChoice = ev.choice;
+        nextAlgorithmState.choicesHistory = [...(nextAlgorithmState.choicesHistory || []), ev.choice || ''];
+        explanation = `CHOOSE: Choice '${ev.choice}' (state = ${JSON.stringify(ev.stateValue)})`;
+        break;
+      }
+
+      case 'BACKTRACK_ENTER': {
+        explanation = `EXPLORE: Branching with choice '${ev.choice}'`;
+        break;
+      }
+
+      case 'BACKTRACK_SUCCESS': {
+        const sol = ev.choice ?? (ev as any).solution ?? 'Valid Solution';
+        nextAlgorithmState.status = `Found Solution: ${sol}`;
+        nextAlgorithmState.phase = 'Solution Found';
+        explanation = `SUCCESS: Valid solution found -> ${sol}`;
+        break;
+      }
+
+      case 'BACKTRACK_FAILURE': {
+        nextAlgorithmState.phase = 'Pruned / Backtrack';
+        explanation = `DEAD END: Invalid state reached, pruning branch (${ev.message || ''})`;
+        break;
+      }
+
+      case 'BACKTRACK_UNDO': {
+        nextAlgorithmState.phase = 'Undo / Backtrack';
+        if (nextAlgorithmState.choicesHistory && nextAlgorithmState.choicesHistory.length > 0) {
+          nextAlgorithmState.choicesHistory.pop();
+        }
+        explanation = `UNDO: Backtracking and reverting choice '${ev.choice}'`;
+        break;
+      }
+
+      case 'BACKTRACK_RETURN': {
+        explanation = `Returning from branch for choice '${ev.choice}'`;
+        break;
+      }
+
+      case 'BACKTRACK_END': {
+        const total = (ev as any).totalSolutions ?? nextAlgorithmState.choicesHistory?.length ?? 1;
+        nextAlgorithmState.status = `Completed. Total Solutions: ${total}`;
+        nextAlgorithmState.phase = 'Completed';
+        explanation = `Backtracking search completed: Total solutions = ${total}`;
+        break;
+      }
+
+      // --- DYNAMIC PROGRAMMING ---
+      case 'DP_START':
+      case 'DP_STATE_CREATE': {
+        const rawType = String(ev.dpType || '').toUpperCase();
+        if (rawType.includes('MEMO')) {
+          nextAlgorithmState.dpType = 'MEMOIZATION';
+          nextAlgorithmState.algorithmName = 'DP Memoization';
+        } else if (rawType.includes('2D') || (ev.dimensions && ev.dimensions.length > 1) || (ev.high && ev.high > 0)) {
+          nextAlgorithmState.dpType = 'TABULATION_2D';
+          nextAlgorithmState.algorithmName = 'DP Tabulation (2D)';
+        } else {
+          nextAlgorithmState.dpType = 'TABULATION_1D';
+          nextAlgorithmState.algorithmName = 'DP Tabulation (1D)';
+        }
+        nextAlgorithmState.category = 'Dynamic Programming';
+        const rows = ev.dimensions?.[0] ?? ev.low ?? 10;
+        const cols = ev.dimensions?.[1] ?? ev.high ?? 0;
+        if (cols > 0) {
+          nextAlgorithmState.dpTable2D = Array.from({ length: rows }, () => Array(cols).fill(0));
+        } else {
+          nextAlgorithmState.dpTable1D = Array(rows).fill(0);
+        }
+        explanation = `Initialized DP state table (${nextAlgorithmState.dpType}: ${rows}${cols > 0 ? `x${cols}` : ' cells'})`;
+        break;
+      }
+
+      case 'DP_STATE_ACCESS': {
+        nextMetrics.accesses++;
+        const r = ev.row ?? (ev.stateKey !== undefined ? parseInt(String(ev.stateKey).replace(/[^0-9]/g, '')) : 0);
+        const c = ev.col ?? 0;
+        nextAlgorithmState.dpCurrentCell = [r, c];
+        explanation = `Read DP state at [${r}${c > 0 ? `,${c}` : ''}]: ${ev.value}`;
+        break;
+      }
+
+      case 'DP_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const r = ev.row ?? (ev.stateKey !== undefined ? parseInt(String(ev.stateKey).replace(/[^0-9]/g, '')) : 0);
+        const c = ev.col ?? 0;
+        if (nextAlgorithmState.dpTable2D) {
+          if (!nextAlgorithmState.dpTable2D[r]) nextAlgorithmState.dpTable2D[r] = [];
+          nextAlgorithmState.dpTable2D[r][c] = ev.value;
+        } else if (nextAlgorithmState.dpTable1D) {
+          nextAlgorithmState.dpTable1D[r] = ev.value;
+        }
+        nextAlgorithmState.dpCurrentCell = [r, c];
+        nextAlgorithmState.dpTransitionFormula = ev.transitionFormula;
+        if (ev.path) {
+          try {
+            nextAlgorithmState.dpPreviousCells = typeof ev.path === 'string' ? JSON.parse(ev.path) : ev.path;
+          } catch (_) {}
+        }
+        explanation = `DP Transition: dp[${r}${c > 0 ? `,${c}` : ''}] = ${ev.transitionFormula || ev.value} => ${ev.value}`;
+        break;
+      }
+
+      case 'DP_TRANSITION': {
+        nextAlgorithmState.dpTransitionFormula = ev.transitionFormula;
+        explanation = `Transition: ${ev.transitionFormula} => ${ev.value ?? ''}`;
+        break;
+      }
+
+      case 'DP_CACHE_HIT': {
+        nextMetrics.cacheHits++;
+        const k = ev.key ?? ev.stateKey;
+        const v = ev.value ?? (ev as any).cachedValue;
+        nextAlgorithmState.memoEntries = [...(nextAlgorithmState.memoEntries || []), { key: k, value: v, status: 'HIT' }];
+        explanation = `CACHE HIT: memo[${k}] already computed! Returned ${v} (Avoided subproblem recomputation!)`;
+        break;
+      }
+
+      case 'DP_CACHE_MISS': {
+        nextMetrics.cacheMisses++;
+        const k = ev.key ?? ev.stateKey;
+        nextAlgorithmState.memoEntries = [...(nextAlgorithmState.memoEntries || []), { key: k, value: undefined, status: 'MISS' }];
+        explanation = `CACHE MISS: memo[${k}] not cached. Computing subproblem...`;
+        break;
+      }
+
+      case 'DP_BASE_CASE': {
+        const br = ev.row ?? (ev.stateKey !== undefined ? parseInt(String(ev.stateKey).replace(/[^0-9]/g, '')) : 0);
+        const bc = ev.col ?? 0;
+        if (nextAlgorithmState.dpTable2D) {
+          if (!nextAlgorithmState.dpTable2D[br]) nextAlgorithmState.dpTable2D[br] = [];
+          nextAlgorithmState.dpTable2D[br][bc] = ev.value;
+        } else if (nextAlgorithmState.dpTable1D) {
+          nextAlgorithmState.dpTable1D[br] = ev.value;
+        }
+        explanation = `DP Base Case: dp[${br}${bc > 0 ? `,${bc}` : ''}] = ${ev.value}`;
+        break;
+      }
+
+      case 'DP_END': {
+        const ans = ev.value ?? (ev as any).finalAnswer;
+        nextAlgorithmState.status = ans !== undefined ? `DP Solved. Final Answer: ${ans}` : 'Completed';
+        explanation = `DP completed: Final result = ${ans ?? ''}`;
+        break;
+      }
+
       case 'CONSOLE_OUTPUT': {
         nextConsole.push(String(ev.message));
         explanation = `Console output: ${ev.message}`;
@@ -2462,6 +3408,8 @@ export function reconstructExecutionSteps(
     currentPointers = nextPointers;
     currentComparison = nextComparison;
     currentError = nextError;
+    currentMetrics = nextMetrics;
+    currentAlgorithmState = nextAlgorithmState;
 
     steps.push({
       stepIndex: i,
@@ -2482,6 +3430,7 @@ export function reconstructExecutionSteps(
         heapBytes,
         totalBytes: stackBytes + heapBytes,
       },
+      algorithmState: nextAlgorithmState,
     });
   }
 

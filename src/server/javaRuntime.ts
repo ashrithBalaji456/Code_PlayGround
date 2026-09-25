@@ -619,6 +619,404 @@ public class CodeFlowTracer {
         recordEvent("{\\"type\\":\\"DIJKSTRA_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"path\\":" + pathJson + ",\\"distance\\":" + dStr + "}");
     }
 
+    // ==========================================
+    // PHASE 5: ALGORITHMS & PATTERNS
+    // ==========================================
+
+    // --- SEARCHING ---
+    public static void linearSearchStart(String structId, Object target, int line) {
+        String tStr = formatValue(target);
+        recordEvent("{\\"type\\":\\"LINEAR_SEARCH_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"target\\":" + tStr + "}");
+    }
+
+    public static void linearSearchAccess(String structId, int index, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINEAR_SEARCH_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void linearSearchCompare(String structId, int index, Object val, Object target, boolean match, int line) {
+        String vStr = formatValue(val);
+        String tStr = formatValue(target);
+        recordEvent("{\\"type\\":\\"LINEAR_SEARCH_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + ",\\"target\\":" + tStr + ",\\"conditionResult\\":" + match + "}");
+    }
+
+    public static void linearSearchMatch(String structId, int index, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINEAR_SEARCH_MATCH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void linearSearchNotFound(String structId, Object target, int line) {
+        String tStr = formatValue(target);
+        recordEvent("{\\"type\\":\\"LINEAR_SEARCH_NOT_FOUND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"target\\":" + tStr + "}");
+    }
+
+    public static void linearSearchEnd(String structId, boolean found, int index, int line) {
+        recordEvent("{\\"type\\":\\"LINEAR_SEARCH_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"conditionResult\\":" + found + ",\\"index\\":" + index + "}");
+    }
+
+    // BINARY SEARCH
+    public static void binarySearchStart(String structId, Object target, int line) {
+        String tStr = formatValue(target);
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"target\\":" + tStr + "}");
+    }
+
+    public static void binarySearchRange(String structId, int low, int high, int line) {
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_RANGE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"low\\":" + low + ",\\"high\\":" + high + "}");
+    }
+
+    public static void binarySearchMid(String structId, int mid, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_MID\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mid\\":" + mid + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void binarySearchCompare(String structId, int mid, Object val, Object target, int cmp, int line) {
+        String vStr = formatValue(val);
+        String tStr = formatValue(target);
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mid\\":" + mid + ",\\"value\\":" + vStr + ",\\"target\\":" + tStr + ",\\"conditionResult\\":" + (cmp == 0) + ",\\"operator\\":\\"" + (cmp < 0 ? "<" : (cmp > 0 ? ">" : "==")) + "\\"}");
+    }
+
+    public static void binarySearchRangeUpdate(String structId, int low, int high, int line) {
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_RANGE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"low\\":" + low + ",\\"high\\":" + high + "}");
+    }
+
+    public static void binarySearchFound(String structId, int index, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_FOUND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void binarySearchNotFound(String structId, Object target, int line) {
+        String tStr = formatValue(target);
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_NOT_FOUND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"target\\":" + tStr + "}");
+    }
+
+    public static void binarySearchEnd(String structId, boolean found, int index, int line) {
+        recordEvent("{\\"type\\":\\"BINARY_SEARCH_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"conditionResult\\":" + found + ",\\"index\\":" + index + "}");
+    }
+
+    // --- SORTING ---
+    public static void sortStart(String algo, String structId, int line) {
+        recordEvent("{\\"type\\":\\"SORT_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"algorithmName\\":\\"" + algo + "\\"}");
+    }
+
+    public static void sortCompare(String structId, int idx1, int idx2, Object v1, Object v2, boolean result, int line) {
+        String s1 = formatValue(v1);
+        String s2 = formatValue(v2);
+        recordEvent("{\\"type\\":\\"SORT_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + idx1 + ",\\"toIndex\\":" + idx2 + ",\\"leftVal\\":" + s1 + ",\\"rightVal\\":" + s2 + ",\\"conditionResult\\":" + result + "}");
+    }
+
+    public static void sortSwap(String structId, int idx1, int idx2, Object v1, Object v2, int line) {
+        String s1 = formatValue(v1);
+        String s2 = formatValue(v2);
+        recordEvent("{\\"type\\":\\"SORT_SWAP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + idx1 + ",\\"toIndex\\":" + idx2 + ",\\"leftVal\\":" + s1 + ",\\"rightVal\\":" + s2 + "}");
+    }
+
+    public static void sortAssign(String structId, int idx, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"SORT_ASSIGN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + idx + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void sortRange(String structId, int start, int end, int line) {
+        recordEvent("{\\"type\\":\\"SORT_RANGE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"rangeStart\\":" + start + ",\\"rangeEnd\\":" + end + "}");
+    }
+
+    public static void sortPartition(String structId, int pivotIdx, Object pivotVal, int left, int right, int line) {
+        String pStr = formatValue(pivotVal);
+        recordEvent("{\\"type\\":\\"SORT_PARTITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"pivotIndex\\":" + pivotIdx + ",\\"pivotValue\\":" + pStr + ",\\"rangeStart\\":" + left + ",\\"rangeEnd\\":" + right + "}");
+    }
+
+    public static void sortMerge(String structId, int l, int m, int r, int line) {
+        recordEvent("{\\"type\\":\\"SORT_MERGE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"low\\":" + l + ",\\"mid\\":" + m + ",\\"high\\":" + r + "}");
+    }
+
+    public static void sortComplete(String structId, int line) {
+        recordEvent("{\\"type\\":\\"SORT_COMPLETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // Quick Sort Specialized
+    public static void quickSortStart(String structId, int left, int right, int line) {
+        recordEvent("{\\"type\\":\\"QUICK_SORT_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"rangeStart\\":" + left + ",\\"rangeEnd\\":" + right + "}");
+    }
+
+    public static void quickSortRange(String structId, int left, int right, int line) {
+        recordEvent("{\\"type\\":\\"QUICK_SORT_RANGE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"rangeStart\\":" + left + ",\\"rangeEnd\\":" + right + "}");
+    }
+
+    public static void quickSortPivot(String structId, int pivotIdx, Object pivotVal, int line) {
+        String pStr = formatValue(pivotVal);
+        recordEvent("{\\"type\\":\\"QUICK_SORT_PIVOT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"pivotIndex\\":" + pivotIdx + ",\\"pivotValue\\":" + pStr + "}");
+    }
+
+    public static void quickSortCompare(String structId, int idx, Object val, Object pivotVal, boolean less, int line) {
+        String vStr = formatValue(val);
+        String pStr = formatValue(pivotVal);
+        recordEvent("{\\"type\\":\\"QUICK_SORT_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + idx + ",\\"value\\":" + vStr + ",\\"pivotValue\\":" + pStr + ",\\"conditionResult\\":" + less + "}");
+    }
+
+    public static void quickSortPartition(String structId, int pivotIdx, int left, int right, int line) {
+        recordEvent("{\\"type\\":\\"QUICK_SORT_PARTITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"pivotIndex\\":" + pivotIdx + ",\\"rangeStart\\":" + left + ",\\"rangeEnd\\":" + right + "}");
+    }
+
+    public static void quickSortSwap(String structId, int idx1, int idx2, Object v1, Object v2, int line) {
+        String s1 = formatValue(v1);
+        String s2 = formatValue(v2);
+        recordEvent("{\\"type\\":\\"QUICK_SORT_SWAP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + idx1 + ",\\"toIndex\\":" + idx2 + ",\\"leftVal\\":" + s1 + ",\\"rightVal\\":" + s2 + "}");
+    }
+
+    public static void quickSortRecurse(String structId, int left, int right, int line) {
+        recordEvent("{\\"type\\":\\"QUICK_SORT_RECURSE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"rangeStart\\":" + left + ",\\"rangeEnd\\":" + right + "}");
+    }
+
+    public static void quickSortReturn(String structId, int line) {
+        recordEvent("{\\"type\\":\\"QUICK_SORT_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    public static void quickSortEnd(String structId, int line) {
+        recordEvent("{\\"type\\":\\"QUICK_SORT_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // --- ARRAY PATTERNS ---
+    // Two Pointers
+    public static void twoPointerStart(String structId, int left, int right, int line) {
+        recordEvent("{\\"type\\":\\"TWO_POINTER_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"low\\":" + left + ",\\"high\\":" + right + "}");
+    }
+
+    public static void twoPointerCompare(String structId, int left, int right, Object v1, Object v2, int line) {
+        String s1 = formatValue(v1);
+        String s2 = formatValue(v2);
+        recordEvent("{\\"type\\":\\"TWO_POINTER_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + left + ",\\"toIndex\\":" + right + ",\\"leftVal\\":" + s1 + ",\\"rightVal\\":" + s2 + "}");
+    }
+
+    public static void twoPointerMoveLeft(String structId, int newLeft, int line) {
+        recordEvent("{\\"type\\":\\"TWO_POINTER_MOVE_LEFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"low\\":" + newLeft + "}");
+    }
+
+    public static void twoPointerMoveRight(String structId, int newRight, int line) {
+        recordEvent("{\\"type\\":\\"TWO_POINTER_MOVE_RIGHT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"high\\":" + newRight + "}");
+    }
+
+    public static void twoPointerUpdate(String structId, int left, int right, Object sum, int line) {
+        String sStr = formatValue(sum);
+        recordEvent("{\\"type\\":\\"TWO_POINTER_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"low\\":" + left + ",\\"high\\":" + right + ",\\"currentSum\\":" + sStr + "}");
+    }
+
+    public static void twoPointerEnd(String structId, int line) {
+        recordEvent("{\\"type\\":\\"TWO_POINTER_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // Sliding Window
+    public static void windowStart(String structId, int start, int end, Object sum, int line) {
+        String sStr = formatValue(sum);
+        recordEvent("{\\"type\\":\\"WINDOW_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"windowStart\\":" + start + ",\\"windowEnd\\":" + end + ",\\"currentSum\\":" + sStr + "}");
+    }
+
+    public static void windowExpand(String structId, int end, Object addedVal, Object currentSum, int line) {
+        String vStr = formatValue(addedVal);
+        String sStr = formatValue(currentSum);
+        recordEvent("{\\"type\\":\\"WINDOW_EXPAND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"windowEnd\\":" + end + ",\\"value\\":" + vStr + ",\\"currentSum\\":" + sStr + "}");
+    }
+
+    public static void windowShrink(String structId, int start, Object removedVal, Object currentSum, int line) {
+        String vStr = formatValue(removedVal);
+        String sStr = formatValue(currentSum);
+        recordEvent("{\\"type\\":\\"WINDOW_SHRINK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"windowStart\\":" + start + ",\\"value\\":" + vStr + ",\\"currentSum\\":" + sStr + "}");
+    }
+
+    public static void windowAccess(String structId, int index, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"WINDOW_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void windowUpdate(String structId, int start, int end, int size, Object sum, Object best, int line) {
+        String sStr = formatValue(sum);
+        String bStr = formatValue(best);
+        recordEvent("{\\"type\\":\\"WINDOW_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"windowStart\\":" + start + ",\\"windowEnd\\":" + end + ",\\"windowSize\\":" + size + ",\\"currentSum\\":" + sStr + ",\\"bestSum\\":" + bStr + "}");
+    }
+
+    public static void windowResult(String structId, Object best, int line) {
+        String bStr = formatValue(best);
+        recordEvent("{\\"type\\":\\"WINDOW_RESULT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"bestSum\\":" + bStr + "}");
+    }
+
+    public static void windowEnd(String structId, int line) {
+        recordEvent("{\\"type\\":\\"WINDOW_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // Prefix Sum
+    public static void prefixSumStart(String arrId, String prefixId, int line) {
+        recordEvent("{\\"type\\":\\"PREFIX_SUM_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + prefixId + "\\",\\"arrayId\\":\\"" + arrId + "\\"}");
+    }
+
+    public static void prefixSumAccess(String arrId, int index, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"PREFIX_SUM_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + arrId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void prefixSumUpdate(String prefixId, int index, Object val, Object prevVal, Object arrVal, int line) {
+        String vStr = formatValue(val);
+        String pStr = formatValue(prevVal);
+        String aStr = formatValue(arrVal);
+        recordEvent("{\\"type\\":\\"PREFIX_SUM_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + prefixId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + ",\\"leftVal\\":" + pStr + ",\\"rightVal\\":" + aStr + "}");
+    }
+
+    public static void prefixSumEnd(String prefixId, int line) {
+        recordEvent("{\\"type\\":\\"PREFIX_SUM_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + prefixId + "\\"}");
+    }
+
+    // Difference Array
+    public static void differenceArrayStart(String arrId, String diffId, int line) {
+        recordEvent("{\\"type\\":\\"DIFFERENCE_ARRAY_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + diffId + "\\",\\"arrayId\\":\\"" + arrId + "\\"}");
+    }
+
+    public static void differenceArrayUpdate(String diffId, int l, int r, Object delta, int line) {
+        String dStr = formatValue(delta);
+        recordEvent("{\\"type\\":\\"DIFFERENCE_ARRAY_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + diffId + "\\",\\"rangeStart\\":" + l + ",\\"rangeEnd\\":" + r + ",\\"value\\":" + dStr + "}");
+    }
+
+    public static void differenceArrayReconstruct(String diffId, String resId, int index, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DIFFERENCE_ARRAY_RECONSTRUCT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + resId + "\\",\\"arrayId\\":\\"" + diffId + "\\",\\"index\\":" + index + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void differenceArrayEnd(String resId, int line) {
+        recordEvent("{\\"type\\":\\"DIFFERENCE_ARRAY_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + resId + "\\"}");
+    }
+
+    // Kadane
+    public static void kadaneStart(String structId, int line) {
+        recordEvent("{\\"type\\":\\"KADANE_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    public static void kadaneUpdate(String structId, int currIdx, Object currVal, Object currentSum, Object bestSum, int line) {
+        String vStr = formatValue(currVal);
+        String csStr = formatValue(currentSum);
+        String bsStr = formatValue(bestSum);
+        recordEvent("{\\"type\\":\\"KADANE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + currIdx + ",\\"value\\":" + vStr + ",\\"currentSum\\":" + csStr + ",\\"bestSum\\":" + bsStr + "}");
+    }
+
+    public static void kadaneBestUpdate(String structId, Object bestSum, int bestStart, int bestEnd, int line) {
+        String bsStr = formatValue(bestSum);
+        recordEvent("{\\"type\\":\\"KADANE_BEST_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"bestSum\\":" + bsStr + ",\\"bestStart\\":" + bestStart + ",\\"bestEnd\\":" + bestEnd + "}");
+    }
+
+    public static void kadaneRangeUpdate(String structId, int currentStart, int currentEnd, int line) {
+        recordEvent("{\\"type\\":\\"KADANE_RANGE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"currentStart\\":" + currentStart + ",\\"rangeEnd\\":" + currentEnd + "}");
+    }
+
+    public static void kadaneEnd(String structId, Object bestSum, int bestStart, int bestEnd, int line) {
+        String bsStr = formatValue(bestSum);
+        recordEvent("{\\"type\\":\\"KADANE_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"bestSum\\":" + bsStr + ",\\"bestStart\\":" + bestStart + ",\\"bestEnd\\":" + bestEnd + "}");
+    }
+
+    // --- RECURSION ---
+    public static void recursionStart(String fnName, String argsJson, int line) {
+        recordEvent("{\\"type\\":\\"RECURSION_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"functionName\\":\\"" + fnName + "\\",\\"arguments\\":" + argsJson + "}");
+    }
+
+    public static void recursionCall(String callId, String parentId, String fnName, String argsJson, int depth, int line) {
+        recordEvent("{\\"type\\":\\"RECURSION_CALL\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"callId\\":\\"" + callId + "\\",\\"parentNodeId\\":\\"" + (parentId != null ? parentId : "") + "\\",\\"functionName\\":\\"" + fnName + "\\",\\"arguments\\":" + argsJson + ",\\"depth\\":" + depth + "}");
+    }
+
+    public static void recursionBaseCase(String callId, Object retVal, int line) {
+        String rStr = formatValue(retVal);
+        recordEvent("{\\"type\\":\\"RECURSION_BASE_CASE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"callId\\":\\"" + callId + "\\",\\"returnValue\\":" + rStr + "}");
+    }
+
+    public static void recursionReturn(String callId, Object retVal, int line) {
+        String rStr = formatValue(retVal);
+        recordEvent("{\\"type\\":\\"RECURSION_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"callId\\":\\"" + callId + "\\",\\"returnValue\\":" + rStr + "}");
+    }
+
+    public static void recursionBacktrack(String callId, int line) {
+        recordEvent("{\\"type\\":\\"RECURSION_BACKTRACK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"callId\\":\\"" + callId + "\\"}");
+    }
+
+    public static void recursionEnd(String fnName, Object finalResult, int line) {
+        String rStr = formatValue(finalResult);
+        recordEvent("{\\"type\\":\\"RECURSION_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"functionName\\":\\"" + fnName + "\\",\\"returnValue\\":" + rStr + "}");
+    }
+
+    // --- BACKTRACKING ---
+    public static void backtrackStart(String name, int line) {
+        recordEvent("{\\"type\\":\\"BACKTRACK_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"algorithmName\\":\\"" + name + "\\"}");
+    }
+
+    public static void backtrackChoice(String choice, Object stateVal, int line) {
+        String sStr = formatValue(stateVal);
+        recordEvent("{\\"type\\":\\"BACKTRACK_CHOICE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"choice\\":\\"" + choice + "\\",\\"stateValue\\":" + sStr + "}");
+    }
+
+    public static void backtrackEnter(String choice, int line) {
+        recordEvent("{\\"type\\":\\"BACKTRACK_ENTER\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"choice\\":\\"" + choice + "\\"}");
+    }
+
+    public static void backtrackSuccess(String solution, int line) {
+        recordEvent("{\\"type\\":\\"BACKTRACK_SUCCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"choice\\":\\"" + solution + "\\"}");
+    }
+
+    public static void backtrackFailure(String reason, int line) {
+        recordEvent("{\\"type\\":\\"BACKTRACK_FAILURE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"message\\":\\"" + reason + "\\"}");
+    }
+
+    public static void backtrackUndo(String choice, Object stateVal, int line) {
+        String sStr = formatValue(stateVal);
+        recordEvent("{\\"type\\":\\"BACKTRACK_UNDO\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"choice\\":\\"" + choice + "\\",\\"stateValue\\":" + sStr + "}");
+    }
+
+    public static void backtrackReturn(String choice, int line) {
+        recordEvent("{\\"type\\":\\"BACKTRACK_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"choice\\":\\"" + choice + "\\"}");
+    }
+
+    public static void backtrackEnd(int line) {
+        recordEvent("{\\"type\\":\\"BACKTRACK_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + "}");
+    }
+
+    // --- DYNAMIC PROGRAMMING ---
+    public static void dpStart(String dpId, String type, int rows, int cols, int line) {
+        recordEvent("{\\"type\\":\\"DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"dpType\\":\\"" + type + "\\",\\"low\\":" + rows + ",\\"high\\":" + cols + "}");
+    }
+
+    public static void dpStateCreate(String dpId, String type, int rows, int cols, int line) {
+        recordEvent("{\\"type\\":\\"DP_STATE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"dpType\\":\\"" + type + "\\",\\"low\\":" + rows + ",\\"high\\":" + cols + "}");
+    }
+
+    public static void dpStateAccess(String dpId, int row, int col, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DP_STATE_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"row\\":" + row + ",\\"col\\":" + col + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void dpStateUpdate(String dpId, int row, int col, Object val, String transitionFormula, String prevCellsJson, int line) {
+        String vStr = formatValue(val);
+        String formula = transitionFormula.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"DP_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"row\\":" + row + ",\\"col\\":" + col + ",\\"value\\":" + vStr + ",\\"transitionFormula\\":\\"" + formula + "\\",\\"path\\":" + prevCellsJson + "}");
+    }
+
+    public static void dpTransition(String dpId, int row, int col, Object val, String formula, int line) {
+        String vStr = formatValue(val);
+        String f = formula.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"DP_TRANSITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"row\\":" + row + ",\\"col\\":" + col + ",\\"value\\":" + vStr + ",\\"transitionFormula\\":\\"" + f + "\\"}");
+    }
+
+    public static void dpCacheHit(String dpId, Object key, Object val, int line) {
+        String kStr = formatValue(key);
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DP_CACHE_HIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"key\\":" + kStr + ",\\"value\\":" + vStr + ",\\"isHit\\":true}");
+    }
+
+    public static void dpCacheMiss(String dpId, Object key, int line) {
+        String kStr = formatValue(key);
+        recordEvent("{\\"type\\":\\"DP_CACHE_MISS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"key\\":" + kStr + ",\\"isHit\\":false}");
+    }
+
+    public static void dpBaseCase(String dpId, int row, int col, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DP_BASE_CASE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"row\\":" + row + ",\\"col\\":" + col + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void dpEnd(String dpId, Object finalResult, int line) {
+        String rStr = formatValue(finalResult);
+        recordEvent("{\\"type\\":\\"DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"value\\":" + rStr + "}");
+    }
+
     // === CONTROL FLOW & UTILITIES ===
     public static void condition(String expr, boolean result, int line) {
         String cleanExpr = expr.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");

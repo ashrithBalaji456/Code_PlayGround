@@ -424,10 +424,16 @@ public class Graph {
       const jsonStr = stdout.substring(beginIdx + beginMarker.length, endIdx).trim();
       try {
         const events = JSON.parse(jsonStr);
+        const printEvents = events
+          .filter((e: any) => e.type === 'PRINT' || e.type === 'CONSOLE_OUTPUT')
+          .map((e: any) => String(e.value ?? e.message ?? ''));
+        const userStdout = (stdout.substring(0, beginIdx) + stdout.substring(endIdx + endMarker.length)).trim();
+        const consoleLines = printEvents.length > 0 ? printEvents : (userStdout ? userStdout.split(/\r?\n/) : []);
         return {
           success: true,
           status: 'COMPLETED',
           events,
+          consoleOutput: consoleLines,
           worker: 'Java 22.0.1 (JVM Sandboxed)',
         };
       } catch (err: any) {

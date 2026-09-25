@@ -8,13 +8,14 @@ import { MemoryPanel } from './components/panels/MemoryPanel';
 import { CallStackPanel } from './components/panels/CallStackPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { DataStructuresPanel } from './components/panels/DataStructuresPanel';
+import { AlgorithmsPanel } from './components/panels/AlgorithmsPanel';
 import { LearningModePanel } from './components/panels/LearningModePanel';
 import { HelpModal } from './components/HelpModal';
 import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
 import { reconstructExecutionSteps } from './engine/stateReconstructor';
-import { Variable, Cpu, Layers, Terminal, Database } from 'lucide-react';
+import { Variable, Cpu, Layers, Terminal, Database, Compass } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -33,7 +34,7 @@ export function App() {
   const [speed, setSpeed] = useState<number>(1);
   const [breakpoints, setBreakpoints] = useState<number[]>([]);
 
-  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'variables' | 'memory' | 'callstack' | 'console'>('structures');
+  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console'>('structures');
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
@@ -398,6 +399,23 @@ export function App() {
                     </button>
 
                     <button
+                      onClick={() => setActiveBottomTab('algorithms')}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
+                        activeBottomTab === 'algorithms'
+                          ? 'border-[#58a6ff] text-[#58a6ff] bg-[#161b22]'
+                          : 'border-transparent text-[#8b949e] hover:text-[#f0f6fc]'
+                      }`}
+                    >
+                      <Compass className="w-3.5 h-3.5" />
+                      <span>Algorithms</span>
+                      {currentStep?.algorithmState?.algorithmName && (
+                        <span className="text-[10px] bg-[#58a6ff]/20 text-[#58a6ff] px-1.5 rounded-full font-bold">
+                          {currentStep.algorithmState.algorithmName}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
                       onClick={() => setActiveBottomTab('variables')}
                       className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
                         activeBottomTab === 'variables'
@@ -473,6 +491,9 @@ export function App() {
                     <DataStructuresPanel
                       structures={currentStep?.structures || {}}
                     />
+                  )}
+                  {activeBottomTab === 'algorithms' && (
+                    <AlgorithmsPanel currentStep={currentStep} />
                   )}
                   {activeBottomTab === 'variables' && (
                     <VariablesPanel
