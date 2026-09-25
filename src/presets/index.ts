@@ -677,5 +677,354 @@ public class Main {
 }
 `,
   },
+  // ==========================================
+  // PHASE 4: GRAPHS & GRAPH ALGORITHMS
+  // ==========================================
+  {
+    id: 'p4-undirected-graph',
+    title: '1. Undirected Graph',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V + E)',
+    description: 'Dynamic vertex addition and undirected edge creation (A — B — C — D — A).',
+    explanation: 'Creates vertices and links them with bidirectional undirected edges, demonstrating degree tracking and adjacency view.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(false); // undirected
+
+        graph.addVertex("A");
+        graph.addVertex("B");
+        graph.addVertex("C");
+        graph.addVertex("D");
+
+        graph.addEdge("A", "B");
+        graph.addEdge("B", "C");
+        graph.addEdge("C", "D");
+        graph.addEdge("D", "A");
+        graph.addEdge("A", "C");
+    }
+}
+`,
+  },
+  {
+    id: 'p4-directed-graph',
+    title: '2. Directed Graph',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V + E)',
+    description: 'Directed graph with directional arrowheads: A ➔ B ➔ C ➔ D ➔ A.',
+    explanation: 'Creates directed edges preserving orientation. Outgoing and incoming neighbors are independently tracked and inspected.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(true); // directed
+
+        graph.addVertex("A");
+        graph.addVertex("B");
+        graph.addVertex("C");
+        graph.addVertex("D");
+
+        graph.addEdge("A", "B");
+        graph.addEdge("B", "C");
+        graph.addEdge("C", "D");
+        graph.addEdge("D", "A");
+    }
+}
+`,
+  },
+  {
+    id: 'p4-weighted-graph',
+    title: '3. Weighted Graph',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V + E)',
+    description: 'Weighted edges with weights displayed directly on edge labels: A ──4── B.',
+    explanation: 'Associates numeric edge weights with each connection, displaying weights on visual edges and in matrix view.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(false, true); // undirected, weighted
+
+        graph.addEdge("A", "B", 4.0);
+        graph.addEdge("B", "C", 2.0);
+        graph.addEdge("C", "D", 7.0);
+        graph.addEdge("D", "A", 3.0);
+        graph.addEdge("A", "C", 5.0);
+    }
+}
+`,
+  },
+  {
+    id: 'p4-bfs',
+    title: '4. Breadth-First Search (BFS)',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'BFS level-order graph traversal with Queue and Visited Set synchronization.',
+    explanation: 'Visualizes discovery, queue enqueue/dequeue operations, and edge traversals level-by-level from node A.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(false);
+
+        graph.addEdge("A", "B");
+        graph.addEdge("A", "C");
+        graph.addEdge("B", "D");
+        graph.addEdge("B", "E");
+        graph.addEdge("C", "F");
+
+        graph.bfs("A");
+    }
+}
+`,
+  },
+  {
+    id: 'p4-dfs-iterative',
+    title: '5. DFS Iterative Traversal',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Depth-First Search using explicit stack for deep path discovery.',
+    explanation: 'Follows paths deeply into the graph, discovering vertices and tracking visited nodes step-by-step.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(true);
+
+        graph.addEdge("A", "B");
+        graph.addEdge("B", "C");
+        graph.addEdge("B", "D");
+        graph.addEdge("C", "E");
+
+        graph.dfs("A");
+    }
+}
+`,
+  },
+  {
+    id: 'p4-dfs-recursive',
+    title: '6. Recursive DFS + Call Stack',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Recursive DFS connecting Graph traversal, method recursion, and Call Stack frames.',
+    explanation: 'Demonstrates deep integration between the Graph visualizer and Call Stack frames during recursive descent and backtracking.',
+    code: `import java.util.*;
+
+public class Main {
+    static void dfsHelper(Graph g, String curr, Set<String> visited) {
+        visited.add(curr);
+        for (String nbr : g.getNeighbors(curr)) {
+            if (!visited.contains(nbr)) {
+                dfsHelper(g, nbr, visited);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        Graph graph = new Graph(false);
+        graph.addEdge("A", "B");
+        graph.addEdge("B", "C");
+        graph.addEdge("C", "D");
+        graph.addEdge("A", "D");
+
+        Set<String> visited = new HashSet<>();
+        dfsHelper(graph, "A", visited);
+    }
+}
+`,
+  },
+  {
+    id: 'p4-cycle-graph',
+    title: '7. Graph with Cycle & Detection',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Directed graph with cycle A ➔ B ➔ C ➔ A with live cycle detection alert.',
+    explanation: 'When DFS encounters a back-edge to an already visited vertex, the CYCLE DETECTED banner activates and highlights the cycle edge.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(true);
+
+        graph.addEdge("A", "B");
+        graph.addEdge("B", "C");
+        graph.addEdge("C", "A"); // back-edge cycle
+        graph.addEdge("C", "D");
+
+        graph.dfs("A");
+    }
+}
+`,
+  },
+  {
+    id: 'p4-dijkstra',
+    title: '8. Dijkstra Shortest Path Algorithm',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O((V + E) log V)',
+    spaceComplexity: 'O(V)',
+    description: 'Dijkstra shortest path with live distance table, edge relaxation, and PriorityQueue.',
+    explanation: 'Visualizes distance updates (dist[u] + w < dist[v]), PriorityQueue polls, and finalizes shortest path costs from node A.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(false, true);
+
+        graph.addEdge("A", "B", 4.0);
+        graph.addEdge("A", "C", 2.0);
+        graph.addEdge("B", "C", 1.0);
+        graph.addEdge("B", "D", 5.0);
+        graph.addEdge("C", "D", 8.0);
+        graph.addEdge("C", "E", 10.0);
+        graph.addEdge("D", "E", 2.0);
+
+        graph.dijkstra("A");
+    }
+}
+`,
+  },
+  {
+    id: 'p4-multiple-graphs',
+    title: '9. Multiple Independent Graphs',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V + E)',
+    description: 'Simultaneously provisions graphA, graphB, and graphC with isolated state.',
+    explanation: 'Verifies complete multi-structure isolation: operations on graphA never contaminate graphB or graphC.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        // graphA: Undirected triangle
+        Graph graphA = new Graph(false);
+        graphA.addEdge("A", "B");
+        graphA.addEdge("B", "C");
+        graphA.addEdge("C", "A");
+
+        // graphB: Directed path
+        Graph graphB = new Graph(true);
+        graphB.addEdge("X", "Y");
+        graphB.addEdge("Y", "Z");
+
+        // graphC: Weighted graph
+        Graph graphC = new Graph(false, true);
+        graphC.addEdge("1", "2", 10.0);
+        graphC.addEdge("2", "3", 25.0);
+    }
+}
+`,
+  },
+  {
+    id: 'p4-supporting-structures',
+    title: '10. Graph + Supporting Data Structures',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Graph BFS working in harmony with Queue and HashSet data structures.',
+    explanation: 'Demonstrates cross-structure coordination where user code simultaneously populates Graph, Queue, and Visited Set.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Graph graph = new Graph(false);
+        graph.addEdge("A", "B");
+        graph.addEdge("A", "C");
+        graph.addEdge("B", "D");
+
+        Queue<String> queue = new LinkedList<>();
+        Set<String> visited = new HashSet<>();
+
+        queue.add("A");
+        visited.add("A");
+
+        while (!queue.isEmpty()) {
+            String curr = queue.poll();
+            for (String nbr : graph.getNeighbors(curr)) {
+                if (!visited.contains(nbr)) {
+                    visited.add(nbr);
+                    queue.add(nbr);
+                }
+            }
+        }
+    }
+}
+`,
+  },
+  {
+    id: 'p4-final-demo',
+    title: '★ Phase 4 Final Demo (Full DSA Integration)',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O((V + E) log V)',
+    spaceComplexity: 'O(V + E)',
+    description: 'Comprehensive demo: Graph + Queue + HashSet + PriorityQueue + HashMap + BFS + Dijkstra.',
+    explanation: 'The ultimate Phase 4 demonstration: All data structures and algorithms execute on real JVM and visualize synchronously.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        // 1. Comprehensive Graph with non-negative weights
+        Graph graph = new Graph(false, true);
+        graph.addEdge("A", "B", 4.0);
+        graph.addEdge("A", "C", 2.0);
+        graph.addEdge("B", "D", 5.0);
+        graph.addEdge("C", "E", 6.0);
+        graph.addEdge("D", "E", 3.0);
+
+        // 2. Queue & Visited Set used by BFS
+        Queue<String> bfsQueue = new LinkedList<>();
+        Set<String> visitedSet = new HashSet<>();
+        bfsQueue.add("A");
+        visitedSet.add("A");
+
+        // 3. Distance Map used by Dijkstra
+        Map<String, Integer> distances = new HashMap<>();
+        distances.put("A", 0);
+        distances.put("B", 4);
+        distances.put("C", 2);
+        distances.put("D", 5);
+        distances.put("E", 6);
+
+        // 4. PriorityQueue used by Dijkstra
+        PriorityQueue<Integer> pq = new PriorityQueue<>();
+        pq.add(2); // dist to C
+        pq.add(4); // dist to B
+        pq.add(5); // dist to D
+
+        // 5. Run live Dijkstra shortest-path execution
+        graph.dijkstra("A");
+    }
+}
+`,
+  },
 ];
 

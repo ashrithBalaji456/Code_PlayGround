@@ -43,7 +43,7 @@ export const VariablesPanel: React.FC<VariablesPanelProps> = ({
                 lastEvent.type === 'VARIABLE_UPDATE' &&
                 lastEvent.variable === v.name;
 
-              const isStructure = v.isReference || /^(Stack|Queue|Deque|LinkedList|HashMap|HashSet|PriorityQueue|BinaryTree|BST|Heap|MinHeap|MaxHeap|Trie|TreeNode|Node)/i.test(v.type);
+              const isStructure = v.isReference || /^(Stack|Queue|Deque|LinkedList|HashMap|HashSet|PriorityQueue|BinaryTree|BST|Heap|MinHeap|MaxHeap|Trie|Graph|TreeNode|Node)/i.test(v.type);
 
               const handleClick = () => {
                 const targetId = v.refTargetId || v.name;

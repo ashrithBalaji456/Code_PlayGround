@@ -163,6 +163,157 @@ public class Trie {
       fs.writeFileSync(path.join(pkgDir, 'Trie.java'), `package com.codeflow;\n${trieSrc}`, 'utf8');
     }
 
+    if (!userCode.includes('class Graph') && userCode.includes('Graph')) {
+      const graphSrc = `import java.util.*;
+
+public class Graph {
+    public static class Edge {
+        public String id;
+        public String source;
+        public String target;
+        public boolean directed;
+        public boolean weighted;
+        public double weight;
+        public Edge(String id, String source, String target, boolean directed, boolean weighted, double weight) {
+            this.id = id;
+            this.source = source;
+            this.target = target;
+            this.directed = directed;
+            this.weighted = weighted;
+            this.weight = weight;
+        }
+    }
+    public boolean directed = false;
+    public boolean weighted = false;
+    public Set<String> vertices = new LinkedHashSet<>();
+    public List<Edge> edges = new ArrayList<>();
+    public Map<String, List<Edge>> adj = new LinkedHashMap<>();
+
+    public Graph() {}
+    public Graph(boolean directed) { this.directed = directed; }
+    public Graph(boolean directed, boolean weighted) {
+        this.directed = directed;
+        this.weighted = weighted;
+    }
+
+    public void addVertex(String v) {
+        vertices.add(v);
+        adj.putIfAbsent(v, new ArrayList<>());
+    }
+
+    public void addNode(String v) {
+        addVertex(v);
+    }
+
+    public void addEdge(String src, String tgt) {
+        addEdge(src, tgt, 1.0);
+    }
+
+    public void addEdge(String src, String tgt, double weight) {
+        addVertex(src);
+        addVertex(tgt);
+        boolean isW = (weight != 1.0) || this.weighted;
+        if (isW) this.weighted = true;
+        String edgeId = "edge_" + src + "_" + tgt + "_" + edges.size();
+        Edge e = new Edge(edgeId, src, tgt, directed, isW, weight);
+        edges.add(e);
+        adj.get(src).add(e);
+        if (!directed) {
+            Edge rev = new Edge(edgeId + "_rev", tgt, src, directed, isW, weight);
+            adj.get(tgt).add(rev);
+        }
+    }
+
+    public void removeEdge(String src, String tgt) {
+        if (adj.containsKey(src)) {
+            adj.get(src).removeIf(e -> e.target.equals(tgt));
+        }
+        if (!directed && adj.containsKey(tgt)) {
+            adj.get(tgt).removeIf(e -> e.target.equals(src));
+        }
+        edges.removeIf(e -> (e.source.equals(src) && e.target.equals(tgt)) || (!directed && e.source.equals(tgt) && e.target.equals(src)));
+    }
+
+    public List<String> getNeighbors(String v) {
+        List<String> neighbors = new ArrayList<>();
+        if (adj.containsKey(v)) {
+            for (Edge e : adj.get(v)) {
+                neighbors.add(e.target);
+            }
+        }
+        return neighbors;
+    }
+
+    public List<String> bfs(String start) {
+        List<String> visitedOrder = new ArrayList<>();
+        Set<String> visited = new LinkedHashSet<>();
+        Queue<String> queue = new LinkedList<>();
+
+        visited.add(start);
+        visitedOrder.add(start);
+        queue.add(start);
+
+        while (!queue.isEmpty()) {
+            String curr = queue.poll();
+            for (String neighbor : getNeighbors(curr)) {
+                if (!visited.contains(neighbor)) {
+                    visited.add(neighbor);
+                    visitedOrder.add(neighbor);
+                    queue.add(neighbor);
+                }
+            }
+        }
+        return visitedOrder;
+    }
+
+    public List<String> dfs(String start) {
+        List<String> visitedOrder = new ArrayList<>();
+        Set<String> visited = new LinkedHashSet<>();
+        dfsRec(start, visited, visitedOrder);
+        return visitedOrder;
+    }
+
+    private void dfsRec(String curr, Set<String> visited, List<String> order) {
+        visited.add(curr);
+        order.add(curr);
+        for (String neighbor : getNeighbors(curr)) {
+            if (!visited.contains(neighbor)) {
+                dfsRec(neighbor, visited, order);
+            }
+        }
+    }
+
+    public Map<String, Double> dijkstra(String start) {
+        Map<String, Double> distances = new LinkedHashMap<>();
+        for (String v : vertices) distances.put(v, Double.POSITIVE_INFINITY);
+        distances.put(start, 0.0);
+
+        PriorityQueue<String[]> pq = new PriorityQueue<>(Comparator.comparingDouble(a -> Double.parseDouble(a[1])));
+        pq.add(new String[]{start, "0.0"});
+
+        while (!pq.isEmpty()) {
+            String[] top = pq.poll();
+            String u = top[0];
+            double d = Double.parseDouble(top[1]);
+            if (d > distances.get(u)) continue;
+
+            if (adj.containsKey(u)) {
+                for (Edge e : adj.get(u)) {
+                    double newDist = distances.get(u) + e.weight;
+                    if (newDist < distances.get(e.target)) {
+                        distances.put(e.target, newDist);
+                        pq.add(new String[]{e.target, String.valueOf(newDist)});
+                    }
+                }
+            }
+        }
+        return distances;
+    }
+}`;
+      fs.writeFileSync(path.join(sandboxDir, 'Graph.java'), graphSrc, 'utf8');
+      fs.writeFileSync(path.join(pkgDir, 'Graph.java'), `package com.codeflow;\n${graphSrc}`, 'utf8');
+    }
+
     // 3. Test compile the RAW user code first to catch genuine javac compilation errors
     const rawJavaFile = path.join(sandboxDir, `${className}.java`);
     fs.writeFileSync(rawJavaFile, userCode, 'utf8');

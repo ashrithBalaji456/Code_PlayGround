@@ -7,6 +7,8 @@ import {
   HeapObject,
   ComparisonInfo,
   ExecutionError,
+  GraphNodeData,
+  GraphEdgeData,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -135,6 +137,44 @@ export function reconstructExecutionSteps(
             }
           : undefined,
         setData: st.setData ? [...st.setData] : undefined,
+        graphData: st.graphData
+          ? (() => {
+              const nodes: Record<string, GraphNodeData> = Object.fromEntries(
+                Object.entries(st.graphData.nodes || {}).map(([k, v]) => [
+                  k,
+                  {
+                    ...v,
+                    inNeighbors: v.inNeighbors ? [...v.inNeighbors] : undefined,
+                    outNeighbors: v.outNeighbors ? [...v.outNeighbors] : undefined,
+                  },
+                ])
+              );
+              const edges: Record<string, GraphEdgeData> = Object.fromEntries(
+                Object.entries(st.graphData.edges || {}).map(([k, v]) => [k, { ...v }])
+              );
+              return {
+                directed: st.graphData.directed,
+                weighted: st.graphData.weighted,
+                nodes,
+                nodeList: Object.values(nodes),
+                edges,
+                edgeList: Object.values(edges),
+                startNodeId: st.graphData.startNodeId,
+                currentNodeId: st.graphData.currentNodeId,
+                activeEdgeId: st.graphData.activeEdgeId,
+                selectedNodeId: st.graphData.selectedNodeId,
+                selectedEdgeId: st.graphData.selectedEdgeId,
+                algorithm: st.graphData.algorithm,
+                algorithmPhase: st.graphData.algorithmPhase,
+                visitedOrder: st.graphData.visitedOrder ? [...st.graphData.visitedOrder] : undefined,
+                queueState: st.graphData.queueState ? [...st.graphData.queueState] : undefined,
+                distances: st.graphData.distances ? { ...st.graphData.distances } : undefined,
+                shortestPath: st.graphData.shortestPath ? [...st.graphData.shortestPath] : undefined,
+                cycleDetected: st.graphData.cycleDetected,
+                cycleEdges: st.graphData.cycleEdges ? [...st.graphData.cycleEdges] : undefined,
+              };
+            })()
+          : undefined,
         activeIndices: [],
         comparingIndices: [],
         swappingIndices: undefined,
@@ -1499,6 +1539,791 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      // === GRAPH (PHASE 4) ===
+      case 'GRAPH_CREATE': {
+        const directed = ev.directed ?? false;
+        const weighted = ev.weighted ?? false;
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'graph',
+          dataType: `Graph<${directed ? 'Directed' : 'Undirected'}${weighted ? ', Weighted' : ''}>`,
+          size: 0,
+          graphData: {
+            directed,
+            weighted,
+            nodes: {},
+            nodeList: [],
+            edges: {},
+            edgeList: [],
+            visitedOrder: [],
+            distances: {},
+          },
+          lastOperation: `new Graph(directed=${directed}, weighted=${weighted})`,
+        };
+        nextVariables[stId] = {
+          name: ev.variable || stId,
+          type: 'Graph',
+          value: `nodes=0, edges=0, ${directed ? 'directed' : 'undirected'}${weighted ? ', weighted' : ''}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 48,
+        };
+        explanation = `Created ${directed ? 'Directed' : 'Undirected'} ${weighted ? 'Weighted ' : ''}Graph '${stId}'`;
+        break;
+      }
+
+      case 'GRAPH_DELETE': {
+        delete nextStructures[stId];
+        delete nextVariables[stId];
+        explanation = `Deleted Graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_NODE_CREATE': {
+        let st = nextStructures[stId];
+        if (!st || !st.graphData) {
+          st = {
+            id: stId,
+            name: ev.variable || stId,
+            type: 'graph',
+            dataType: 'Graph',
+            size: 0,
+            graphData: {
+              directed: false,
+              weighted: false,
+              nodes: {},
+              nodeList: [],
+              edges: {},
+              edgeList: [],
+            },
+          };
+          nextStructures[stId] = st;
+        }
+        const gd = st.graphData!;
+        const nid = ev.nodeId || String(ev.value ?? 'N');
+        const val = ev.value ?? nid;
+        gd.nodes[nid] = {
+          id: nid,
+          label: String(val),
+          value: val,
+          state: 'UNVISITED',
+          degree: 0,
+          inNeighbors: [],
+          outNeighbors: [],
+        };
+        gd.nodeList = Object.values(gd.nodes);
+        st.size = gd.nodeList.length;
+        st.lastOperation = `addVertex("${nid}")`;
+        if (nextVariables[stId]) {
+          nextVariables[stId].value = `nodes=${gd.nodeList.length}, edges=${gd.edgeList.length}`;
+        }
+        explanation = `Added vertex '${nid}' to graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_NODE_DELETE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const gd = st.graphData;
+          const nid = ev.nodeId || String(ev.value);
+          delete gd.nodes[nid];
+          for (const [eid, edge] of Object.entries(gd.edges)) {
+            if (edge.source === nid || edge.target === nid) {
+              delete gd.edges[eid];
+            }
+          }
+          for (const n of Object.values(gd.nodes)) {
+            if (n.inNeighbors) n.inNeighbors = n.inNeighbors.filter((x) => x !== nid);
+            if (n.outNeighbors) n.outNeighbors = n.outNeighbors.filter((x) => x !== nid);
+            n.degree = (n.inNeighbors?.length || 0) + (n.outNeighbors?.length || 0);
+          }
+          gd.nodeList = Object.values(gd.nodes);
+          gd.edgeList = Object.values(gd.edges);
+          st.size = gd.nodeList.length;
+          st.lastOperation = `removeVertex("${nid}")`;
+          if (nextVariables[stId]) {
+            nextVariables[stId].value = `nodes=${gd.nodeList.length}, edges=${gd.edgeList.length}`;
+          }
+        }
+        explanation = `Removed vertex '${ev.nodeId}' from graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_NODE_ACCESS': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.currentNodeId = ev.nodeId;
+          st.graphData.selectedNodeId = ev.nodeId;
+          st.lastOperation = `getVertex("${ev.nodeId}")`;
+        }
+        explanation = `Accessed vertex '${ev.nodeId}' in graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_EDGE_CREATE': {
+        let st = nextStructures[stId];
+        if (!st || !st.graphData) {
+          st = {
+            id: stId,
+            name: ev.variable || stId,
+            type: 'graph',
+            dataType: 'Graph',
+            size: 0,
+            graphData: {
+              directed: ev.directed ?? false,
+              weighted: ev.weighted ?? false,
+              nodes: {},
+              nodeList: [],
+              edges: {},
+              edgeList: [],
+            },
+          };
+          nextStructures[stId] = st;
+        }
+        const gd = st.graphData!;
+        const src = ev.sourceNodeId || 'A';
+        const tgt = ev.targetNodeId || 'B';
+        const directed = ev.directed ?? gd.directed;
+        const weighted = ev.weighted ?? gd.weighted;
+        const weight = ev.weight;
+        const edgeId = ev.edgeId || (directed ? `${src}->${tgt}` : `${src}--${tgt}`);
+
+        if (!gd.nodes[src]) {
+          gd.nodes[src] = { id: src, label: src, value: src, state: 'UNVISITED', degree: 0, inNeighbors: [], outNeighbors: [] };
+        }
+        if (!gd.nodes[tgt]) {
+          gd.nodes[tgt] = { id: tgt, label: tgt, value: tgt, state: 'UNVISITED', degree: 0, inNeighbors: [], outNeighbors: [] };
+        }
+
+        gd.edges[edgeId] = {
+          id: edgeId,
+          source: src,
+          target: tgt,
+          directed,
+          weighted,
+          weight,
+          state: 'NORMAL',
+        };
+
+        if (!gd.nodes[src].outNeighbors) gd.nodes[src].outNeighbors = [];
+        if (!gd.nodes[src].outNeighbors!.includes(tgt)) gd.nodes[src].outNeighbors!.push(tgt);
+        if (!gd.nodes[tgt].inNeighbors) gd.nodes[tgt].inNeighbors = [];
+        if (!gd.nodes[tgt].inNeighbors!.includes(src)) gd.nodes[tgt].inNeighbors!.push(src);
+
+        if (!directed) {
+          if (!gd.nodes[tgt].outNeighbors) gd.nodes[tgt].outNeighbors = [];
+          if (!gd.nodes[tgt].outNeighbors!.includes(src)) gd.nodes[tgt].outNeighbors!.push(src);
+          if (!gd.nodes[src].inNeighbors) gd.nodes[src].inNeighbors = [];
+          if (!gd.nodes[src].inNeighbors!.includes(tgt)) gd.nodes[src].inNeighbors!.push(tgt);
+        }
+
+        for (const n of Object.values(gd.nodes)) {
+          const outs = n.outNeighbors?.length || 0;
+          const ins = n.inNeighbors?.length || 0;
+          n.degree = directed ? outs + ins : outs;
+        }
+
+        gd.nodeList = Object.values(gd.nodes);
+        gd.edgeList = Object.values(gd.edges);
+        st.size = gd.nodeList.length;
+        gd.activeEdgeId = edgeId;
+        st.lastOperation = directed
+          ? `addEdge(${src} ➔ ${tgt}${weighted ? `, w=${weight}` : ''})`
+          : `addEdge(${src} — ${tgt}${weighted ? `, w=${weight}` : ''})`;
+        if (nextVariables[stId]) {
+          nextVariables[stId].value = `nodes=${gd.nodeList.length}, edges=${gd.edgeList.length}`;
+        }
+        explanation = directed
+          ? `Created directed edge: ${src} ➔ ${tgt}${weighted ? ` (weight ${weight})` : ''}`
+          : `Created undirected edge: ${src} ── ${tgt}${weighted ? ` (weight ${weight})` : ''}`;
+        break;
+      }
+
+      case 'GRAPH_EDGE_DELETE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const gd = st.graphData;
+          let targetEid = ev.edgeId;
+          if (!targetEid && ev.sourceNodeId && ev.targetNodeId) {
+            for (const [k, e] of Object.entries(gd.edges)) {
+              if (
+                (e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)
+              ) {
+                targetEid = k;
+                break;
+              }
+            }
+          }
+          if (targetEid && gd.edges[targetEid]) {
+            const e = gd.edges[targetEid];
+            const src = e.source;
+            const tgt = e.target;
+            delete gd.edges[targetEid];
+            if (gd.nodes[src] && gd.nodes[src].outNeighbors) {
+              gd.nodes[src].outNeighbors = gd.nodes[src].outNeighbors!.filter((x) => x !== tgt);
+            }
+            if (gd.nodes[tgt] && gd.nodes[tgt].inNeighbors) {
+              gd.nodes[tgt].inNeighbors = gd.nodes[tgt].inNeighbors!.filter((x) => x !== src);
+            }
+            if (!e.directed) {
+              if (gd.nodes[tgt] && gd.nodes[tgt].outNeighbors) {
+                gd.nodes[tgt].outNeighbors = gd.nodes[tgt].outNeighbors!.filter((x) => x !== src);
+              }
+              if (gd.nodes[src] && gd.nodes[src].inNeighbors) {
+                gd.nodes[src].inNeighbors = gd.nodes[src].inNeighbors!.filter((x) => x !== tgt);
+              }
+            }
+            for (const n of Object.values(gd.nodes)) {
+              n.degree = (n.outNeighbors?.length || 0) + (n.inNeighbors?.length || 0);
+            }
+            gd.edgeList = Object.values(gd.edges);
+            st.lastOperation = `removeEdge(${src}, ${tgt})`;
+            if (nextVariables[stId]) {
+              nextVariables[stId].value = `nodes=${gd.nodeList.length}, edges=${gd.edgeList.length}`;
+            }
+          }
+        }
+        explanation = `Removed edge ${ev.sourceNodeId ?? ''} - ${ev.targetNodeId ?? ''} from graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_EDGE_WEIGHT_UPDATE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const gd = st.graphData;
+          let targetEdge = ev.edgeId ? gd.edges[ev.edgeId] : undefined;
+          if (!targetEdge && ev.sourceNodeId && ev.targetNodeId) {
+            targetEdge = Object.values(gd.edges).find(
+              (e) =>
+                (e.source === ev.sourceNodeId && e.target === ev.targetNodeId) ||
+                (!e.directed && e.source === ev.targetNodeId && e.target === ev.sourceNodeId)
+            );
+          }
+          if (targetEdge) {
+            targetEdge.weight = ev.weight;
+            targetEdge.weighted = true;
+            targetEdge.state = 'ACTIVE';
+            gd.activeEdgeId = targetEdge.id;
+          }
+        }
+        explanation = `Updated edge weight for (${ev.sourceNodeId} ➔ ${ev.targetNodeId}) to ${ev.weight}`;
+        break;
+      }
+
+      case 'GRAPH_CLEAR': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.nodes = {};
+          st.graphData.nodeList = [];
+          st.graphData.edges = {};
+          st.graphData.edgeList = [];
+          st.graphData.visitedOrder = [];
+          st.graphData.distances = {};
+          st.graphData.queueState = [];
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) {
+            nextVariables[stId].value = 'nodes=0, edges=0';
+          }
+        }
+        explanation = `Cleared graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_ROOT_UPDATE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.startNodeId = ev.nodeId;
+        }
+        explanation = `Updated start root of graph ${stId} to '${ev.nodeId}'`;
+        break;
+      }
+
+      case 'GRAPH_NEIGHBORS_ACCESS': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.currentNodeId = ev.nodeId;
+          const neighbors = ev.neighbors || st.graphData.nodes[ev.nodeId!]?.outNeighbors || [];
+          for (const e of Object.values(st.graphData.edges)) {
+            if (e.source === ev.nodeId && neighbors.includes(e.target)) {
+              e.state = 'ACTIVE';
+            }
+          }
+          st.lastOperation = `getNeighbors("${ev.nodeId}")`;
+        }
+        explanation = `Accessed neighbors of node '${ev.nodeId}' in graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_NODE_VISIT':
+      case 'GRAPH_VISIT': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'VISITED';
+            st.graphData.nodes[nid].visited = true;
+          }
+          st.graphData.currentNodeId = nid;
+          if (!st.graphData.visitedOrder) st.graphData.visitedOrder = [];
+          if (!st.graphData.visitedOrder.includes(nid)) {
+            st.graphData.visitedOrder.push(nid);
+          }
+          st.lastOperation = `visitNode("${nid}")`;
+        }
+        explanation = `Visited node '${ev.nodeId}' in graph ${stId}`;
+        break;
+      }
+
+      case 'GRAPH_EDGE_TRAVERSE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const src = ev.sourceNodeId;
+          const tgt = ev.targetNodeId;
+          let foundEdge = ev.edgeId ? st.graphData.edges[ev.edgeId] : undefined;
+          if (!foundEdge && src && tgt) {
+            foundEdge = Object.values(st.graphData.edges).find(
+              (e) =>
+                (e.source === src && e.target === tgt) ||
+                (!e.directed && e.source === tgt && e.target === src)
+            );
+          }
+          if (foundEdge) {
+            foundEdge.state = 'TRAVERSED';
+            st.graphData.activeEdgeId = foundEdge.id;
+          }
+        }
+        explanation = `Traversed edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId}`;
+        break;
+      }
+
+      // === BFS ALGORITHM ===
+      case 'BFS_START': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const gd = st.graphData;
+          gd.algorithm = 'BFS';
+          gd.algorithmPhase = 'START';
+          gd.startNodeId = ev.nodeId || ev.startNodeId || gd.nodeList[0]?.id;
+          gd.visitedOrder = [];
+          gd.queueState = [];
+          for (const n of Object.values(gd.nodes)) {
+            n.state = 'UNVISITED';
+            n.visited = false;
+          }
+          for (const e of Object.values(gd.edges)) {
+            e.state = 'NORMAL';
+          }
+          st.lastOperation = `bfs(start="${gd.startNodeId}")`;
+        }
+        explanation = `Started BFS traversal from node '${ev.nodeId || ev.startNodeId}'`;
+        break;
+      }
+
+      case 'BFS_NODE_DISCOVER': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'DISCOVERED';
+          }
+          st.lastOperation = `discoverNode("${nid}")`;
+        }
+        explanation = `BFS discovered node '${ev.nodeId}'`;
+        break;
+      }
+
+      case 'BFS_ENQUEUE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId || String(ev.value);
+          if (!st.graphData.queueState) st.graphData.queueState = [];
+          st.graphData.queueState.push(nid);
+          if (st.graphData.nodes[nid] && st.graphData.nodes[nid].state !== 'VISITED') {
+            st.graphData.nodes[nid].state = 'DISCOVERED';
+          }
+          st.lastOperation = `queue.add("${nid}")`;
+        }
+        explanation = `BFS enqueued node '${ev.nodeId || ev.value}' into Queue`;
+        break;
+      }
+
+      case 'BFS_DEQUEUE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId || String(ev.value);
+          if (st.graphData.queueState && st.graphData.queueState.length > 0) {
+            const idx = st.graphData.queueState.indexOf(nid);
+            if (idx !== -1) {
+              st.graphData.queueState.splice(idx, 1);
+            } else {
+              st.graphData.queueState.shift();
+            }
+          }
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'PROCESSING';
+          }
+          st.graphData.currentNodeId = nid;
+          st.lastOperation = `queue.poll() ➔ "${nid}"`;
+        }
+        explanation = `BFS dequeued node '${ev.nodeId || ev.value}' from Queue for processing`;
+        break;
+      }
+
+      case 'BFS_NODE_VISIT': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'VISITED';
+            st.graphData.nodes[nid].visited = true;
+          }
+          st.graphData.currentNodeId = nid;
+          if (!st.graphData.visitedOrder) st.graphData.visitedOrder = [];
+          if (!st.graphData.visitedOrder.includes(nid)) {
+            st.graphData.visitedOrder.push(nid);
+          }
+          st.lastOperation = `visit("${nid}")`;
+        }
+        explanation = `BFS visited node '${ev.nodeId}' (Added to visited set)`;
+        break;
+      }
+
+      case 'BFS_EDGE_TRAVERSE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const src = ev.sourceNodeId;
+          const tgt = ev.targetNodeId;
+          const edge = Object.values(st.graphData.edges).find(
+            (e) =>
+              (e.source === src && e.target === tgt) ||
+              (!e.directed && e.source === tgt && e.target === src)
+          );
+          if (edge) {
+            edge.state = 'TRAVERSED';
+            st.graphData.activeEdgeId = edge.id;
+          }
+        }
+        explanation = `BFS explored edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId}`;
+        break;
+      }
+
+      case 'BFS_END': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.algorithmPhase = 'COMPLETED';
+          st.graphData.currentNodeId = null;
+          st.graphData.activeEdgeId = null;
+        }
+        explanation = `BFS traversal completed. Visited ${st?.graphData?.visitedOrder?.length || 0} nodes.`;
+        break;
+      }
+
+      // === DFS ALGORITHM ===
+      case 'DFS_START': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const gd = st.graphData;
+          gd.algorithm = 'DFS';
+          gd.algorithmPhase = 'START';
+          gd.startNodeId = ev.nodeId || ev.startNodeId || gd.nodeList[0]?.id;
+          gd.visitedOrder = [];
+          gd.cycleDetected = false;
+          gd.cycleEdges = [];
+          for (const n of Object.values(gd.nodes)) {
+            n.state = 'UNVISITED';
+            n.visited = false;
+          }
+          for (const e of Object.values(gd.edges)) {
+            e.state = 'NORMAL';
+          }
+          st.lastOperation = `dfs(start="${gd.startNodeId}")`;
+        }
+        explanation = `Started DFS traversal from node '${ev.nodeId || ev.startNodeId}'`;
+        break;
+      }
+
+      case 'DFS_NODE_DISCOVER': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'DISCOVERED';
+          }
+        }
+        explanation = `DFS discovered node '${ev.nodeId}'`;
+        break;
+      }
+
+      case 'DFS_CALL': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'PROCESSING';
+          }
+          st.graphData.currentNodeId = nid;
+          st.lastOperation = `dfs("${nid}")`;
+        }
+        explanation = `Recursive DFS called for node '${ev.nodeId}' (Pushed to call stack)`;
+        break;
+      }
+
+      case 'DFS_NODE_VISIT': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'VISITED';
+            st.graphData.nodes[nid].visited = true;
+          }
+          st.graphData.currentNodeId = nid;
+          if (!st.graphData.visitedOrder) st.graphData.visitedOrder = [];
+          if (!st.graphData.visitedOrder.includes(nid)) {
+            st.graphData.visitedOrder.push(nid);
+          }
+          st.lastOperation = `visit("${nid}")`;
+        }
+        explanation = `DFS visited node '${ev.nodeId}'`;
+        break;
+      }
+
+      case 'DFS_EDGE_TRAVERSE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const src = ev.sourceNodeId;
+          const tgt = ev.targetNodeId;
+          const edge = Object.values(st.graphData.edges).find(
+            (e) =>
+              (e.source === src && e.target === tgt) ||
+              (!e.directed && e.source === tgt && e.target === src)
+          );
+          if (edge) {
+            edge.state = 'TRAVERSED';
+            st.graphData.activeEdgeId = edge.id;
+          }
+        }
+        explanation = `DFS followed edge ${ev.sourceNodeId} ➔ ${ev.targetNodeId}`;
+        break;
+      }
+
+      case 'DFS_RETURN':
+      case 'DFS_BACKTRACK': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'VISITED';
+          }
+          st.graphData.currentNodeId = nid;
+          st.lastOperation = `backtrack("${nid}")`;
+        }
+        explanation = `DFS backtracked from node '${ev.nodeId}' (Popped frame / returned)`;
+        break;
+      }
+
+      case 'DFS_ALREADY_VISITED': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const src = ev.sourceNodeId;
+          const tgt = ev.targetNodeId || ev.nodeId;
+          st.graphData.cycleDetected = true;
+          if (!st.graphData.cycleEdges) st.graphData.cycleEdges = [];
+          const edge = Object.values(st.graphData.edges).find(
+            (e) =>
+              (e.source === src && e.target === tgt) ||
+              (!e.directed && e.source === tgt && e.target === src)
+          );
+          if (edge) {
+            edge.state = 'CYCLE';
+            st.graphData.cycleEdges.push(edge.id);
+          }
+          st.lastOperation = `cycleCheck: ${tgt} already visited!`;
+        }
+        explanation = `DFS detected cycle / already visited node '${ev.targetNodeId || ev.nodeId}' from '${ev.sourceNodeId}'`;
+        break;
+      }
+
+      case 'DFS_END': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.algorithmPhase = 'COMPLETED';
+          st.graphData.currentNodeId = null;
+          st.graphData.activeEdgeId = null;
+        }
+        explanation = `DFS traversal complete. Total nodes visited: ${st?.graphData?.visitedOrder?.length || 0}${st?.graphData?.cycleDetected ? ' (Cycle Detected)' : ''}`;
+        break;
+      }
+
+      // === DIJKSTRA ALGORITHM ===
+      case 'DIJKSTRA_START': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const gd = st.graphData;
+          gd.algorithm = 'DIJKSTRA';
+          gd.algorithmPhase = 'START';
+          gd.startNodeId = ev.nodeId || ev.startNodeId || gd.nodeList[0]?.id;
+          gd.visitedOrder = [];
+          gd.distances = {};
+          gd.queueState = [];
+          gd.shortestPath = [];
+          for (const n of Object.values(gd.nodes)) {
+            n.state = 'UNVISITED';
+            gd.distances[n.id] = n.id === gd.startNodeId ? 0 : '∞';
+          }
+          for (const e of Object.values(gd.edges)) {
+            e.state = 'NORMAL';
+          }
+          st.lastOperation = `dijkstra(start="${gd.startNodeId}")`;
+        }
+        explanation = `Started Dijkstra's shortest-path algorithm from node '${ev.nodeId || ev.startNodeId}'`;
+        break;
+      }
+
+      case 'DISTANCE_INITIALIZE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          if (!st.graphData.distances) st.graphData.distances = {};
+          const d = ev.distance !== undefined ? ev.distance : (ev.nodeId === st.graphData.startNodeId ? 0 : '∞');
+          st.graphData.distances[ev.nodeId!] = d;
+        }
+        explanation = `Initialized distance to node '${ev.nodeId}' = ${ev.distance ?? '∞'}`;
+        break;
+      }
+
+      case 'DIJKSTRA_QUEUE_INSERT': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          if (!st.graphData.queueState) st.graphData.queueState = [];
+          const item = `(${ev.nodeId}, ${ev.distance ?? ev.weight ?? 0})`;
+          st.graphData.queueState.push(item);
+          st.lastOperation = `pq.add(${item})`;
+        }
+        explanation = `Inserted (${ev.nodeId}, dist=${ev.distance ?? ev.weight ?? 0}) into PriorityQueue`;
+        break;
+      }
+
+      case 'DIJKSTRA_QUEUE_REMOVE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          if (st.graphData.queueState && st.graphData.queueState.length > 0) {
+            const nid = ev.nodeId;
+            const idx = st.graphData.queueState.findIndex((s) => s.startsWith(`(${nid},`));
+            if (idx !== -1) {
+              st.graphData.queueState.splice(idx, 1);
+            } else {
+              st.graphData.queueState.shift();
+            }
+          }
+        }
+        explanation = `Extracted node '${ev.nodeId}' from PriorityQueue`;
+        break;
+      }
+
+      case 'DIJKSTRA_NODE_SELECT': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          st.graphData.currentNodeId = nid;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'PROCESSING';
+          }
+          st.lastOperation = `selectMinNode("${nid}")`;
+        }
+        explanation = `Selected minimum-distance node '${ev.nodeId}' for exploration`;
+        break;
+      }
+
+      case 'DIJKSTRA_EDGE_RELAX': {
+        const st = nextStructures[stId];
+        const u = ev.sourceNodeId || 'u';
+        const v = ev.targetNodeId || 'v';
+        const w = ev.weight ?? 0;
+        const oldD = ev.oldDistance ?? '∞';
+        const newD = ev.newDistance;
+        if (st && st.graphData) {
+          const edge = Object.values(st.graphData.edges).find(
+            (e) =>
+              (e.source === u && e.target === v) ||
+              (!e.directed && e.source === v && e.target === u)
+          );
+          if (edge) {
+            edge.state = 'RELAXED';
+            st.graphData.activeEdgeId = edge.id;
+          }
+          if (newD !== undefined) {
+            if (!st.graphData.distances) st.graphData.distances = {};
+            st.graphData.distances[v] = newD;
+          }
+          st.lastOperation = `relax(${u} ➔ ${v}): dist[${v}] updated ${oldD} ➔ ${newD}`;
+        }
+        nextComparison = {
+          left: `dist[${u}] + w(${w})`,
+          right: `dist[${v}]`,
+          operator: '<',
+          result: true,
+          explanation: `dist[${u}] + ${w} < ${oldD} ➔ True: Update dist[${v}] to ${newD}`,
+        };
+        explanation = `Relaxed edge ${u} ➔ ${v} (weight ${w}): dist[${v}] updated from ${oldD} to ${newD}`;
+        break;
+      }
+
+      case 'DISTANCE_UPDATE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          if (!st.graphData.distances) st.graphData.distances = {};
+          st.graphData.distances[ev.nodeId!] = ev.newDistance!;
+          st.lastOperation = `dist[${ev.nodeId}] = ${ev.newDistance}`;
+        }
+        explanation = `Updated shortest distance to '${ev.nodeId}': ${ev.oldDistance ?? ''} ➔ ${ev.newDistance}`;
+        break;
+      }
+
+      case 'DIJKSTRA_NODE_FINALIZE': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          const nid = ev.nodeId!;
+          if (st.graphData.nodes[nid]) {
+            st.graphData.nodes[nid].state = 'FINALIZED';
+            st.graphData.nodes[nid].visited = true;
+          }
+          if (!st.graphData.visitedOrder) st.graphData.visitedOrder = [];
+          if (!st.graphData.visitedOrder.includes(nid)) {
+            st.graphData.visitedOrder.push(nid);
+          }
+          st.lastOperation = `finalize("${nid}", d=${st.graphData.distances?.[nid]})`;
+        }
+        explanation = `Finalized shortest path to node '${ev.nodeId}' with distance ${st?.graphData?.distances?.[ev.nodeId!] ?? ''}`;
+        break;
+      }
+
+      case 'DIJKSTRA_END': {
+        const st = nextStructures[stId];
+        if (st && st.graphData) {
+          st.graphData.algorithmPhase = 'COMPLETED';
+          st.graphData.currentNodeId = null;
+          st.graphData.activeEdgeId = null;
+          if (ev.path && Array.isArray(ev.path)) {
+            st.graphData.shortestPath = ev.path;
+            for (let p = 0; p < ev.path.length - 1; p++) {
+              const u = ev.path[p];
+              const v = ev.path[p + 1];
+              const edge = Object.values(st.graphData.edges).find(
+                (e) =>
+                  (e.source === u && e.target === v) ||
+                  (!e.directed && e.source === v && e.target === u)
+              );
+              if (edge) edge.state = 'PATH';
+            }
+          }
+        }
+        explanation = `Dijkstra algorithm finished. Shortest paths computed.${ev.path ? ` Path: ${ev.path.join(' ➔ ')}` : ''}`;
+        break;
+      }
+
       // === CONTROL FLOW ===
       case 'CONDITION_EVALUATE': {
         nextComparison = {
@@ -1622,6 +2447,12 @@ export function reconstructExecutionSteps(
       if (st.linkedListData) heapBytes += 24 + Object.keys(st.linkedListData.nodes).length * 24;
       if (st.mapData) heapBytes += 48 + st.mapData.entries.length * 32;
       if (st.setData) heapBytes += 32 + st.setData.length * 8;
+      if (st.treeData) heapBytes += 32 + Object.keys(st.treeData.nodes).length * 32;
+      if (st.heapData) heapBytes += 24 + st.heapData.array.length * 8;
+      if (st.trieData) heapBytes += 40 + Object.keys(st.trieData.nodes).length * 48;
+      if (st.graphData) {
+        heapBytes += 48 + Object.keys(st.graphData.nodes).length * 32 + Object.keys(st.graphData.edges).length * 40;
+      }
     }
 
     currentVariables = nextVariables;

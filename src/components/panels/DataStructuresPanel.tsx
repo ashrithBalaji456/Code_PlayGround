@@ -35,6 +35,8 @@ export const DataStructuresPanel: React.FC<DataStructuresPanelProps> = ({
         return <GitBranch className="w-4 h-4 text-[#58a6ff]" />;
       case 'trie':
         return <Network className="w-4 h-4 text-[#bc8cff]" />;
+      case 'graph':
+        return <Network className="w-4 h-4 text-[#bc8cff]" />;
       default:
         return <Database className="w-4 h-4 text-[#8b949e]" />;
     }
@@ -101,9 +103,11 @@ export const DataStructuresPanel: React.FC<DataStructuresPanelProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between text-xs font-mono mb-2">
-                      <span className="text-[#8b949e]">Size:</span>
+                      <span className="text-[#8b949e]">{st.type === 'graph' ? 'Vertices / Edges:' : 'Size:'}</span>
                       <span className="text-[#3fb950] font-bold bg-[#3fb950]/15 px-1.5 py-0.2 rounded">
-                        {size} elements
+                        {st.type === 'graph' && st.graphData
+                          ? `${Object.keys(st.graphData.nodes || {}).length} nodes, ${Object.keys(st.graphData.edges || {}).length} edges`
+                          : `${size} elements`}
                       </span>
                     </div>
 

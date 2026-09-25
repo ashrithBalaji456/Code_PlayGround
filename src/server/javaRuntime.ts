@@ -454,6 +454,171 @@ public class CodeFlowTracer {
         recordEvent("{\\"type\\":\\"TRIE_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
     }
 
+    // === GRAPH & GRAPH ALGORITHMS (Phase 4) ===
+    public static void graphCreate(String structId, String varName, boolean directed, boolean weighted, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"graph\\",\\"dataType\\":\\"Graph\\",\\"directed\\":" + directed + ",\\"weighted\\":" + weighted + ",\\"size\\":0}");
+    }
+
+    public static void graphNodeCreate(String structId, String nodeId, Object value, int line) {
+        String valStr = formatValue(value);
+        recordEvent("{\\"type\\":\\"GRAPH_NODE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + valStr + "}");
+    }
+
+    public static void graphNodeDelete(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_NODE_DELETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void graphNodeAccess(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_NODE_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void graphEdgeCreate(String structId, String edgeId, String srcId, String tgtId, boolean directed, boolean weighted, double weight, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_EDGE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\",\\"sourceNodeId\\":\\"" + srcId + "\\",\\"targetNodeId\\":\\"" + tgtId + "\\",\\"directed\\":" + directed + ",\\"weighted\\":" + weighted + ",\\"weight\\":" + weight + "}");
+    }
+
+    public static void graphEdgeDelete(String structId, String edgeId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_EDGE_DELETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\"}");
+    }
+
+    public static void graphEdgeAccess(String structId, String edgeId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_EDGE_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\"}");
+    }
+
+    public static void graphEdgeWeightUpdate(String structId, String edgeId, double newWeight, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_EDGE_WEIGHT_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\",\\"weight\\":" + newWeight + "}");
+    }
+
+    public static void graphNeighborsAccess(String structId, String nodeId, List<?> neighbors, int line) {
+        String neighJson = formatList(neighbors);
+        recordEvent("{\\"type\\":\\"GRAPH_NEIGHBORS_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"neighbors\\":" + neighJson + "}");
+    }
+
+    public static void graphNodeVisit(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_NODE_VISIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void graphEdgeTraverse(String structId, String edgeId, String srcId, String tgtId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_EDGE_TRAVERSE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\",\\"sourceNodeId\\":\\"" + srcId + "\\",\\"targetNodeId\\":\\"" + tgtId + "\\"}");
+    }
+
+    public static void graphClear(String structId, int line) {
+        recordEvent("{\\"type\\":\\"GRAPH_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // BFS
+    public static void bfsStart(String structId, String startNodeId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"startNodeId\\":\\"" + startNodeId + "\\"}");
+    }
+
+    public static void bfsNodeDiscover(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_NODE_DISCOVER\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void bfsNodeVisit(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_NODE_VISIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void bfsEdgeTraverse(String structId, String edgeId, String srcId, String tgtId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_EDGE_TRAVERSE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\",\\"sourceNodeId\\":\\"" + srcId + "\\",\\"targetNodeId\\":\\"" + tgtId + "\\"}");
+    }
+
+    public static void bfsEnqueue(String structId, String queueVar, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_ENQUEUE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + queueVar + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void bfsDequeue(String structId, String queueVar, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_DEQUEUE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + queueVar + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void bfsEnd(String structId, int line) {
+        recordEvent("{\\"type\\":\\"BFS_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // DFS
+    public static void dfsStart(String structId, String startNodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"startNodeId\\":\\"" + startNodeId + "\\"}");
+    }
+
+    public static void dfsNodeDiscover(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_NODE_DISCOVER\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void dfsNodeVisit(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_NODE_VISIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void dfsEdgeTraverse(String structId, String edgeId, String srcId, String tgtId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_EDGE_TRAVERSE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\",\\"sourceNodeId\\":\\"" + srcId + "\\",\\"targetNodeId\\":\\"" + tgtId + "\\"}");
+    }
+
+    public static void dfsCall(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_CALL\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void dfsReturn(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void dfsBacktrack(String structId, String fromNodeId, String toNodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_BACKTRACK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"sourceNodeId\\":\\"" + fromNodeId + "\\",\\"targetNodeId\\":\\"" + toNodeId + "\\"}");
+    }
+
+    public static void dfsAlreadyVisited(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_ALREADY_VISITED\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"cycle\\":true}");
+    }
+
+    public static void dfsEnd(String structId, int line) {
+        recordEvent("{\\"type\\":\\"DFS_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    // DIJKSTRA
+    public static void dijkstraStart(String structId, String startNodeId, int line) {
+        recordEvent("{\\"type\\":\\"DIJKSTRA_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"startNodeId\\":\\"" + startNodeId + "\\"}");
+    }
+
+    public static void distanceInitialize(String structId, String nodeId, Object dist, int line) {
+        String dStr = formatValue(dist);
+        recordEvent("{\\"type\\":\\"DISTANCE_INITIALIZE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"distance\\":" + dStr + "}");
+    }
+
+    public static void dijkstraNodeSelect(String structId, String nodeId, Object dist, int line) {
+        String dStr = formatValue(dist);
+        recordEvent("{\\"type\\":\\"DIJKSTRA_NODE_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"distance\\":" + dStr + "}");
+    }
+
+    public static void dijkstraEdgeRelax(String structId, String edgeId, String srcId, String tgtId, Object currDist, double edgeWeight, Object tgtDist, boolean willRelax, int line) {
+        String cDistStr = formatValue(currDist);
+        String tDistStr = formatValue(tgtDist);
+        recordEvent("{\\"type\\":\\"DIJKSTRA_EDGE_RELAX\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"edgeId\\":\\"" + edgeId + "\\",\\"sourceNodeId\\":\\"" + srcId + "\\",\\"targetNodeId\\":\\"" + tgtId + "\\",\\"leftVal\\":" + cDistStr + ",\\"weight\\":" + edgeWeight + ",\\"rightVal\\":" + tDistStr + ",\\"conditionResult\\":" + willRelax + "}");
+    }
+
+    public static void distanceUpdate(String structId, String nodeId, Object oldDist, Object newDist, int line) {
+        String oDistStr = formatValue(oldDist);
+        String nDistStr = formatValue(newDist);
+        recordEvent("{\\"type\\":\\"DISTANCE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"oldDistance\\":" + oDistStr + ",\\"newDistance\\":" + nDistStr + "}");
+    }
+
+    public static void dijkstraQueueInsert(String structId, String nodeId, Object dist, int line) {
+        String dStr = formatValue(dist);
+        recordEvent("{\\"type\\":\\"DIJKSTRA_QUEUE_INSERT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"distance\\":" + dStr + "}");
+    }
+
+    public static void dijkstraQueueRemove(String structId, String nodeId, Object dist, int line) {
+        String dStr = formatValue(dist);
+        recordEvent("{\\"type\\":\\"DIJKSTRA_QUEUE_REMOVE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"distance\\":" + dStr + "}");
+    }
+
+    public static void dijkstraNodeFinalize(String structId, String nodeId, Object finalDist, int line) {
+        String dStr = formatValue(finalDist);
+        recordEvent("{\\"type\\":\\"DIJKSTRA_NODE_FINALIZE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"distance\\":" + dStr + "}");
+    }
+
+    public static void dijkstraEnd(String structId, List<?> shortestPath, Object totalDist, int line) {
+        String pathJson = formatList(shortestPath);
+        String dStr = formatValue(totalDist);
+        recordEvent("{\\"type\\":\\"DIJKSTRA_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"path\\":" + pathJson + ",\\"distance\\":" + dStr + "}");
+    }
+
     // === CONTROL FLOW & UTILITIES ===
     public static void condition(String expr, boolean result, int line) {
         String cleanExpr = expr.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");

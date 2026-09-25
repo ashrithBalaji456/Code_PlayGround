@@ -184,6 +184,20 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
+    // Graph graph = new Graph();
+    const graphDeclMatch = trimmed.match(/^(?:Graph)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:Graph)\((.*?)\);?$/);
+    if (graphDeclMatch) {
+      const varName = graphDeclMatch[1];
+      const rawArgs = graphDeclMatch[2].split(',').map((s) => s.trim());
+      const isDirected = rawArgs[0] === 'true';
+      const isWeighted = rawArgs[1] === 'true';
+      varTypes.set(varName, 'Graph');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.graphCreate("${varName}", "${varName}", ${isDirected}, ${isWeighted}, ${lineNum});`);
+      continue;
+    }
+
     // 2. DATA STRUCTURE OPERATIONS
     // Stack .push(val);
     const pushMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.push\((.+)\);?$/);
@@ -644,6 +658,195 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`        CodeFlowTracer.trieSearchStep("${varName}", _nid, _ch, ${lineNum});`);
       outputLines.push(`      }`);
       outputLines.push(`      CodeFlowTracer.trieWordFound("${varName}", _w, _found, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // 2.6 GRAPH OPERATIONS (Phase 4)
+    // graph.addVertex("A") or graph.addNode("A")
+    const graphVertexMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(?:addVertex|addNode)\((.+)\);?$/);
+    if (graphVertexMatch && varTypes.get(graphVertexMatch[1]) === 'Graph') {
+      const varName = graphVertexMatch[1];
+      const arg = graphVertexMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _v = String.valueOf(${arg}).replace("\\"", "");`);
+      outputLines.push(`      ${varName}.addVertex(_v);`);
+      outputLines.push(`      CodeFlowTracer.graphNodeCreate("${varName}", _v, _v, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // graph.addEdge("A", "B") or graph.addEdge("A", "B", 5.0)
+    const graphEdgeMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.addEdge\((.+)\);?$/);
+    if (graphEdgeMatch && varTypes.get(graphEdgeMatch[1]) === 'Graph') {
+      const varName = graphEdgeMatch[1];
+      const rawArgs = graphEdgeMatch[2].split(',').map((s) => s.trim());
+      const srcArg = rawArgs[0];
+      const tgtArg = rawArgs[1];
+      const weightArg = rawArgs[2] || '1.0';
+      const hasWeight = rawArgs.length >= 3;
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _s = String.valueOf(${srcArg}).replace("\\"", "");`);
+      outputLines.push(`      String _t = String.valueOf(${tgtArg}).replace("\\"", "");`);
+      outputLines.push(`      double _w = (double)(${weightArg});`);
+      outputLines.push(`      boolean _hasW = ${hasWeight};`);
+      outputLines.push(`      ${varName}.addEdge(_s, _t, _w);`);
+      outputLines.push(`      String _eId = "edge_" + _s + "_" + _t;`);
+      outputLines.push(`      CodeFlowTracer.graphEdgeCreate("${varName}", _eId, _s, _t, ${varName}.directed, _hasW, _w, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // graph.removeEdge("A", "B")
+    const graphRemEdgeMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.removeEdge\((.+)\);?$/);
+    if (graphRemEdgeMatch && varTypes.get(graphRemEdgeMatch[1]) === 'Graph') {
+      const varName = graphRemEdgeMatch[1];
+      const rawArgs = graphRemEdgeMatch[2].split(',').map((s) => s.trim());
+      const srcArg = rawArgs[0];
+      const tgtArg = rawArgs[1];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _s = String.valueOf(${srcArg}).replace("\\"", "");`);
+      outputLines.push(`      String _t = String.valueOf(${tgtArg}).replace("\\"", "");`);
+      outputLines.push(`      ${varName}.removeEdge(_s, _t);`);
+      outputLines.push(`      CodeFlowTracer.graphEdgeDelete("${varName}", "edge_" + _s + "_" + _t, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // graph.getNeighbors("A")
+    const graphNbrMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.getNeighbors\((.+)\);?$/);
+    if (graphNbrMatch && varTypes.get(graphNbrMatch[1]) === 'Graph') {
+      const varName = graphNbrMatch[1];
+      const arg = graphNbrMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _v = String.valueOf(${arg}).replace("\\"", "");`);
+      outputLines.push(`      var _nbrs = ${varName}.getNeighbors(_v);`);
+      outputLines.push(`      CodeFlowTracer.graphNeighborsAccess("${varName}", _v, _nbrs, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // graph.bfs("A")
+    const graphBfsMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.bfs\((.+)\);?$/);
+    if (graphBfsMatch && varTypes.get(graphBfsMatch[1]) === 'Graph') {
+      const varName = graphBfsMatch[1];
+      const startArg = graphBfsMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _start = String.valueOf(${startArg}).replace("\\"", "");`);
+      outputLines.push(`      CodeFlowTracer.bfsStart("${varName}", _start, ${lineNum});`);
+      outputLines.push(`      Set<String> _bfsVisited = new LinkedHashSet<>();`);
+      outputLines.push(`      Queue<String> _bfsQueue = new LinkedList<>();`);
+      outputLines.push(`      _bfsVisited.add(_start);`);
+      outputLines.push(`      _bfsQueue.add(_start);`);
+      outputLines.push(`      CodeFlowTracer.bfsNodeDiscover("${varName}", _start, ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.bfsEnqueue("${varName}", "queue", _start, ${lineNum});`);
+      outputLines.push(`      while (!_bfsQueue.isEmpty()) {`);
+      outputLines.push(`        String _u = _bfsQueue.poll();`);
+      outputLines.push(`        CodeFlowTracer.bfsDequeue("${varName}", "queue", _u, ${lineNum});`);
+      outputLines.push(`        CodeFlowTracer.bfsNodeVisit("${varName}", _u, ${lineNum});`);
+      outputLines.push(`        for (String _nbr : ${varName}.getNeighbors(_u)) {`);
+      outputLines.push(`          String _eId = "edge_" + _u + "_" + _nbr;`);
+      outputLines.push(`          CodeFlowTracer.bfsEdgeTraverse("${varName}", _eId, _u, _nbr, ${lineNum});`);
+      outputLines.push(`          if (!_bfsVisited.contains(_nbr)) {`);
+      outputLines.push(`            _bfsVisited.add(_nbr);`);
+      outputLines.push(`            _bfsQueue.add(_nbr);`);
+      outputLines.push(`            CodeFlowTracer.bfsNodeDiscover("${varName}", _nbr, ${lineNum});`);
+      outputLines.push(`            CodeFlowTracer.bfsEnqueue("${varName}", "queue", _nbr, ${lineNum});`);
+      outputLines.push(`          }`);
+      outputLines.push(`        }`);
+      outputLines.push(`      }`);
+      outputLines.push(`      CodeFlowTracer.bfsEnd("${varName}", ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // graph.dfs("A")
+    const graphDfsMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.dfs\((.+)\);?$/);
+    if (graphDfsMatch && varTypes.get(graphDfsMatch[1]) === 'Graph') {
+      const varName = graphDfsMatch[1];
+      const startArg = graphDfsMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _start = String.valueOf(${startArg}).replace("\\"", "");`);
+      outputLines.push(`      CodeFlowTracer.dfsStart("${varName}", _start, ${lineNum});`);
+      outputLines.push(`      Set<String> _dfsVisited = new LinkedHashSet<>();`);
+      outputLines.push(`      Stack<String> _dfsStack = new Stack<>();`);
+      outputLines.push(`      _dfsStack.push(_start);`);
+      outputLines.push(`      while (!_dfsStack.isEmpty()) {`);
+      outputLines.push(`        String _u = _dfsStack.pop();`);
+      outputLines.push(`        if (!_dfsVisited.contains(_u)) {`);
+      outputLines.push(`          _dfsVisited.add(_u);`);
+      outputLines.push(`          CodeFlowTracer.dfsNodeVisit("${varName}", _u, ${lineNum});`);
+      outputLines.push(`          for (String _nbr : ${varName}.getNeighbors(_u)) {`);
+      outputLines.push(`            String _eId = "edge_" + _u + "_" + _nbr;`);
+      outputLines.push(`            CodeFlowTracer.dfsEdgeTraverse("${varName}", _eId, _u, _nbr, ${lineNum});`);
+      outputLines.push(`            if (!_dfsVisited.contains(_nbr)) {`);
+      outputLines.push(`              CodeFlowTracer.dfsNodeDiscover("${varName}", _nbr, ${lineNum});`);
+      outputLines.push(`              _dfsStack.push(_nbr);`);
+      outputLines.push(`            } else {`);
+      outputLines.push(`              CodeFlowTracer.dfsAlreadyVisited("${varName}", _nbr, ${lineNum});`);
+      outputLines.push(`            }`);
+      outputLines.push(`          }`);
+      outputLines.push(`        }`);
+      outputLines.push(`      }`);
+      outputLines.push(`      CodeFlowTracer.dfsEnd("${varName}", ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // graph.dijkstra("A")
+    const graphDijkstraMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.dijkstra\((.+)\);?$/);
+    if (graphDijkstraMatch && varTypes.get(graphDijkstraMatch[1]) === 'Graph') {
+      const varName = graphDijkstraMatch[1];
+      const startArg = graphDijkstraMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _start = String.valueOf(${startArg}).replace("\\"", "");`);
+      outputLines.push(`      CodeFlowTracer.dijkstraStart("${varName}", _start, ${lineNum});`);
+      outputLines.push(`      Map<String, Double> _dist = new LinkedHashMap<>();`);
+      outputLines.push(`      for (String _v : ${varName}.vertices) {`);
+      outputLines.push(`        _dist.put(_v, Double.POSITIVE_INFINITY);`);
+      outputLines.push(`        CodeFlowTracer.distanceInitialize("${varName}", _v, "Infinity", ${lineNum});`);
+      outputLines.push(`      }`);
+      outputLines.push(`      _dist.put(_start, 0.0);`);
+      outputLines.push(`      CodeFlowTracer.distanceUpdate("${varName}", _start, "Infinity", 0.0, ${lineNum});`);
+      outputLines.push(`      PriorityQueue<String[]> _pq = new PriorityQueue<>(Comparator.comparingDouble(a -> Double.parseDouble(a[1])));`);
+      outputLines.push(`      _pq.add(new String[]{_start, "0.0"});`);
+      outputLines.push(`      CodeFlowTracer.dijkstraQueueInsert("${varName}", _start, 0.0, ${lineNum});`);
+      outputLines.push(`      Set<String> _finalized = new HashSet<>();`);
+      outputLines.push(`      while (!_pq.isEmpty()) {`);
+      outputLines.push(`        String[] _top = _pq.poll();`);
+      outputLines.push(`        String _u = _top[0];`);
+      outputLines.push(`        double _d = Double.parseDouble(_top[1]);`);
+      outputLines.push(`        CodeFlowTracer.dijkstraQueueRemove("${varName}", _u, _d, ${lineNum});`);
+      outputLines.push(`        if (_finalized.contains(_u)) continue;`);
+      outputLines.push(`        _finalized.add(_u);`);
+      outputLines.push(`        CodeFlowTracer.dijkstraNodeSelect("${varName}", _u, _d, ${lineNum});`);
+      outputLines.push(`        CodeFlowTracer.dijkstraNodeFinalize("${varName}", _u, _d, ${lineNum});`);
+      outputLines.push(`        if (${varName}.adj.containsKey(_u)) {`);
+      outputLines.push(`          for (var _e : ${varName}.adj.get(_u)) {`);
+      outputLines.push(`            String _v = _e.target;`);
+      outputLines.push(`            double _w = _e.weight;`);
+      outputLines.push(`            double _newD = _d + _w;`);
+      outputLines.push(`            double _currD = _dist.getOrDefault(_v, Double.POSITIVE_INFINITY);`);
+      outputLines.push(`            boolean _willRelax = _newD < _currD;`);
+      outputLines.push(`            CodeFlowTracer.dijkstraEdgeRelax("${varName}", _e.id, _u, _v, _d, _w, Double.isInfinite(_currD) ? "Infinity" : _currD, _willRelax, ${lineNum});`);
+      outputLines.push(`            if (_willRelax) {`);
+      outputLines.push(`              _dist.put(_v, _newD);`);
+      outputLines.push(`              CodeFlowTracer.distanceUpdate("${varName}", _v, Double.isInfinite(_currD) ? "Infinity" : _currD, _newD, ${lineNum});`);
+      outputLines.push(`              _pq.add(new String[]{_v, String.valueOf(_newD)});`);
+      outputLines.push(`              CodeFlowTracer.dijkstraQueueInsert("${varName}", _v, _newD, ${lineNum});`);
+      outputLines.push(`            }`);
+      outputLines.push(`          }`);
+      outputLines.push(`        }`);
+      outputLines.push(`      }`);
+      outputLines.push(`      List<String> _shortestPath = new ArrayList<>(_dist.keySet());`);
+      outputLines.push(`      CodeFlowTracer.dijkstraEnd("${varName}", _shortestPath, 0.0, ${lineNum});`);
       outputLines.push(`    }`);
       continue;
     }

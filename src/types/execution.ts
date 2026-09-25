@@ -127,10 +127,46 @@ export type EventType =
   | 'PRIORITYQUEUE_POLL'
   | 'PRIORITYQUEUE_PEEK'
   | 'PRIORITYQUEUE_CLEAR'
+  | 'GRAPH_CREATE'
+  | 'GRAPH_DELETE'
   | 'GRAPH_NODE_CREATE'
+  | 'GRAPH_NODE_DELETE'
+  | 'GRAPH_NODE_ACCESS'
   | 'GRAPH_EDGE_CREATE'
   | 'GRAPH_EDGE_DELETE'
+  | 'GRAPH_EDGE_ACCESS'
+  | 'GRAPH_EDGE_WEIGHT_UPDATE'
+  | 'GRAPH_CLEAR'
+  | 'GRAPH_ROOT_UPDATE'
+  | 'GRAPH_NEIGHBORS_ACCESS'
+  | 'GRAPH_NODE_VISIT'
+  | 'GRAPH_EDGE_TRAVERSE'
   | 'GRAPH_VISIT'
+  | 'BFS_START'
+  | 'BFS_NODE_DISCOVER'
+  | 'BFS_NODE_VISIT'
+  | 'BFS_EDGE_TRAVERSE'
+  | 'BFS_ENQUEUE'
+  | 'BFS_DEQUEUE'
+  | 'BFS_END'
+  | 'DFS_START'
+  | 'DFS_NODE_DISCOVER'
+  | 'DFS_NODE_VISIT'
+  | 'DFS_EDGE_TRAVERSE'
+  | 'DFS_CALL'
+  | 'DFS_RETURN'
+  | 'DFS_BACKTRACK'
+  | 'DFS_ALREADY_VISITED'
+  | 'DFS_END'
+  | 'DIJKSTRA_START'
+  | 'DISTANCE_INITIALIZE'
+  | 'DIJKSTRA_NODE_SELECT'
+  | 'DIJKSTRA_EDGE_RELAX'
+  | 'DISTANCE_UPDATE'
+  | 'DIJKSTRA_QUEUE_INSERT'
+  | 'DIJKSTRA_QUEUE_REMOVE'
+  | 'DIJKSTRA_NODE_FINALIZE'
+  | 'DIJKSTRA_END'
   | 'FUNCTION_CALL'
   | 'FUNCTION_RETURN'
   | 'LOOP_START'
@@ -184,6 +220,21 @@ export interface ExecutionEvent {
   leftVal?: any;
   rightVal?: any;
   operator?: string;
+  // Phase 4 Graph & Algorithm fields
+  sourceNodeId?: string;
+  targetNodeId?: string;
+  edgeId?: string;
+  directed?: boolean;
+  weighted?: boolean;
+  weight?: number;
+  oldDistance?: number | string;
+  newDistance?: number | string;
+  distance?: number | string;
+  path?: string[];
+  neighbors?: string[];
+  cycle?: boolean;
+  startNodeId?: string;
+  queueVar?: string;
 }
 
 export interface VariableInfo {
@@ -236,22 +287,38 @@ export interface TrieNodeData {
   color?: string;
 }
 
+export type GraphNodeState = 'UNVISITED' | 'DISCOVERED' | 'PROCESSING' | 'VISITED' | 'FINALIZED';
+
 export interface GraphNodeData {
   id: string;
   label: string;
+  value?: any;
+  state?: GraphNodeState;
+  distance?: number | string;
   x?: number;
   y?: number;
   visited?: boolean;
   highlighted?: boolean;
   color?: string;
+  degree?: number;
+  inNeighbors?: string[];
+  outNeighbors?: string[];
+  metadata?: Record<string, any>;
 }
 
+export type GraphEdgeState = 'NORMAL' | 'ACTIVE' | 'TRAVERSED' | 'SELECTED' | 'RELAXED' | 'REJECTED' | 'CYCLE' | 'PATH';
+
 export interface GraphEdgeData {
+  id: string;
   source: string;
   target: string;
+  directed: boolean;
+  weighted?: boolean;
   weight?: number;
+  state?: GraphEdgeState;
   highlighted?: boolean;
-  directed?: boolean;
+  color?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface DataStructureState {
@@ -304,8 +371,25 @@ export interface DataStructureState {
   };
   setData?: any[];
   graphData?: {
-    nodes: GraphNodeData[];
-    edges: GraphEdgeData[];
+    directed: boolean;
+    weighted: boolean;
+    nodes: Record<string, GraphNodeData>;
+    nodeList: GraphNodeData[];
+    edges: Record<string, GraphEdgeData>;
+    edgeList: GraphEdgeData[];
+    startNodeId?: string | null;
+    currentNodeId?: string | null;
+    activeEdgeId?: string | null;
+    selectedNodeId?: string | null;
+    selectedEdgeId?: string | null;
+    algorithm?: 'BFS' | 'DFS' | 'DIJKSTRA' | null;
+    algorithmPhase?: string;
+    visitedOrder?: string[];
+    queueState?: string[];
+    distances?: Record<string, number | string>;
+    shortestPath?: string[];
+    cycleDetected?: boolean;
+    cycleEdges?: string[];
   };
   metadata?: Record<string, any>;
   // Visual indicators
@@ -371,7 +455,7 @@ export type SupportedLanguage = 'java' | 'python';
 export interface CodePreset {
   id: string;
   title: string;
-  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics';
+  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;
