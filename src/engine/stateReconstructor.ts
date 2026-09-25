@@ -69,7 +69,7 @@ export function reconstructExecutionSteps(
   let currentPointers: Record<string, any> = {};
   let currentComparison: ComparisonInfo | null = null;
   let currentError: ExecutionError | null = null;
-  const currentHeap: HeapObject[] = [];
+  let currentHeap: HeapObject[] = [];
 
   let currentMetrics: AlgorithmMetrics = {
     comparisons: 0,
@@ -387,9 +387,15 @@ export function reconstructExecutionSteps(
           lastOperation: `Allocated int[${rows}][${cols}]`,
           stateCategory: 'RUNTIME_STATE',
         };
-        if (nextVariables[matId]) {
-          nextVariables[matId].value = `[${rows}x${cols} Matrix]`;
-        }
+        nextVariables[matId] = {
+          name: matId,
+          type: ev.dataType || 'int[][]',
+          value: `@${matId}`,
+          scope: 'main',
+          isReference: true,
+          refTargetId: `@${matId}`,
+          estimatedBytes: 8,
+        };
         explanation = `Initialized 2D Matrix ${matId} [${rows}x${cols}]`;
         break;
       }
@@ -3332,6 +3338,15 @@ export function reconstructExecutionSteps(
             stateCategory: 'RUNTIME_STATE',
           };
         }
+        nextVariables[structId] = {
+          name: structId,
+          type: cols > 0 ? 'int[][]' : 'int[]',
+          value: `@${structId}`,
+          scope: 'main',
+          isReference: true,
+          refTargetId: `@${structId}`,
+          estimatedBytes: 8,
+        };
         explanation = `Initialized DP state table (${nextAlgorithmState.dpType}: ${rows}${cols > 0 ? `x${cols}` : ' cells'})`;
         break;
       }
@@ -3470,32 +3485,123 @@ export function reconstructExecutionSteps(
       }
     }
 
-    // Calculate memory stats
+    // Ensure all active data structures have a reference variable on the stack
+    for (const [stId, st] of Object.entries(nextStructures)) {
+      if (!nextVariables[stId]) {
+        nextVariables[stId] = {
+          name: stId,
+          type: st.dataType || `${st.type} ref`,
+          value: `@${stId}`,
+          scope: 'main',
+          isReference: true,
+          refTargetId: `@${stId}`,
+          estimatedBytes: 8,
+        };
+      }
+    }
+
+    // Calculate memory stats & construct JVM Heap objects
     let stackBytes = 0;
     for (const v of Object.values(nextVariables)) {
       stackBytes += v.estimatedBytes;
     }
+
     let heapBytes = 0;
+    const nextHeap: HeapObject[] = [];
+
     for (const st of Object.values(nextStructures)) {
-      if (st.arrayData) heapBytes += 16 + st.arrayData.length * 4;
-      if (st.stackData) heapBytes += 24 + st.stackData.length * 8;
-      if (st.queueData) heapBytes += 24 + st.queueData.length * 8;
-      if (st.dequeData) heapBytes += 24 + st.dequeData.length * 8;
-      if (st.priorityQueueData) heapBytes += 32 + st.priorityQueueData.length * 8;
-      if (st.linkedListData) heapBytes += 24 + Object.keys(st.linkedListData.nodes).length * 24;
-      if (st.mapData) heapBytes += 48 + st.mapData.entries.length * 32;
-      if (st.setData) heapBytes += 32 + st.setData.length * 8;
-      if (st.treeData) heapBytes += 32 + Object.keys(st.treeData.nodes).length * 32;
-      if (st.heapData) heapBytes += 24 + st.heapData.array.length * 8;
-      if (st.trieData) heapBytes += 40 + Object.keys(st.trieData.nodes).length * 48;
-      if (st.graphData) {
-        heapBytes += 48 + Object.keys(st.graphData.nodes).length * 32 + Object.keys(st.graphData.edges).length * 40;
+      let estBytes = 0;
+      let label = '';
+      let fields: Record<string, any> = {};
+
+      if (st.type === 'matrix' || st.matrixData) {
+        const rows = st.matrixData?.length || 0;
+        const cols = rows > 0 && Array.isArray(st.matrixData?.[0]) ? st.matrixData[0].length : 0;
+        const cells = st.size || rows * cols;
+        estBytes = 24 + rows * 16 + cells * 4;
+        label = `${rows}x${cols} Matrix (${cells} elements)`;
+        fields = { rows, cols, size: cells };
+      } else if (st.type === 'array' || st.arrayData) {
+        const len = st.arrayData?.length || 0;
+        estBytes = 16 + len * 4;
+        label = `length = ${len}`;
+        fields = { length: len };
+      } else if (st.type === 'stack' || st.stackData) {
+        const sz = st.stackData?.length || 0;
+        estBytes = 24 + sz * 8;
+        label = `size = ${sz}`;
+        fields = { size: sz };
+      } else if (st.type === 'queue' || st.queueData) {
+        const sz = st.queueData?.length || 0;
+        estBytes = 24 + sz * 8;
+        label = `size = ${sz}`;
+        fields = { size: sz };
+      } else if (st.type === 'deque' || st.dequeData) {
+        const sz = st.dequeData?.length || 0;
+        estBytes = 24 + sz * 8;
+        label = `size = ${sz}`;
+        fields = { size: sz };
+      } else if (st.type === 'priorityqueue' || st.priorityQueueData) {
+        const sz = st.priorityQueueData?.length || 0;
+        estBytes = 32 + sz * 8;
+        label = `size = ${sz}`;
+        fields = { size: sz };
+      } else if (st.type === 'linkedlist' || st.linkedListData) {
+        const nodeCount = Object.keys(st.linkedListData?.nodes || {}).length;
+        estBytes = 24 + nodeCount * 24;
+        label = `nodes = ${nodeCount}`;
+        fields = { head: st.linkedListData?.headId, size: nodeCount };
+      } else if (st.type === 'map' || st.mapData) {
+        const entryCount = st.mapData?.entries?.length || 0;
+        estBytes = 48 + entryCount * 32;
+        label = `size = ${entryCount}`;
+        fields = { size: entryCount };
+      } else if (st.type === 'set' || st.setData) {
+        const sz = st.setData?.length || 0;
+        estBytes = 32 + sz * 8;
+        label = `size = ${sz}`;
+        fields = { size: sz };
+      } else if (st.type === 'tree' || st.type === 'bst' || st.treeData) {
+        const nodeCount = Object.keys(st.treeData?.nodes || {}).length;
+        estBytes = 32 + nodeCount * 32;
+        label = `nodes = ${nodeCount}`;
+        fields = { root: st.treeData?.rootId, size: nodeCount };
+      } else if (st.type === 'heap' || st.heapData) {
+        const sz = st.heapData?.array?.length || 0;
+        estBytes = 24 + sz * 8;
+        label = `size = ${sz}`;
+        fields = { size: sz };
+      } else if (st.type === 'trie' || st.trieData) {
+        const nodeCount = Object.keys(st.trieData?.nodes || {}).length;
+        estBytes = 40 + nodeCount * 48;
+        label = `words = ${st.trieData?.wordsCount || 0}, nodes = ${nodeCount}`;
+        fields = { words: st.trieData?.wordsCount || 0 };
+      } else if (st.type === 'graph' || st.graphData) {
+        const vCount = Object.keys(st.graphData?.nodes || {}).length;
+        const eCount = Object.keys(st.graphData?.edges || {}).length;
+        estBytes = 48 + vCount * 32 + eCount * 40;
+        label = `${vCount} vertices, ${eCount} edges`;
+        fields = { directed: st.graphData?.directed, weighted: st.graphData?.weighted };
+      } else {
+        estBytes = 32;
+        label = `${st.type} instance`;
       }
+
+      heapBytes += estBytes;
+      nextHeap.push({
+        id: `@${st.id}`,
+        type: st.dataType || st.type,
+        label,
+        fields,
+        estimatedBytes: estBytes,
+        referencesTo: [],
+      });
     }
 
     currentVariables = nextVariables;
     currentStructures = nextStructures;
     currentCallStack = nextCallStack;
+    currentHeap = nextHeap;
     currentConsole = nextConsole;
     currentPointers = nextPointers;
     currentComparison = nextComparison;
@@ -3512,7 +3618,7 @@ export function reconstructExecutionSteps(
       variables: currentVariables,
       callStack: currentCallStack,
       structures: currentStructures,
-      heap: currentHeap,
+      heap: nextHeap,
       consoleOutput: currentConsole,
       activePointers: currentPointers,
       comparison: currentComparison,
