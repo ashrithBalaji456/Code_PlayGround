@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { DataStructureState, TreeNodeData } from '../../types/execution';
 import { computeBinaryTreeLayout, TreeLayoutResult } from '../../utils/treeLayout';
-import { GitFork, GitBranch, Compass, Info, CheckCircle2, ChevronRight, Eye } from 'lucide-react';
+import { GitFork, GitBranch, Compass, Info, CheckCircle2, ChevronRight, Eye, ZoomIn, ZoomOut, RotateCcw, Move } from 'lucide-react';
 
 interface TreeVisualizerProps {
   structure: DataStructureState;
@@ -11,6 +11,45 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
   const treeData = structure.treeData;
   const isBST = structure.type === 'bst' || structure.dataType?.toLowerCase().includes('bst');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // Zoom & Pan state
+  const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState<boolean>(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleZoomIn = () => setZoom((prev) => Math.min(Number((prev + 0.2).toFixed(2)), 4.0));
+  const handleZoomOut = () => setZoom((prev) => Math.max(Number((prev - 0.2).toFixed(2)), 0.25));
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    setZoom((prev) => {
+      const next = Number((prev * factor).toFixed(2));
+      return Math.min(Math.max(next, 0.25), 4.5);
+    });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning) return;
+    setPan({
+      x: e.clientX - panStart.x,
+      y: e.clientY - panStart.y,
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsPanning(false);
+  };
 
   if (!treeData || !treeData.rootId || Object.keys(treeData.nodes).length === 0) {
     return (
@@ -114,12 +153,54 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
       )}
 
       {/* SVG Canvas for Tree */}
-      <div className="bg-[#0d1117] rounded-lg p-3 flex justify-center overflow-x-auto min-h-[240px] border border-[#30363d]/50 relative">
+      <div className="bg-[#0d1117] rounded-lg p-3 flex justify-center overflow-hidden min-h-[300px] border border-[#30363d]/50 relative">
+        {/* Floating Zoom & Pan Controls */}
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1 bg-[#161b22]/90 backdrop-blur-md border border-[#30363d] rounded-lg p-1 shadow-xl text-xs font-mono">
+          <button
+            onClick={handleZoomOut}
+            title="Zoom Out (Scroll Down)"
+            className="p-1.5 hover:bg-[#21262d] text-[#c9d1d9] hover:text-white rounded transition-colors active:scale-95"
+          >
+            <ZoomOut className="w-3.5 h-3.5" />
+          </button>
+          <span className="px-2 py-0.5 text-[11px] font-semibold text-[#58a6ff] min-w-[44px] text-center select-none">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={handleZoomIn}
+            title="Zoom In (Scroll Up)"
+            className="p-1.5 hover:bg-[#21262d] text-[#c9d1d9] hover:text-white rounded transition-colors active:scale-95"
+          >
+            <ZoomIn className="w-3.5 h-3.5" />
+          </button>
+          <div className="w-[1px] h-4 bg-[#30363d] mx-0.5" />
+          <button
+            onClick={handleResetZoom}
+            title="Reset Zoom & Pan"
+            className="px-2 py-1 hover:bg-[#21262d] text-[#8b949e] hover:text-[#c9d1d9] rounded flex items-center gap-1 transition-colors text-[11px] active:scale-95"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Reset
+          </button>
+        </div>
+
+        {/* Drag & Zoom Info Badge */}
+        <div className="absolute top-3 left-3 z-10 text-[10px] text-[#8b949e]/80 font-mono pointer-events-none flex items-center gap-1 bg-[#161b22]/70 backdrop-blur px-2 py-1 rounded border border-[#30363d]/50">
+          <Move className="w-3 h-3 inline text-[#58a6ff]" /> Scroll to Zoom · Drag to Pan
+        </div>
+
         <svg
-          width={layout.width}
-          height={layout.height}
-          className="overflow-visible select-none"
+          width="100%"
+          height={Math.max(layout.height, 300)}
+          viewBox={`0 0 ${layout.width} ${Math.max(layout.height, 300)}`}
+          className={`overflow-hidden select-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
         >
+          <rect width="100%" height="100%" fill="transparent" />
           <defs>
             <marker
               id="arrow-tree-left"
@@ -142,6 +223,9 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
               <path d="M0,0 L0,6 L6,3 z" fill="#3fb950" opacity="0.8" />
             </marker>
           </defs>
+
+          {/* Zoom & Pan Group wrapping branches & nodes */}
+          <g transform={`translate(${layout.width / 2 + pan.x}, ${Math.max(layout.height, 300) / 2 + pan.y}) scale(${zoom}) translate(${-layout.width / 2}, ${-Math.max(layout.height, 300) / 2})`}>
 
           {/* Connecting Branches (Parent ➔ Child References) */}
           {layout.edges.map((edge) => {
@@ -275,6 +359,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
               </g>
             );
           })}
+          </g>
         </svg>
       </div>
 
