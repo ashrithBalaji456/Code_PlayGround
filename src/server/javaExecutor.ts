@@ -59,12 +59,122 @@ export async function executeJavaWorker(userCode: string): Promise<JavaExecution
     const classMatch = userCode.match(/public\s+class\s+([A-Za-z0-9_]+)/);
     const className = classMatch ? classMatch[1] : 'Main';
 
+    // Provide built-in TreeNode, BST, Trie helpers if not declared in user code
+    if (!userCode.includes('class TreeNode') && (userCode.includes('TreeNode') || userCode.includes('BinaryTree') || userCode.includes('BST'))) {
+      const treeNodeSrc = `public class TreeNode {
+    public int val;
+    public TreeNode left;
+    public TreeNode right;
+    public TreeNode() {}
+    public TreeNode(int val) { this.val = val; }
+    public TreeNode(int val, TreeNode left, TreeNode right) {
+        this.val = val;
+        this.left = left;
+        this.right = right;
+    }
+}`;
+      fs.writeFileSync(path.join(sandboxDir, 'TreeNode.java'), treeNodeSrc, 'utf8');
+      fs.writeFileSync(path.join(pkgDir, 'TreeNode.java'), `package com.codeflow;\n${treeNodeSrc}`, 'utf8');
+    }
+
+    if (!userCode.includes('class BST') && userCode.includes('BST')) {
+      const bstSrc = `public class BST {
+    public TreeNode root;
+    public void insert(int val) {
+        root = insertRec(root, val);
+    }
+    private TreeNode insertRec(TreeNode curr, int val) {
+        if (curr == null) return new TreeNode(val);
+        if (val < curr.val) curr.left = insertRec(curr.left, val);
+        else if (val > curr.val) curr.right = insertRec(curr.right, val);
+        return curr;
+    }
+    public boolean search(int val) {
+        return searchRec(root, val);
+    }
+    private boolean searchRec(TreeNode curr, int val) {
+        if (curr == null) return false;
+        if (curr.val == val) return true;
+        return val < curr.val ? searchRec(curr.left, val) : searchRec(curr.right, val);
+    }
+    public void delete(int val) {
+        root = deleteRec(root, val);
+    }
+    private TreeNode deleteRec(TreeNode curr, int val) {
+        if (curr == null) return null;
+        if (val < curr.val) curr.left = deleteRec(curr.left, val);
+        else if (val > curr.val) curr.right = deleteRec(curr.right, val);
+        else {
+            if (curr.left == null) return curr.right;
+            if (curr.right == null) return curr.left;
+            curr.val = minValue(curr.right);
+            curr.right = deleteRec(curr.right, curr.val);
+        }
+        return curr;
+    }
+    private int minValue(TreeNode curr) {
+        int min = curr.val;
+        while (curr.left != null) {
+            min = curr.left.val;
+            curr = curr.left;
+        }
+        return min;
+    }
+}`;
+      fs.writeFileSync(path.join(sandboxDir, 'BST.java'), bstSrc, 'utf8');
+      fs.writeFileSync(path.join(pkgDir, 'BST.java'), `package com.codeflow;\n${bstSrc}`, 'utf8');
+    }
+
+    if (!userCode.includes('class Trie') && userCode.includes('Trie')) {
+      const trieSrc = `import java.util.*;
+
+public class Trie {
+    public static class TrieNode {
+        public Map<Character, TrieNode> children = new HashMap<>();
+        public boolean isEndOfWord;
+    }
+    public TrieNode root = new TrieNode();
+    public void insert(String word) {
+        TrieNode curr = root;
+        for (char ch : word.toCharArray()) {
+            curr.children.putIfAbsent(ch, new TrieNode());
+            curr = curr.children.get(ch);
+        }
+        curr.isEndOfWord = true;
+    }
+    public boolean search(String word) {
+        TrieNode curr = root;
+        for (char ch : word.toCharArray()) {
+            if (!curr.children.containsKey(ch)) return false;
+            curr = curr.children.get(ch);
+        }
+        return curr.isEndOfWord;
+    }
+    public boolean startsWith(String prefix) {
+        TrieNode curr = root;
+        for (char ch : prefix.toCharArray()) {
+            if (!curr.children.containsKey(ch)) return false;
+            curr = curr.children.get(ch);
+        }
+        return true;
+    }
+}`;
+      fs.writeFileSync(path.join(sandboxDir, 'Trie.java'), trieSrc, 'utf8');
+      fs.writeFileSync(path.join(pkgDir, 'Trie.java'), `package com.codeflow;\n${trieSrc}`, 'utf8');
+    }
+
     // 3. Test compile the RAW user code first to catch genuine javac compilation errors
     const rawJavaFile = path.join(sandboxDir, `${className}.java`);
     fs.writeFileSync(rawJavaFile, userCode, 'utf8');
 
+    const sandboxJavaFiles = fs
+      .readdirSync(sandboxDir)
+      .filter((f) => f.endsWith('.java'))
+      .map((f) => `"${path.join(sandboxDir, f)}"`)
+      .join(' ');
+
     const compileError = await new Promise<{ line: number; message: string; detail: string } | null>((resolve) => {
-      exec(`javac "${rawJavaFile}"`, { timeout: 4000 }, (error, _stdout, stderr) => {
+      exec(`javac -cp "${sandboxDir}" ${sandboxJavaFiles}`, { timeout: 4000, cwd: sandboxDir }, (error, _stdout, stderr) => {
         if (error) {
           const errText = stderr || error.message;
           // Parse javac format: e.g. Main.java:5: error: ';' expected
@@ -104,9 +214,10 @@ export async function executeJavaWorker(userCode: string): Promise<JavaExecution
     fs.writeFileSync(instrumentedJavaFile, instrumentedCode, 'utf8');
 
     // 5. Compile instrumented package
+    const pkgFiles = fs.readdirSync(pkgDir).filter((f) => f.endsWith('.java')).map((f) => `"${path.join(pkgDir, f)}"`).join(' ');
     await new Promise<void>((resolve, reject) => {
       exec(
-        `javac -cp "${sandboxDir}" "${tracerFile}" "${instrumentedJavaFile}"`,
+        `javac -cp "${sandboxDir}" ${pkgFiles}`,
         { timeout: 4000 },
         (error, _stdout, stderr) => {
           if (error) {

@@ -55,11 +55,58 @@ export type EventType =
   | 'LINKEDLIST_CLEAR'
   | 'NODE_CREATE'
   | 'NODE_LINK'
-  | 'NODE_UNLINK'
+  | 'TREE_CREATE'
   | 'TREE_NODE_CREATE'
+  | 'TREE_NODE_DELETE'
   | 'TREE_LINK'
-  | 'TREE_UNLINK'
-  | 'TREE_ROTATE'
+  | 'TREE_LINK_LEFT'
+  | 'TREE_LINK_RIGHT'
+  | 'TREE_UNLINK_LEFT'
+  | 'TREE_UNLINK_RIGHT'
+  | 'TREE_NODE_ACCESS'
+  | 'TREE_TRAVERSE'
+  | 'TREE_CLEAR'
+  | 'TREE_ROOT_UPDATE'
+  | 'TREE_TRAVERSAL_START'
+  | 'TREE_NODE_VISIT'
+  | 'TREE_TRAVERSAL_END'
+  | 'TREE_ROTATE_LEFT'
+  | 'TREE_ROTATE_RIGHT'
+  | 'TREE_REBALANCE'
+  | 'BST_CREATE'
+  | 'BST_INSERT'
+  | 'BST_SEARCH'
+  | 'BST_DELETE'
+  | 'BST_COMPARE'
+  | 'BST_TRAVERSE'
+  | 'BST_NODE_VISIT'
+  | 'BST_ROTATE'
+  | 'BST_ROOT_UPDATE'
+  | 'BST_SEARCH_START'
+  | 'BST_MOVE_LEFT'
+  | 'BST_MOVE_RIGHT'
+  | 'BST_NODE_FOUND'
+  | 'BST_SEARCH_END'
+  | 'HEAP_CREATE'
+  | 'HEAP_INSERT'
+  | 'HEAP_REMOVE'
+  | 'HEAP_PEEK'
+  | 'HEAP_COMPARE'
+  | 'HEAP_SWAP'
+  | 'HEAPIFY_UP'
+  | 'HEAPIFY_DOWN'
+  | 'HEAP_CLEAR'
+  | 'TRIE_CREATE'
+  | 'TRIE_NODE_CREATE'
+  | 'TRIE_NODE_ACCESS'
+  | 'TRIE_EDGE_CREATE'
+  | 'TRIE_WORD_COMPLETE'
+  | 'TRIE_SEARCH_START'
+  | 'TRIE_SEARCH_STEP'
+  | 'TRIE_WORD_FOUND'
+  | 'TRIE_WORD_NOT_FOUND'
+  | 'TRIE_REMOVE'
+  | 'TRIE_CLEAR'
   | 'MAP_CREATE'
   | 'MAP_INSERT'
   | 'MAP_LOOKUP'
@@ -102,7 +149,7 @@ export interface ExecutionEvent {
   line: number;
   variable?: string;
   structureId?: string;
-  structureType?: 'array' | 'matrix' | 'stack' | 'queue' | 'linkedlist' | 'tree' | 'map' | 'set' | 'graph';
+  structureType?: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'bst' | 'heap' | 'trie' | 'map' | 'set' | 'graph' | 'priorityqueue';
   dataType?: string;
   values?: any;
   value?: any;
@@ -125,6 +172,18 @@ export interface ExecutionEvent {
   size?: number;
   detail?: string;
   meta?: Record<string, any>;
+  // Phase 3 Hierarchical fields
+  nodeId?: string;
+  parentNodeId?: string;
+  childNodeId?: string;
+  traversal?: string;
+  char?: string;
+  isWord?: boolean;
+  word?: string;
+  heapType?: 'MIN' | 'MAX';
+  leftVal?: any;
+  rightVal?: any;
+  operator?: string;
 }
 
 export interface VariableInfo {
@@ -160,6 +219,19 @@ export interface TreeNodeData {
   value: any;
   leftId: string | null;
   rightId: string | null;
+  parentId?: string | null;
+  isLeft?: boolean;
+  highlighted?: boolean;
+  color?: string;
+  balanceFactor?: number;
+}
+
+export interface TrieNodeData {
+  id: string;
+  char: string;
+  isWord: boolean;
+  children: Record<string, string>; // char -> childNodeId
+  parentId?: string | null;
   highlighted?: boolean;
   color?: string;
 }
@@ -185,7 +257,7 @@ export interface GraphEdgeData {
 export interface DataStructureState {
   id: string;
   name: string;
-  type: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'map' | 'set' | 'graph' | 'priorityqueue';
+  type: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'bst' | 'heap' | 'trie' | 'map' | 'set' | 'graph' | 'priorityqueue';
   dataType: string;
   size?: number;
   elements?: any[];
@@ -203,6 +275,28 @@ export interface DataStructureState {
   treeData?: {
     rootId: string | null;
     nodes: Record<string, TreeNodeData>;
+    traversalOrder?: any[];
+    activeTraversalNodeId?: string | null;
+    traversalType?: string;
+    comparisonStep?: string;
+    selectedNodeId?: string | null;
+  };
+  heapData?: {
+    array: any[];
+    isMinHeap: boolean;
+    comparingIndices?: [number, number];
+    swappingIndices?: [number, number];
+    lastAction?: string;
+  };
+  trieData?: {
+    rootId: string;
+    nodes: Record<string, TrieNodeData>;
+    wordsCount: number;
+    words: string[];
+    activeSearchWord?: string;
+    activeSearchPath?: string[];
+    searchResult?: 'FOUND' | 'NOT_FOUND' | null;
+    selectedNodeId?: string | null;
   };
   mapData?: {
     entries: { key: any; value: any; hash: number; bucket: number }[];

@@ -133,13 +133,54 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     }
 
     // PriorityQueue<Integer> pq = new PriorityQueue<>();
-    const pqDeclMatch = trimmed.match(/^(?:PriorityQueue|java\.util\.PriorityQueue)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:PriorityQueue|java\.util\.PriorityQueue)<.*?>\(\);?$/);
+    const pqDeclMatch = trimmed.match(/^(?:PriorityQueue|java\.util\.PriorityQueue)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:PriorityQueue|java\.util\.PriorityQueue)<.*?>\((.*?)\);?$/);
     if (pqDeclMatch) {
       const varName = pqDeclMatch[2];
+      const isMin = !pqDeclMatch[3].includes('reverseOrder');
       varTypes.set(varName, 'PriorityQueue');
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.priorityQueueCreate("${varName}", "PriorityQueue<${pqDeclMatch[1]}>", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.heapCreate("${varName}", "${varName}", "PriorityQueue<${pqDeclMatch[1]}>", ${isMin}, ${lineNum});`);
+      continue;
+    }
+
+    // TreeNode root = new TreeNode(10); or Node root = new Node(10);
+    const treeDeclMatch = trimmed.match(/^(?:TreeNode|Node)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:TreeNode|Node)\((.+)\);?$/);
+    if (treeDeclMatch) {
+      const varName = treeDeclMatch[1];
+      const valArg = treeDeclMatch[2].trim();
+      varTypes.set(varName, 'Tree');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _nid = "Node#" + System.identityHashCode(${varName});`);
+      outputLines.push(`      CodeFlowTracer.treeCreate("${varName}", "${varName}", "BinaryTree", ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.treeNodeCreate("${varName}", _nid, (${valArg}), ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.treeRootUpdate("${varName}", _nid, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // BST bst = new BST();
+    const bstDeclMatch = trimmed.match(/^(?:BST)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:BST)\(\);?$/);
+    if (bstDeclMatch) {
+      const varName = bstDeclMatch[1];
+      varTypes.set(varName, 'BST');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.bstCreate("${varName}", "${varName}", "BST", ${lineNum});`);
+      continue;
+    }
+
+    // Trie trie = new Trie();
+    const trieDeclMatch = trimmed.match(/^(?:Trie)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:Trie)\(\);?$/);
+    if (trieDeclMatch) {
+      const varName = trieDeclMatch[1];
+      varTypes.set(varName, 'Trie');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.trieCreate("${varName}", "${varName}", ${lineNum});`);
       continue;
     }
 
@@ -199,6 +240,8 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`      var _val = ${varName}.poll();`);
       if (stType === 'PriorityQueue') {
         outputLines.push(`      CodeFlowTracer.priorityQueuePoll("${varName}", _val, new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.heapRemove("${varName}", _val, new ArrayList<>(${varName}), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.heapifyDown("${varName}", 0, _val, ${lineNum});`);
       } else if (stType === 'Deque') {
         outputLines.push(`      CodeFlowTracer.dequeRemoveFirst("${varName}", _val, ${varName}.size(), ${lineNum});`);
       } else {
@@ -328,6 +371,8 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       } else if (stType === 'PriorityQueue') {
         outputLines.push(`      ${varName}.add(_v);`);
         outputLines.push(`      CodeFlowTracer.priorityQueueAdd("${varName}", _v, new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.heapInsert("${varName}", _v, new ArrayList<>(${varName}), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.heapifyUp("${varName}", ${varName}.size() - 1, _v, ${lineNum});`);
       } else if (stType === 'LinkedList') {
         outputLines.push(`      ${varName}.add(_v);`);
         outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, ${varName}.size() - 1, ${varName}.size(), ${lineNum});`);
@@ -430,6 +475,187 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       else if (stType === 'LinkedList') outputLines.push(`    CodeFlowTracer.linkedListClear("${varName}", ${lineNum});`);
       else if (stType === 'HashMap') outputLines.push(`    CodeFlowTracer.mapClear("${varName}", ${lineNum});`);
       else if (stType === 'HashSet') outputLines.push(`    CodeFlowTracer.setClear("${varName}", ${lineNum});`);
+      continue;
+    }
+
+    // 2.5 TREE LINKING, BST & TRIE OPERATIONS (Phase 3)
+    // root.left = new TreeNode(20); or root.left.left = new TreeNode(40);
+    const treeLinkNewMatch = trimmed.match(/^((?:[a-zA-Z_0-9]+(?:\.[a-zA-Z_0-9]+)*))\.(left|right)\s*=\s*new\s+(?:TreeNode|Node)\((.+)\);?$/);
+    if (treeLinkNewMatch) {
+      const parentExpr = treeLinkNewMatch[1];
+      const dir = treeLinkNewMatch[2];
+      const valArg = treeLinkNewMatch[3].trim();
+      const rootVar = parentExpr.split('.')[0];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      var _child = new TreeNode(${valArg});`);
+      outputLines.push(`      ${parentExpr}.${dir} = _child;`);
+      outputLines.push(`      String _pId = "Node#" + System.identityHashCode(${parentExpr});`);
+      outputLines.push(`      String _cId = "Node#" + System.identityHashCode(_child);`);
+      outputLines.push(`      CodeFlowTracer.treeNodeCreate("${rootVar}", _cId, (${valArg}), ${lineNum});`);
+      if (dir === 'left') {
+        outputLines.push(`      CodeFlowTracer.treeLinkLeft("${rootVar}", _pId, _cId, ${lineNum});`);
+      } else {
+        outputLines.push(`      CodeFlowTracer.treeLinkRight("${rootVar}", _pId, _cId, ${lineNum});`);
+      }
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // root.left = child; or root.right = child;
+    const treeLinkVarMatch = trimmed.match(/^((?:[a-zA-Z_0-9]+(?:\.[a-zA-Z_0-9]+)*))\.(left|right)\s*=\s*([a-zA-Z_0-9]+);?$/);
+    if (treeLinkVarMatch && treeLinkVarMatch[3] !== 'null') {
+      const parentExpr = treeLinkVarMatch[1];
+      const dir = treeLinkVarMatch[2];
+      const childVar = treeLinkVarMatch[3];
+      const rootVar = parentExpr.split('.')[0];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    ${rawLine}`);
+      outputLines.push(`    {`);
+      outputLines.push(`      if (${childVar} != null) {`);
+      outputLines.push(`        String _pId = "Node#" + System.identityHashCode(${parentExpr});`);
+      outputLines.push(`        String _cId = "Node#" + System.identityHashCode(${childVar});`);
+      if (dir === 'left') {
+        outputLines.push(`        CodeFlowTracer.treeLinkLeft("${rootVar}", _pId, _cId, ${lineNum});`);
+      } else {
+        outputLines.push(`        CodeFlowTracer.treeLinkRight("${rootVar}", _pId, _cId, ${lineNum});`);
+      }
+      outputLines.push(`      }`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // root.left = null; or root.right = null;
+    const treeUnlinkMatch = trimmed.match(/^((?:[a-zA-Z_0-9]+(?:\.[a-zA-Z_0-9]+)*))\.(left|right)\s*=\s*null;?$/);
+    if (treeUnlinkMatch) {
+      const parentExpr = treeUnlinkMatch[1];
+      const dir = treeUnlinkMatch[2];
+      const rootVar = parentExpr.split('.')[0];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    ${rawLine}`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _pId = "Node#" + System.identityHashCode(${parentExpr});`);
+      if (dir === 'left') {
+        outputLines.push(`      CodeFlowTracer.treeUnlinkLeft("${rootVar}", _pId, ${lineNum});`);
+      } else {
+        outputLines.push(`      CodeFlowTracer.treeUnlinkRight("${rootVar}", _pId, ${lineNum});`);
+      }
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // bst.insert(val)
+    const bstInsertMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.insert\((\d+|[a-zA-Z_0-9]+)\);?$/);
+    if (bstInsertMatch && varTypes.get(bstInsertMatch[1]) === 'BST') {
+      const varName = bstInsertMatch[1];
+      const valArg = bstInsertMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      var _v = (${valArg});`);
+      outputLines.push(`      ${varName}.insert(_v);`);
+      outputLines.push(`      CodeFlowTracer.bstInsert("${varName}", "Node#" + _v, _v, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // bst.search(val)
+    const bstSearchMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.search\((\d+|[a-zA-Z_0-9]+)\);?$/);
+    if (bstSearchMatch && varTypes.get(bstSearchMatch[1]) === 'BST') {
+      const varName = bstSearchMatch[1];
+      const valArg = bstSearchMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      var _v = (${valArg});`);
+      outputLines.push(`      boolean _found = ${varName}.search(_v);`);
+      outputLines.push(`      CodeFlowTracer.bstSearchStart("${varName}", _v, ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.bstSearchEnd("${varName}", _v, _found, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // bst.delete(val)
+    const bstDeleteMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.delete\((\d+|[a-zA-Z_0-9]+)\);?$/);
+    if (bstDeleteMatch && varTypes.get(bstDeleteMatch[1]) === 'BST') {
+      const varName = bstDeleteMatch[1];
+      const valArg = bstDeleteMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      var _v = (${valArg});`);
+      outputLines.push(`      ${varName}.delete(_v);`);
+      outputLines.push(`      CodeFlowTracer.bstDelete("${varName}", "Node#" + _v, _v, "Deleted " + _v, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // trie.insert("word")
+    const trieInsertMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.insert\((.+)\);?$/);
+    if (trieInsertMatch && varTypes.get(trieInsertMatch[1]) === 'Trie') {
+      const varName = trieInsertMatch[1];
+      const wordArg = trieInsertMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _w = String.valueOf(${wordArg}).replace("\\"", "");`);
+      outputLines.push(`      ${varName}.insert(_w);`);
+      outputLines.push(`      String _curr = "root";`);
+      outputLines.push(`      for (int _ci = 0; _ci < _w.length(); _ci++) {`);
+      outputLines.push(`        String _ch = String.valueOf(_w.charAt(_ci));`);
+      outputLines.push(`        String _nid = "node_" + _w.substring(0, _ci + 1);`);
+      outputLines.push(`        CodeFlowTracer.trieNodeCreate("${varName}", _nid, _ch, _curr, ${lineNum});`);
+      outputLines.push(`        _curr = _nid;`);
+      outputLines.push(`      }`);
+      outputLines.push(`      CodeFlowTracer.trieWordComplete("${varName}", _curr, _w, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // trie.search("word")
+    const trieSearchMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.search\((.+)\);?$/);
+    if (trieSearchMatch && varTypes.get(trieSearchMatch[1]) === 'Trie') {
+      const varName = trieSearchMatch[1];
+      const wordArg = trieSearchMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _w = String.valueOf(${wordArg}).replace("\\"", "");`);
+      outputLines.push(`      boolean _found = ${varName}.search(_w);`);
+      outputLines.push(`      CodeFlowTracer.trieSearchStart("${varName}", _w, ${lineNum});`);
+      outputLines.push(`      for (int _ci = 0; _ci < _w.length(); _ci++) {`);
+      outputLines.push(`        String _ch = String.valueOf(_w.charAt(_ci));`);
+      outputLines.push(`        String _nid = "node_" + _w.substring(0, _ci + 1);`);
+      outputLines.push(`        CodeFlowTracer.trieSearchStep("${varName}", _nid, _ch, ${lineNum});`);
+      outputLines.push(`      }`);
+      outputLines.push(`      CodeFlowTracer.trieWordFound("${varName}", _w, _found, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // trie.startsWith("prefix")
+    const trieStartsMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.startsWith\((.+)\);?$/);
+    if (trieStartsMatch && varTypes.get(trieStartsMatch[1]) === 'Trie') {
+      const varName = trieStartsMatch[1];
+      const wordArg = trieStartsMatch[2].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      outputLines.push(`      String _w = String.valueOf(${wordArg}).replace("\\"", "");`);
+      outputLines.push(`      boolean _found = ${varName}.startsWith(_w);`);
+      outputLines.push(`      CodeFlowTracer.trieSearchStart("${varName}", _w, ${lineNum});`);
+      outputLines.push(`      for (int _ci = 0; _ci < _w.length(); _ci++) {`);
+      outputLines.push(`        String _ch = String.valueOf(_w.charAt(_ci));`);
+      outputLines.push(`        String _nid = "node_" + _w.substring(0, _ci + 1);`);
+      outputLines.push(`        CodeFlowTracer.trieSearchStep("${varName}", _nid, _ch, ${lineNum});`);
+      outputLines.push(`      }`);
+      outputLines.push(`      CodeFlowTracer.trieWordFound("${varName}", _w, _found, ${lineNum});`);
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // Traversals: inorder(root); preorder(root); postorder(root);
+    const travMatch = trimmed.match(/^(inorder|preorder|postorder|levelOrder)\(([a-zA-Z_0-9]+)\);?$/);
+    if (travMatch) {
+      const travName = travMatch[1].toUpperCase();
+      const rootArg = travMatch[2];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.funcCall("${travName}", "{root:'${rootArg}'}", ${lineNum});`);
+      outputLines.push(`    ${rawLine}`);
       continue;
     }
 

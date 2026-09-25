@@ -89,6 +89,45 @@ export function reconstructExecutionSteps(
               nodes: { ...st.linkedListData.nodes },
             }
           : undefined,
+        treeData: st.treeData
+          ? {
+              rootId: st.treeData.rootId,
+              nodes: Object.fromEntries(
+                Object.entries(st.treeData.nodes).map(([k, v]) => [k, { ...v }])
+              ),
+              traversalOrder: st.treeData.traversalOrder ? [...st.treeData.traversalOrder] : undefined,
+              activeTraversalNodeId: st.treeData.activeTraversalNodeId,
+              traversalType: st.treeData.traversalType,
+              comparisonStep: st.treeData.comparisonStep,
+              selectedNodeId: st.treeData.selectedNodeId,
+            }
+          : undefined,
+        heapData: st.heapData
+          ? {
+              array: [...st.heapData.array],
+              isMinHeap: st.heapData.isMinHeap,
+              comparingIndices: st.heapData.comparingIndices ? [...st.heapData.comparingIndices] : undefined,
+              swappingIndices: st.heapData.swappingIndices ? [...st.heapData.swappingIndices] : undefined,
+              lastAction: st.heapData.lastAction,
+            }
+          : undefined,
+        trieData: st.trieData
+          ? {
+              rootId: st.trieData.rootId,
+              nodes: Object.fromEntries(
+                Object.entries(st.trieData.nodes).map(([k, v]) => [
+                  k,
+                  { ...v, children: { ...v.children } },
+                ])
+              ),
+              wordsCount: st.trieData.wordsCount,
+              words: [...st.trieData.words],
+              activeSearchWord: st.trieData.activeSearchWord,
+              activeSearchPath: st.trieData.activeSearchPath ? [...st.trieData.activeSearchPath] : undefined,
+              searchResult: st.trieData.searchResult,
+              selectedNodeId: st.trieData.selectedNodeId,
+            }
+          : undefined,
         mapData: st.mapData
           ? {
               bucketCount: st.mapData.bucketCount,
@@ -822,6 +861,641 @@ export function reconstructExecutionSteps(
           st.lastOperation = `peek() ➔ ${ev.value}`;
         }
         explanation = `Inspected min/max element in PriorityQueue ${stId}: ${ev.value}`;
+        break;
+      }
+
+      // === BINARY TREE ===
+      case 'TREE_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'tree',
+          dataType: ev.dataType || 'BinaryTree',
+          treeData: { rootId: null, nodes: {} },
+          size: 0,
+          lastOperation: 'new BinaryTree()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'BinaryTree',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created Binary Tree: ${stId}`;
+        break;
+      }
+
+      case 'TREE_NODE_CREATE': {
+        let st = nextStructures[stId];
+        if (!st) {
+          st = {
+            id: stId,
+            name: stId,
+            type: 'tree',
+            dataType: 'BinaryTree',
+            treeData: { rootId: null, nodes: {} },
+            size: 0,
+          };
+          nextStructures[stId] = st;
+        }
+        if (!st.treeData) st.treeData = { rootId: null, nodes: {} };
+        const nodeId = ev.nodeId || `Node#${ev.value}`;
+        st.treeData.nodes[nodeId] = {
+          id: nodeId,
+          value: ev.value,
+          leftId: null,
+          rightId: null,
+          parentId: null,
+        };
+        if (!st.treeData.rootId) {
+          st.treeData.rootId = nodeId;
+        }
+        st.size = Object.keys(st.treeData.nodes).length;
+        st.lastOperation = `createNode(${ev.value})`;
+        if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        explanation = `Created Tree Node (${ev.value}) [${nodeId}]`;
+        break;
+      }
+
+      case 'TREE_LINK_LEFT': {
+        const st = nextStructures[stId];
+        if (st && st.treeData && ev.parentNodeId && ev.childNodeId) {
+          if (st.treeData.nodes[ev.parentNodeId]) {
+            st.treeData.nodes[ev.parentNodeId].leftId = ev.childNodeId;
+          }
+          if (st.treeData.nodes[ev.childNodeId]) {
+            st.treeData.nodes[ev.childNodeId].parentId = ev.parentNodeId;
+            st.treeData.nodes[ev.childNodeId].isLeft = true;
+          }
+          const pVal = st.treeData.nodes[ev.parentNodeId]?.value ?? ev.parentNodeId;
+          const cVal = st.treeData.nodes[ev.childNodeId]?.value ?? ev.childNodeId;
+          st.lastOperation = `linkLeft(${pVal} ➔ ${cVal})`;
+        }
+        explanation = `Linked node ${ev.childNodeId} as LEFT child of ${ev.parentNodeId}`;
+        break;
+      }
+
+      case 'TREE_LINK_RIGHT': {
+        const st = nextStructures[stId];
+        if (st && st.treeData && ev.parentNodeId && ev.childNodeId) {
+          if (st.treeData.nodes[ev.parentNodeId]) {
+            st.treeData.nodes[ev.parentNodeId].rightId = ev.childNodeId;
+          }
+          if (st.treeData.nodes[ev.childNodeId]) {
+            st.treeData.nodes[ev.childNodeId].parentId = ev.parentNodeId;
+            st.treeData.nodes[ev.childNodeId].isLeft = false;
+          }
+          const pVal = st.treeData.nodes[ev.parentNodeId]?.value ?? ev.parentNodeId;
+          const cVal = st.treeData.nodes[ev.childNodeId]?.value ?? ev.childNodeId;
+          st.lastOperation = `linkRight(${pVal} ➔ ${cVal})`;
+        }
+        explanation = `Linked node ${ev.childNodeId} as RIGHT child of ${ev.parentNodeId}`;
+        break;
+      }
+
+      case 'TREE_UNLINK_LEFT': {
+        const st = nextStructures[stId];
+        if (st && st.treeData && ev.parentNodeId && st.treeData.nodes[ev.parentNodeId]) {
+          st.treeData.nodes[ev.parentNodeId].leftId = null;
+          st.lastOperation = `unlinkLeft(${st.treeData.nodes[ev.parentNodeId].value})`;
+        }
+        explanation = `Unlinked LEFT child from node ${ev.parentNodeId}`;
+        break;
+      }
+
+      case 'TREE_UNLINK_RIGHT': {
+        const st = nextStructures[stId];
+        if (st && st.treeData && ev.parentNodeId && st.treeData.nodes[ev.parentNodeId]) {
+          st.treeData.nodes[ev.parentNodeId].rightId = null;
+          st.lastOperation = `unlinkRight(${st.treeData.nodes[ev.parentNodeId].value})`;
+        }
+        explanation = `Unlinked RIGHT child from node ${ev.parentNodeId}`;
+        break;
+      }
+
+      case 'TREE_NODE_DELETE': {
+        const st = nextStructures[stId];
+        if (st && st.treeData && ev.nodeId) {
+          delete st.treeData.nodes[ev.nodeId];
+          st.size = Object.keys(st.treeData.nodes).length;
+          if (st.treeData.rootId === ev.nodeId) st.treeData.rootId = null;
+          st.lastOperation = `deleteNode(${ev.nodeId})`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Deleted node ${ev.nodeId} from tree ${stId}`;
+        break;
+      }
+
+      case 'TREE_ROOT_UPDATE': {
+        const st = nextStructures[stId];
+        if (st && st.treeData) {
+          st.treeData.rootId = ev.nodeId || null;
+        }
+        explanation = `Updated root of tree ${stId} to ${ev.nodeId}`;
+        break;
+      }
+
+      case 'TREE_TRAVERSAL_START': {
+        const st = nextStructures[stId];
+        if (st && st.treeData) {
+          st.treeData.traversalOrder = [];
+          st.treeData.traversalType = ev.traversal || 'INORDER';
+          st.lastOperation = `${st.treeData.traversalType} traversal started`;
+        }
+        explanation = `Started ${ev.traversal || 'tree'} traversal on ${stId}`;
+        break;
+      }
+
+      case 'TREE_NODE_VISIT': {
+        const st = nextStructures[stId];
+        if (st && st.treeData) {
+          st.treeData.activeTraversalNodeId = ev.nodeId || null;
+          if (ev.value !== undefined) {
+            st.treeData.traversalOrder = [...(st.treeData.traversalOrder || []), ev.value];
+          }
+          st.lastOperation = `visited(${ev.value}) [${ev.traversal || 'TRAVERSAL'}]`;
+        }
+        explanation = `Visited tree node ${ev.value} (${ev.traversal || 'Traversal'})`;
+        break;
+      }
+
+      case 'TREE_TRAVERSAL_END': {
+        const st = nextStructures[stId];
+        if (st && st.treeData) {
+          st.treeData.activeTraversalNodeId = null;
+        }
+        explanation = `Finished tree traversal on ${stId}`;
+        break;
+      }
+
+      case 'TREE_CLEAR': {
+        const st = nextStructures[stId];
+        if (st && st.treeData) {
+          st.treeData = { rootId: null, nodes: {} };
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared tree ${stId}`;
+        break;
+      }
+
+      // === BST ===
+      case 'BST_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'bst',
+          dataType: ev.dataType || 'BST',
+          treeData: { rootId: null, nodes: {} },
+          size: 0,
+          lastOperation: 'new BST()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: 'BST',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created Binary Search Tree (BST): ${stId}`;
+        break;
+      }
+
+      case 'BST_INSERT': {
+        let st = nextStructures[stId];
+        if (!st) {
+          st = {
+            id: stId,
+            name: stId,
+            type: 'bst',
+            dataType: 'BST',
+            treeData: { rootId: null, nodes: {} },
+            size: 0,
+          };
+          nextStructures[stId] = st;
+        }
+        if (!st.treeData) st.treeData = { rootId: null, nodes: {} };
+        const nodeId = ev.nodeId || `Node#${ev.value}`;
+        const val = typeof ev.value === 'number' ? ev.value : parseInt(ev.value, 10) || 0;
+        st.treeData.nodes[nodeId] = {
+          id: nodeId,
+          value: val,
+          leftId: null,
+          rightId: null,
+          parentId: null,
+        };
+
+        if (!st.treeData.rootId) {
+          st.treeData.rootId = nodeId;
+        } else {
+          // Find standard BST parent
+          let currId: string | null = st.treeData.rootId;
+          let pId: string | null = null;
+          let isLeftChild = false;
+          while (currId && st.treeData.nodes[currId] && currId !== nodeId) {
+            pId = currId;
+            const currVal = st.treeData.nodes[currId].value;
+            if (val < currVal) {
+              isLeftChild = true;
+              currId = st.treeData.nodes[currId].leftId;
+            } else {
+              isLeftChild = false;
+              currId = st.treeData.nodes[currId].rightId;
+            }
+          }
+          if (pId && st.treeData.nodes[pId]) {
+            st.treeData.nodes[nodeId].parentId = pId;
+            st.treeData.nodes[nodeId].isLeft = isLeftChild;
+            if (isLeftChild) {
+              st.treeData.nodes[pId].leftId = nodeId;
+            } else {
+              st.treeData.nodes[pId].rightId = nodeId;
+            }
+          }
+        }
+
+        st.size = Object.keys(st.treeData.nodes).length;
+        st.lastOperation = `insert(${val})`;
+        if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        explanation = `Inserted ${val} into BST ${stId}`;
+        break;
+      }
+
+      case 'BST_COMPARE': {
+        const st = nextStructures[stId];
+        const res = !!ev.conditionResult;
+        const compStr = `${ev.leftVal} ${ev.operator || '<'} ${ev.rightVal} ? ${res ? 'TRUE' : 'FALSE'}`;
+        nextComparison = {
+          left: String(ev.leftVal),
+          right: String(ev.rightVal),
+          operator: ev.operator || '<',
+          result: res,
+          explanation: `${compStr} ➔ ${res ? 'Move LEFT' : 'Move RIGHT'}`,
+        };
+        if (st && st.treeData) {
+          st.treeData.comparisonStep = compStr;
+          st.lastOperation = compStr;
+        }
+        explanation = `BST Decision: ${compStr}`;
+        break;
+      }
+
+      case 'BST_SEARCH_START': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `search(${ev.value})`;
+        }
+        explanation = `Started BST search for key ${ev.value}`;
+        break;
+      }
+
+      case 'BST_NODE_FOUND': {
+        const st = nextStructures[stId];
+        if (st && st.treeData) {
+          st.treeData.selectedNodeId = ev.nodeId || null;
+          st.lastOperation = `found(${ev.value}) ✓`;
+        }
+        nextComparison = {
+          left: String(ev.value),
+          right: 'BST',
+          operator: '∈',
+          result: true,
+          explanation: `Key ${ev.value} FOUND in BST!`,
+        };
+        explanation = `Key ${ev.value} found in BST ${stId}`;
+        break;
+      }
+
+      case 'BST_SEARCH_END': {
+        const found = !!ev.conditionResult;
+        nextComparison = {
+          left: String(ev.value),
+          right: 'BST',
+          operator: found ? '∈' : '∉',
+          result: found,
+          explanation: `Key ${ev.value} ${found ? 'FOUND' : 'NOT FOUND'} in BST`,
+        };
+        explanation = `BST search for ${ev.value}: ${found ? 'FOUND ✓' : 'NOT FOUND ✗'}`;
+        break;
+      }
+
+      case 'BST_DELETE': {
+        const st = nextStructures[stId];
+        if (st && st.treeData && ev.value !== undefined) {
+          const targetNode = Object.values(st.treeData.nodes).find(
+            (n) => n.value === ev.value || n.id === ev.nodeId
+          );
+          if (targetNode) {
+            delete st.treeData.nodes[targetNode.id];
+            // Unlink from parent
+            if (targetNode.parentId && st.treeData.nodes[targetNode.parentId]) {
+              const p = st.treeData.nodes[targetNode.parentId];
+              if (p.leftId === targetNode.id) p.leftId = targetNode.leftId || targetNode.rightId || null;
+              if (p.rightId === targetNode.id) p.rightId = targetNode.rightId || targetNode.leftId || null;
+            } else if (st.treeData.rootId === targetNode.id) {
+              st.treeData.rootId = targetNode.rightId || targetNode.leftId || null;
+            }
+          }
+          st.size = Object.keys(st.treeData.nodes).length;
+          st.lastOperation = `delete(${ev.value}) [${ev.detail || 'node removed'}]`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Deleted ${ev.value} from BST ${stId}`;
+        break;
+      }
+
+      // === HEAP ===
+      case 'HEAP_CREATE': {
+        const isMin = ev.heapType !== 'MAX';
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'heap',
+          dataType: ev.dataType || (isMin ? 'MinHeap' : 'MaxHeap'),
+          heapData: { array: [], isMinHeap: isMin },
+          size: 0,
+          lastOperation: `new ${isMin ? 'MinHeap' : 'MaxHeap'}()`,
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: isMin ? 'MinHeap' : 'MaxHeap',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created ${isMin ? 'Min-Heap' : 'Max-Heap'}: ${stId}`;
+        break;
+      }
+
+      case 'HEAP_INSERT': {
+        let st = nextStructures[stId];
+        if (!st) {
+          st = {
+            id: stId,
+            name: stId,
+            type: 'heap',
+            dataType: 'Heap',
+            heapData: { array: [], isMinHeap: true },
+            size: 0,
+          };
+          nextStructures[stId] = st;
+        }
+        if (!st.heapData) st.heapData = { array: [], isMinHeap: true };
+        const rawArr = Array.isArray(ev.values) ? [...ev.values] : [...st.heapData.array, ev.value];
+        st.heapData.array = rawArr;
+        st.size = rawArr.length;
+        st.lastOperation = `insert(${ev.value})`;
+        st.heapData.lastAction = `Inserted ${ev.value} at index ${rawArr.length - 1}`;
+        if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        explanation = `Inserted ${ev.value} into Heap ${stId}`;
+        break;
+      }
+
+      case 'HEAP_COMPARE': {
+        const st = nextStructures[stId];
+        if (st && st.heapData && typeof ev.fromIndex === 'number' && typeof ev.toIndex === 'number') {
+          st.heapData.comparingIndices = [ev.fromIndex, ev.toIndex];
+          st.lastOperation = `compare([${ev.fromIndex}] vs [${ev.toIndex}])`;
+        }
+        nextComparison = {
+          left: String(ev.leftVal),
+          right: String(ev.rightVal),
+          operator: ev.operator || '<',
+          result: !!ev.conditionResult,
+          explanation: `Heap compare: ${ev.leftVal} ${ev.operator || '<'} ${ev.rightVal} ➔ ${ev.conditionResult ? 'SWAP' : 'OK'}`,
+        };
+        explanation = `Heap comparison at indices [${ev.fromIndex}] and [${ev.toIndex}]`;
+        break;
+      }
+
+      case 'HEAP_SWAP': {
+        const st = nextStructures[stId];
+        if (st && st.heapData) {
+          if (Array.isArray(ev.values)) {
+            st.heapData.array = [...ev.values];
+          }
+          if (typeof ev.fromIndex === 'number' && typeof ev.toIndex === 'number') {
+            st.heapData.swappingIndices = [ev.fromIndex, ev.toIndex];
+            st.lastOperation = `swap([${ev.fromIndex}] ⇄ [${ev.toIndex}])`;
+          }
+        }
+        explanation = `Swapped heap elements at indices [${ev.fromIndex}] and [${ev.toIndex}]`;
+        break;
+      }
+
+      case 'HEAPIFY_UP': {
+        const st = nextStructures[stId];
+        if (st && st.heapData) {
+          st.heapData.lastAction = `heapifyUp(index: ${ev.index})`;
+          st.lastOperation = `heapifyUp(${ev.value})`;
+        }
+        explanation = `Heapify Up triggered for value ${ev.value} at index ${ev.index}`;
+        break;
+      }
+
+      case 'HEAPIFY_DOWN': {
+        const st = nextStructures[stId];
+        if (st && st.heapData) {
+          st.heapData.lastAction = `heapifyDown(index: ${ev.index})`;
+          st.lastOperation = `heapifyDown(${ev.value})`;
+        }
+        explanation = `Heapify Down triggered starting at root index ${ev.index}`;
+        break;
+      }
+
+      case 'HEAP_REMOVE': {
+        const st = nextStructures[stId];
+        if (st && st.heapData) {
+          const rawArr = Array.isArray(ev.values) ? [...ev.values] : st.heapData.array.slice(1);
+          st.heapData.array = rawArr;
+          st.size = rawArr.length;
+          st.lastOperation = `remove() ➔ ${ev.value}`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Extracted root element ${ev.value} from Heap ${stId}`;
+        break;
+      }
+
+      case 'HEAP_PEEK': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `peek() ➔ ${ev.value}`;
+        }
+        explanation = `Inspected root of Heap ${stId}: ${ev.value}`;
+        break;
+      }
+
+      case 'HEAP_CLEAR': {
+        const st = nextStructures[stId];
+        if (st && st.heapData) {
+          st.heapData.array = [];
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared Heap ${stId}`;
+        break;
+      }
+
+      // === TRIE ===
+      case 'TRIE_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'trie',
+          dataType: 'Trie',
+          trieData: {
+            rootId: 'root',
+            nodes: {
+              root: { id: 'root', char: 'root', isWord: false, children: {} },
+            },
+            wordsCount: 0,
+            words: [],
+          },
+          size: 1,
+          lastOperation: 'new Trie()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: 'Trie',
+          value: 'words = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created Trie: ${stId}`;
+        break;
+      }
+
+      case 'TRIE_NODE_CREATE': {
+        let st = nextStructures[stId];
+        if (!st) {
+          st = {
+            id: stId,
+            name: stId,
+            type: 'trie',
+            dataType: 'Trie',
+            trieData: {
+              rootId: 'root',
+              nodes: { root: { id: 'root', char: 'root', isWord: false, children: {} } },
+              wordsCount: 0,
+              words: [],
+            },
+            size: 1,
+          };
+          nextStructures[stId] = st;
+        }
+        if (!st.trieData) {
+          st.trieData = {
+            rootId: 'root',
+            nodes: { root: { id: 'root', char: 'root', isWord: false, children: {} } },
+            wordsCount: 0,
+            words: [],
+          };
+        }
+        const nodeId = ev.nodeId || `node_${ev.char}`;
+        const pId = ev.parentNodeId || 'root';
+        const ch = ev.char || '';
+
+        if (!st.trieData.nodes[nodeId]) {
+          st.trieData.nodes[nodeId] = {
+            id: nodeId,
+            char: ch,
+            isWord: false,
+            children: {},
+            parentId: pId,
+          };
+        }
+        if (st.trieData.nodes[pId]) {
+          st.trieData.nodes[pId].children[ch] = nodeId;
+        }
+        st.size = Object.keys(st.trieData.nodes).length;
+        st.lastOperation = `char('${ch}')`;
+        explanation = `Added character '${ch}' to Trie ${stId}`;
+        break;
+      }
+
+      case 'TRIE_WORD_COMPLETE': {
+        const st = nextStructures[stId];
+        if (st && st.trieData) {
+          if (ev.nodeId && st.trieData.nodes[ev.nodeId]) {
+            st.trieData.nodes[ev.nodeId].isWord = true;
+          }
+          if (ev.word && !st.trieData.words.includes(ev.word)) {
+            st.trieData.words = [...st.trieData.words, ev.word];
+            st.trieData.wordsCount = st.trieData.words.length;
+          }
+          st.lastOperation = `inserted "${ev.word}" ✓`;
+          if (nextVariables[stId]) nextVariables[stId].value = `words = ${st.trieData.wordsCount}`;
+        }
+        explanation = `Completed insertion of word "${ev.word}" into Trie ${stId}`;
+        break;
+      }
+
+      case 'TRIE_SEARCH_START': {
+        const st = nextStructures[stId];
+        if (st && st.trieData) {
+          st.trieData.activeSearchWord = ev.word;
+          st.trieData.activeSearchPath = ['root'];
+          st.trieData.searchResult = null;
+          st.lastOperation = `search("${ev.word}")`;
+        }
+        explanation = `Started Trie search for "${ev.word}"`;
+        break;
+      }
+
+      case 'TRIE_SEARCH_STEP': {
+        const st = nextStructures[stId];
+        if (st && st.trieData && ev.nodeId) {
+          st.trieData.activeSearchPath = [...(st.trieData.activeSearchPath || []), ev.nodeId];
+          st.lastOperation = `step('${ev.char}')`;
+        }
+        explanation = `Trie search step for character '${ev.char}'`;
+        break;
+      }
+
+      case 'TRIE_WORD_FOUND':
+      case 'TRIE_WORD_NOT_FOUND': {
+        const st = nextStructures[stId];
+        const isFound = ev.type === 'TRIE_WORD_FOUND' || !!ev.conditionResult;
+        if (st && st.trieData) {
+          st.trieData.searchResult = isFound ? 'FOUND' : 'NOT_FOUND';
+          st.lastOperation = `search("${ev.word}") ➔ ${isFound ? 'FOUND ✓' : 'NOT FOUND ✗'}`;
+        }
+        nextComparison = {
+          left: `"${ev.word}"`,
+          right: 'Trie',
+          operator: '∈',
+          result: isFound,
+          explanation: `Word "${ev.word}" ${isFound ? 'EXISTS in Trie' : 'NOT FOUND in Trie'}`,
+        };
+        explanation = `Trie search for "${ev.word}": ${isFound ? 'FOUND ✓' : 'NOT FOUND ✗'}`;
+        break;
+      }
+
+      case 'TRIE_CLEAR': {
+        const st = nextStructures[stId];
+        if (st && st.trieData) {
+          st.trieData = {
+            rootId: 'root',
+            nodes: { root: { id: 'root', char: 'root', isWord: false, children: {} } },
+            wordsCount: 0,
+            words: [],
+          };
+          st.size = 1;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'words = 0';
+        }
+        explanation = `Cleared Trie ${stId}`;
         break;
       }
 

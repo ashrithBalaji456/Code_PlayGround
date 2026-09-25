@@ -1,6 +1,6 @@
 import React from 'react';
 import { DataStructureState } from '../../types/execution';
-import { Database, Eye, Layers, ListOrdered, Hash, CheckSquare } from 'lucide-react';
+import { Database, Eye, Layers, ListOrdered, Hash, CheckSquare, GitFork, GitBranch, Network } from 'lucide-react';
 
 interface DataStructuresPanelProps {
   structures: Record<string, DataStructureState>;
@@ -27,7 +27,14 @@ export const DataStructuresPanel: React.FC<DataStructuresPanelProps> = ({
       case 'set':
         return <CheckSquare className="w-4 h-4 text-[#a371f7]" />;
       case 'priorityqueue':
+      case 'heap':
         return <Database className="w-4 h-4 text-[#d29922]" />;
+      case 'tree':
+        return <GitFork className="w-4 h-4 text-[#d29922]" />;
+      case 'bst':
+        return <GitBranch className="w-4 h-4 text-[#58a6ff]" />;
+      case 'trie':
+        return <Network className="w-4 h-4 text-[#bc8cff]" />;
       default:
         return <Database className="w-4 h-4 text-[#8b949e]" />;
     }
@@ -63,7 +70,7 @@ export const DataStructuresPanel: React.FC<DataStructuresPanelProps> = ({
             <Database className="w-8 h-8 mb-2 opacity-40 text-[#8b949e]" />
             <p className="text-xs font-mono">No data structures active in current step.</p>
             <p className="text-[11px] text-[#8b949e]/80 mt-1 max-w-xs">
-              Instantiate a Stack, Queue, Deque, LinkedList, HashMap, HashSet, or PriorityQueue to inspect its live state.
+              Instantiate a Stack, Queue, Deque, LinkedList, HashMap, HashSet, PriorityQueue, Binary Tree, BST, Heap, or Trie to inspect its live state.
             </p>
           </div>
         ) : (

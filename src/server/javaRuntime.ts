@@ -290,6 +290,170 @@ public class CodeFlowTracer {
         recordEvent("{\\"type\\":\\"PRIORITYQUEUE_PEEK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
     }
 
+    // === BINARY TREE & BST ===
+    public static void treeCreate(String structId, String varName, String type, int line) {
+        recordEvent("{\\"type\\":\\"TREE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"tree\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void treeNodeCreate(String structId, String nodeId, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"TREE_NODE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + valStr + "}");
+    }
+
+    public static void treeNodeDelete(String structId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_NODE_DELETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void treeLinkLeft(String structId, String parentNodeId, String childNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_LINK_LEFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\",\\"childNodeId\\":\\"" + childNodeId + "\\"}");
+    }
+
+    public static void treeLinkRight(String structId, String parentNodeId, String childNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_LINK_RIGHT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\",\\"childNodeId\\":\\"" + childNodeId + "\\"}");
+    }
+
+    public static void treeUnlinkLeft(String structId, String parentNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_UNLINK_LEFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\"}");
+    }
+
+    public static void treeUnlinkRight(String structId, String parentNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_UNLINK_RIGHT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\"}");
+    }
+
+    public static void treeNodeVisit(String structId, String nodeId, Object val, String traversalType, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"TREE_NODE_VISIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + valStr + ",\\"traversal\\":\\"" + traversalType + "\\"}");
+    }
+
+    public static void treeRootUpdate(String structId, String rootNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_ROOT_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + rootNodeId + "\\"}");
+    }
+
+    public static void treeClear(String structId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    public static void bstCreate(String structId, String varName, String type, int line) {
+        recordEvent("{\\"type\\":\\"BST_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"bst\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void bstInsert(String structId, String nodeId, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"BST_INSERT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + valStr + "}");
+    }
+
+    public static void bstCompare(String structId, String nodeId, Object val, Object nodeVal, String op, boolean res, int line) {
+        String valStr = formatValue(val);
+        String nodeValStr = formatValue(nodeVal);
+        recordEvent("{\\"type\\":\\"BST_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"leftVal\\":" + valStr + ",\\"rightVal\\":" + nodeValStr + ",\\"operator\\":\\"" + op + "\\",\\"conditionResult\\":" + res + "}");
+    }
+
+    public static void bstSearchStart(String structId, Object targetVal, int line) {
+        String valStr = formatValue(targetVal);
+        recordEvent("{\\"type\\":\\"BST_SEARCH_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + valStr + "}");
+    }
+
+    public static void bstMoveLeft(String structId, String fromNodeId, String toNodeId, int line) {
+        recordEvent("{\\"type\\":\\"BST_MOVE_LEFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + fromNodeId + "\\",\\"childNodeId\\":\\"" + toNodeId + "\\"}");
+    }
+
+    public static void bstMoveRight(String structId, String fromNodeId, String toNodeId, int line) {
+        recordEvent("{\\"type\\":\\"BST_MOVE_RIGHT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + fromNodeId + "\\",\\"childNodeId\\":\\"" + toNodeId + "\\"}");
+    }
+
+    public static void bstNodeFound(String structId, String nodeId, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"BST_NODE_FOUND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + valStr + "}");
+    }
+
+    public static void bstSearchEnd(String structId, Object targetVal, boolean found, int line) {
+        String valStr = formatValue(targetVal);
+        recordEvent("{\\"type\\":\\"BST_SEARCH_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + valStr + ",\\"conditionResult\\":" + found + "}");
+    }
+
+    public static void bstDelete(String structId, String nodeId, Object val, String caseDesc, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"BST_DELETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + valStr + ",\\"detail\\":\\"" + caseDesc + "\\"}");
+    }
+
+    // === HEAP ===
+    public static void heapCreate(String structId, String varName, String type, boolean isMin, int line) {
+        recordEvent("{\\"type\\":\\"HEAP_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"heap\\",\\"dataType\\":\\"" + type + "\\",\\"heapType\\":\\"" + (isMin ? "MIN" : "MAX") + "\\",\\"size\\":0}");
+    }
+
+    public static void heapInsert(String structId, Object val, List<?> elements, int line) {
+        String valStr = formatValue(val);
+        String elemsJson = formatList(elements);
+        recordEvent("{\\"type\\":\\"HEAP_INSERT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + valStr + ",\\"values\\":" + elemsJson + ",\\"size\\":" + elements.size() + "}");
+    }
+
+    public static void heapCompare(String structId, int idx1, int idx2, Object val1, Object val2, String op, boolean res, int line) {
+        String val1Str = formatValue(val1);
+        String val2Str = formatValue(val2);
+        recordEvent("{\\"type\\":\\"HEAP_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + idx1 + ",\\"toIndex\\":" + idx2 + ",\\"leftVal\\":" + val1Str + ",\\"rightVal\\":" + val2Str + ",\\"operator\\":\\"" + op + "\\",\\"conditionResult\\":" + res + "}");
+    }
+
+    public static void heapSwap(String structId, int idx1, int idx2, Object val1, Object val2, List<?> elements, int line) {
+        String val1Str = formatValue(val1);
+        String val2Str = formatValue(val2);
+        String elemsJson = formatList(elements);
+        recordEvent("{\\"type\\":\\"HEAP_SWAP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + idx1 + ",\\"toIndex\\":" + idx2 + ",\\"leftVal\\":" + val1Str + ",\\"rightVal\\":" + val2Str + ",\\"values\\":" + elemsJson + ",\\"size\\":" + elements.size() + "}");
+    }
+
+    public static void heapifyUp(String structId, int idx, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"HEAPIFY_UP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + idx + ",\\"value\\":" + valStr + "}");
+    }
+
+    public static void heapifyDown(String structId, int idx, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"HEAPIFY_DOWN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + idx + ",\\"value\\":" + valStr + "}");
+    }
+
+    public static void heapRemove(String structId, Object val, List<?> elements, int line) {
+        String valStr = formatValue(val);
+        String elemsJson = formatList(elements);
+        recordEvent("{\\"type\\":\\"HEAP_REMOVE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + valStr + ",\\"values\\":" + elemsJson + ",\\"size\\":" + elements.size() + "}");
+    }
+
+    public static void heapPeek(String structId, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"HEAP_PEEK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + valStr + "}");
+    }
+
+    // === TRIE ===
+    public static void trieCreate(String structId, String varName, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"trie\\",\\"dataType\\":\\"Trie\\",\\"size\\":0}");
+    }
+
+    public static void trieNodeCreate(String structId, String nodeId, String ch, String parentNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_NODE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"char\\":\\"" + ch + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\"}");
+    }
+
+    public static void trieEdgeCreate(String structId, String parentNodeId, String childNodeId, String ch, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_EDGE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\",\\"childNodeId\\":\\"" + childNodeId + "\\",\\"char\\":\\"" + ch + "\\"}");
+    }
+
+    public static void trieWordComplete(String structId, String nodeId, String word, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_WORD_COMPLETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"word\\":\\"" + word + "\\"}");
+    }
+
+    public static void trieSearchStart(String structId, String word, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_SEARCH_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"word\\":\\"" + word + "\\"}");
+    }
+
+    public static void trieSearchStep(String structId, String nodeId, String ch, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_SEARCH_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"char\\":\\"" + ch + "\\"}");
+    }
+
+    public static void trieWordFound(String structId, String word, boolean found, int line) {
+        recordEvent("{\\"type\\":\\"" + (found ? "TRIE_WORD_FOUND" : "TRIE_WORD_NOT_FOUND") + "\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"word\\":\\"" + word + "\\",\\"conditionResult\\":" + found + "}");
+    }
+
+    public static void trieClear(String structId, int line) {
+        recordEvent("{\\"type\\":\\"TRIE_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
     // === CONTROL FLOW & UTILITIES ===
     public static void condition(String expr, boolean result, int line) {
         String cleanExpr = expr.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");

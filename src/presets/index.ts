@@ -359,5 +359,323 @@ public class Main {
 }
 `,
   },
+  {
+    id: 'p3-binary-tree',
+    title: '1. Binary Tree (Nodes & References)',
+    category: 'Trees & Heaps',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'Dynamic binary tree creation distinguishing node values from left and right child references.',
+    explanation: 'Creates a 5-node binary tree with left and right reference pointers.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        TreeNode root = new TreeNode(10);
+        root.left = new TreeNode(20);
+        root.right = new TreeNode(30);
+        root.left.left = new TreeNode(40);
+        root.left.right = new TreeNode(50);
+    }
+}
+`,
+  },
+  {
+    id: 'p3-tree-traversal',
+    title: '2. Tree Traversals (Inorder / Pre / Post)',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(H)',
+    description: 'Step-by-step traversal highlighting nodes in real-time order with call stack synchronization.',
+    explanation: 'Executes recursive traversals while highlighting active nodes on the canvas.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        TreeNode root = new TreeNode(10);
+        root.left = new TreeNode(20);
+        root.right = new TreeNode(30);
+        root.left.left = new TreeNode(40);
+        root.left.right = new TreeNode(50);
+
+        inorder(root);
+        preorder(root);
+        postorder(root);
+    }
+
+    static void inorder(TreeNode node) {
+        if (node == null) return;
+        inorder(node.left);
+        System.out.println(node.val);
+        inorder(node.right);
+    }
+
+    static void preorder(TreeNode node) {
+        if (node == null) return;
+        System.out.println(node.val);
+        preorder(node.left);
+        preorder(node.right);
+    }
+
+    static void postorder(TreeNode node) {
+        if (node == null) return;
+        postorder(node.left);
+        postorder(node.right);
+        System.out.println(node.val);
+    }
+}
+`,
+  },
+  {
+    id: 'p3-bst-insert',
+    title: '3. BST Insertion (Decision Path)',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Binary Search Tree insertion displaying comparison decision path: 40 < 50 ? TRUE ➔ Left.',
+    explanation: 'Builds a balanced BST by comparing each inserted value against parent nodes.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        BST bst = new BST();
+        bst.insert(50);
+        bst.insert(30);
+        bst.insert(70);
+        bst.insert(20);
+        bst.insert(40);
+        bst.insert(60);
+        bst.insert(80);
+    }
+}
+`,
+  },
+  {
+    id: 'p3-bst-search',
+    title: '4. BST Search (Path Traversal)',
+    category: 'Trees & Heaps',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(1)',
+    description: 'Search in BST illustrating comparison branch decisions down to found node.',
+    explanation: 'Navigates left or right based on key comparison until target 60 is located.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        BST bst = new BST();
+        bst.insert(50);
+        bst.insert(30);
+        bst.insert(70);
+        bst.insert(60);
+
+        bst.search(60);
+        bst.search(25);
+    }
+}
+`,
+  },
+  {
+    id: 'p3-bst-delete',
+    title: '5. BST Deletion (Leaf & 2-Child Cases)',
+    category: 'Trees & Heaps',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(1)',
+    description: 'BST deletion demonstrating leaf removal (20) and two-child in-order successor replacement (70).',
+    explanation: 'Removes nodes and automatically updates references according to BST invariant.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        BST bst = new BST();
+        bst.insert(50);
+        bst.insert(30);
+        bst.insert(70);
+        bst.insert(20);
+        bst.insert(40);
+        bst.insert(60);
+        bst.insert(80);
+
+        // Delete leaf node 20
+        bst.delete(20);
+
+        // Delete node 70 with two children (60 and 80)
+        bst.delete(70);
+    }
+}
+`,
+  },
+  {
+    id: 'p3-min-heap',
+    title: '6. Min Heap (Heapify Up & Down)',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Complete binary tree layout with synchronized linear array representation and heapify swaps.',
+    explanation: 'Maintains min-heap property where parent <= children at all levels.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        PriorityQueue<Integer> minHeap = new PriorityQueue<>();
+
+        minHeap.add(20);
+        minHeap.add(40);
+        minHeap.add(30);
+        minHeap.add(10);
+        minHeap.add(50);
+
+        minHeap.poll();
+    }
+}
+`,
+  },
+  {
+    id: 'p3-max-heap',
+    title: '7. Max Heap (Reverse Priority)',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Max Heap with root holding the maximum element, comparing and swapping upwards.',
+    explanation: 'Uses Collections.reverseOrder() to extract maximum items first.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        PriorityQueue<Integer> maxHeap = new PriorityQueue<>(Collections.reverseOrder());
+
+        maxHeap.add(20);
+        maxHeap.add(40);
+        maxHeap.add(10);
+        maxHeap.add(50);
+        maxHeap.add(30);
+
+        maxHeap.poll();
+    }
+}
+`,
+  },
+  {
+    id: 'p3-trie-insert',
+    title: '8. Trie Insertion (Shared Prefixes)',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(L)',
+    spaceComplexity: 'O(ALPHABET * L)',
+    description: 'Trie prefix tree inserting "cat", "car", "dog" with merged prefix branches.',
+    explanation: 'Visualizes character path sharing between "cat" and "car" under prefix "ca".',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Trie trie = new Trie();
+
+        trie.insert("cat");
+        trie.insert("car");
+        trie.insert("dog");
+    }
+}
+`,
+  },
+  {
+    id: 'p3-trie-search',
+    title: '9. Trie Search & Prefix Check',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(L)',
+    spaceComplexity: 'O(1)',
+    description: 'Searches for full words and prefixes with real-time green/red decision ribbons.',
+    explanation: 'Traverses characters along branches: "car" ➔ FOUND, "can" ➔ NOT FOUND.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        Trie trie = new Trie();
+
+        trie.insert("cat");
+        trie.insert("car");
+        trie.insert("dog");
+
+        trie.search("car");
+        trie.search("can");
+        trie.startsWith("ca");
+    }
+}
+`,
+  },
+  {
+    id: 'p3-multi-structures',
+    title: '10. Multiple Independent Trees & Heaps',
+    category: 'Trees & Heaps',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(N)',
+    description: 'Simultaneously provisions and updates treeA, treeB, and bstA without interference.',
+    explanation: 'Verifies complete structure isolation across multiple hierarchical structures.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        TreeNode treeA = new TreeNode(10);
+        treeA.left = new TreeNode(20);
+        treeA.right = new TreeNode(30);
+
+        TreeNode treeB = new TreeNode(50);
+        treeB.left = new TreeNode(60);
+        treeB.right = new TreeNode(70);
+
+        BST bstA = new BST();
+        bstA.insert(40);
+        bstA.insert(20);
+        bstA.insert(60);
+    }
+}
+`,
+  },
+  {
+    id: 'p3-final-demo',
+    title: '★ Phase 3 Final Demo (All Hierarchies)',
+    category: 'Trees & Heaps',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(N log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Comprehensive demo running Binary Tree, BST, Min-Heap, and Trie simultaneously.',
+    explanation: 'The UI automatically detects and displays all 4 hierarchical structures in parallel from actual execution.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        // 1. Binary Tree
+        TreeNode root = new TreeNode(10);
+        root.left = new TreeNode(20);
+        root.right = new TreeNode(30);
+
+        // 2. Binary Search Tree
+        BST bst = new BST();
+        bst.insert(50);
+        bst.insert(30);
+        bst.insert(70);
+        bst.insert(20);
+        bst.insert(40);
+
+        // 3. PriorityQueue / Min Heap
+        PriorityQueue<Integer> minHeap = new PriorityQueue<>();
+        minHeap.add(20);
+        minHeap.add(30);
+        minHeap.add(10);
+
+        // 4. Prefix Trie
+        Trie trie = new Trie();
+        trie.insert("cat");
+        trie.insert("car");
+        trie.insert("dog");
+        trie.search("car");
+    }
+}
+`,
+  },
 ];
 

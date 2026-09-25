@@ -6,6 +6,8 @@ import { QueueVisualizer } from './visualizers/QueueVisualizer';
 import { DequeVisualizer } from './visualizers/DequeVisualizer';
 import { LinkedListVisualizer } from './visualizers/LinkedListVisualizer';
 import { TreeVisualizer } from './visualizers/TreeVisualizer';
+import { HeapVisualizer } from './visualizers/HeapVisualizer';
+import { TrieVisualizer } from './visualizers/TrieVisualizer';
 import { HashMapVisualizer } from './visualizers/HashMapVisualizer';
 import { HashSetVisualizer } from './visualizers/HashSetVisualizer';
 import { PriorityQueueVisualizer } from './visualizers/PriorityQueueVisualizer';
@@ -170,10 +172,24 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   visualizer = <HashSetVisualizer structure={st} lastEvent={currentStep.event} />;
                   break;
                 case 'priorityqueue':
-                  visualizer = <PriorityQueueVisualizer structure={st} lastEvent={currentStep.event} />;
+                  visualizer = (
+                    <div className="flex flex-col gap-3">
+                      <PriorityQueueVisualizer structure={st} lastEvent={currentStep.event} />
+                      {st.priorityQueueData && st.priorityQueueData.length > 0 && (
+                        <HeapVisualizer structure={st} lastEvent={currentStep.event} />
+                      )}
+                    </div>
+                  );
+                  break;
+                case 'heap':
+                  visualizer = <HeapVisualizer structure={st} lastEvent={currentStep.event} />;
                   break;
                 case 'tree':
+                case 'bst':
                   visualizer = <TreeVisualizer structure={st} />;
+                  break;
+                case 'trie':
+                  visualizer = <TrieVisualizer structure={st} />;
                   break;
                 case 'graph':
                   visualizer = <GraphVisualizer structure={st} />;
