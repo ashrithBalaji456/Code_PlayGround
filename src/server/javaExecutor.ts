@@ -368,8 +368,8 @@ public class Graph {
     const pkgFiles = fs.readdirSync(pkgDir).filter((f) => f.endsWith('.java')).map((f) => `"${path.join(pkgDir, f)}"`).join(' ');
     await new Promise<void>((resolve, reject) => {
       exec(
-        `javac -cp "${sandboxDir}" ${pkgFiles}`,
-        { timeout: 4000 },
+        `javac -d "${sandboxDir}" -cp "${sandboxDir}" ${pkgFiles}`,
+        { timeout: 4000, cwd: sandboxDir },
         (error, _stdout, stderr) => {
           if (error) {
             reject(new Error(`Failed to compile instrumented code: ${stderr || error.message}`));

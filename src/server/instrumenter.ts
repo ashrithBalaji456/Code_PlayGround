@@ -22,7 +22,11 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const rawLine = lines[lineIdx];
     const lineNum = lineIdx + 1;
-    const trimmed = rawLine.trim();
+    const trimmed = rawLine.replace(/\/\/.*$/, '').trim();
+    if (trimmed.length === 0) {
+      outputLines.push(rawLine);
+      continue;
+    }
 
     // Check main method signature
     if (trimmed.includes('public static void main(String[] args)') || trimmed.includes('public static void main(String args[])')) {
@@ -954,7 +958,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
           const parts = p.trim().split(/\s+/);
           return parts[parts.length - 1];
         });
-        const argsJsonExpr = paramPairs.map((p) => `\\"${p}\\":\" + ${p} + \"`).join(',');
+        const argsJsonExpr = paramPairs.map((p) => `\\"${p}\\":\\"" + String.valueOf(${p}) + "\\"`).join(',');
         outputLines.push(`    CodeFlowTracer.funcCall("${fnName}", "{" + "${argsJsonExpr}" + "}", ${lineNum});`);
       } else {
         outputLines.push(`    CodeFlowTracer.funcCall("${fnName}", "{}", ${lineNum});`);
