@@ -109,25 +109,255 @@ export const CODE_PRESETS: CodePreset[] = [
 `,
   },
   {
-    id: 'p1-condition-branch',
-    title: 'Condition Evaluation (if/else)',
-    category: 'Arrays & Sorting',
+    id: 'p2-final-demo',
+    title: 'Phase 2 Demo: All Core Structures',
+    category: 'Stacks & Queues',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(N)',
+    description: 'Simultaneously provisions and executes Stack, Queue, LinkedList, HashMap, and HashSet.',
+    explanation: 'Comprehensive demonstration proving multi-structure visualization, independent life-cycles, and zero fake state.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Stack<Integer> stack = new Stack<>();
+        Queue<Integer> queue = new LinkedList<>();
+        LinkedList<Integer> list = new LinkedList<>();
+        HashMap<String, Integer> map = new HashMap<>();
+        HashSet<Integer> set = new HashSet<>();
+
+        stack.push(10);
+        stack.push(20);
+
+        queue.add(30);
+        queue.add(40);
+
+        list.add(50);
+        list.add(60);
+
+        map.put("Java", 90);
+        map.put("DSA", 95);
+
+        set.add(100);
+        set.add(200);
+
+        stack.pop();
+        queue.poll();
+        list.removeFirst();
+        map.put("Java", 100);
+        set.remove(100);
+    }
+}
+`,
+  },
+  {
+    id: 'p2-stack',
+    title: 'Stack (LIFO)',
+    category: 'Stacks & Queues',
     difficulty: 'Easy',
     language: 'java',
     timeComplexity: 'O(1)',
-    spaceComplexity: 'O(1)',
-    description: 'Visual condition evaluation showing 15 > 10 ➔ TRUE and branch execution.',
-    explanation: 'Evaluates boolean comparison on the fly and highlights the executing code branch.',
-    code: `public class Main {
+    spaceComplexity: 'O(N)',
+    description: 'Stack creation, push(10, 20, 30), peek(), and pop() with TOP pointer tracking.',
+    explanation: 'Demonstrates Last-In First-Out semantics with animated element transitions at the TOP.',
+    code: `import java.util.*;
+
+public class Main {
     public static void main(String[] args) {
-        int x = 15;
-        if (x > 10) {
-            System.out.println("x is greater than 10");
-        } else {
-            System.out.println("x is 10 or less");
-        }
+        Stack<Integer> stack = new Stack<>();
+
+        stack.push(10);
+        stack.push(20);
+        stack.push(30);
+
+        stack.peek();
+        stack.pop();
+    }
+}
+`,
+  },
+  {
+    id: 'p2-multi-stacks',
+    title: 'Multiple Independent Stacks',
+    category: 'Stacks & Queues',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'Provisions three distinct visual stacks for a, b, and c without hardcoding.',
+    explanation: 'Verifies that multiple structures of the same type never interfere with each other.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Stack<Integer> a = new Stack<>();
+        Stack<Integer> b = new Stack<>();
+        Stack<Integer> c = new Stack<>();
+
+        a.push(10);
+        b.push(20);
+        c.push(30);
+    }
+}
+`,
+  },
+  {
+    id: 'p2-queue',
+    title: 'Queue (FIFO)',
+    category: 'Stacks & Queues',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'FIFO Queue with add(), peek(), and poll() animating FRONT to REAR.',
+    explanation: 'Demonstrates First-In First-Out semantics where elements enter at REAR and leave at FRONT.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Queue<Integer> queue = new LinkedList<>();
+
+        queue.add(10);
+        queue.add(20);
+        queue.add(30);
+
+        queue.peek();
+        queue.poll();
+    }
+}
+`,
+  },
+  {
+    id: 'p2-deque',
+    title: 'Deque (Double-Ended Queue)',
+    category: 'Stacks & Queues',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'Double-ended queue with addFirst, addLast, removeFirst, removeLast.',
+    explanation: 'Visualizes bidirectional insertion and extraction at both FRONT and REAR terminals.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Deque<Integer> deque = new ArrayDeque<>();
+
+        deque.addFirst(10);
+        deque.addLast(20);
+
+        deque.removeFirst();
+        deque.removeLast();
+    }
+}
+`,
+  },
+  {
+    id: 'p2-linkedlist',
+    title: 'LinkedList Operations',
+    category: 'Linked Lists',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(N)',
+    description: 'Node chaining (Node #101 -> Node #102), indexed insertion, and deletion.',
+    explanation: 'Displays genuine node references and pointer link updates without replacing the whole view.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        LinkedList<Integer> list = new LinkedList<>();
+
+        list.add(10);
+        list.add(20);
+        list.add(30);
+
+        list.add(1, 15);
+        list.remove(2);
+    }
+}
+`,
+  },
+  {
+    id: 'p2-hashmap',
+    title: 'HashMap (Hashing & Buckets)',
+    category: 'Hash Tables',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'Key hashing, bucket mapping, put, get, update, and remove.',
+    explanation: 'Illustrates key -> hashCode() -> bucket mapping and collision chain grouping.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        HashMap<String, Integer> map = new HashMap<>();
+
+        map.put("Java", 90);
+        map.put("DSA", 95);
+
+        map.get("Java");
+
+        map.put("Java", 100);
+
+        map.remove("DSA");
+    }
+}
+`,
+  },
+  {
+    id: 'p2-hashset',
+    title: 'HashSet (Uniqueness & Duplicates)',
+    category: 'Hash Tables',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'Set uniqueness check, duplicate element rejection animation, and contains().',
+    explanation: 'Demonstrates duplicate rejection when adding existing elements and active membership testing.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        HashSet<Integer> set = new HashSet<>();
+
+        set.add(10);
+        set.add(20);
+        set.add(10);
+
+        set.contains(20);
+        set.remove(10);
+    }
+}
+`,
+  },
+  {
+    id: 'p2-priorityqueue',
+    title: 'PriorityQueue (Logical vs Heap)',
+    category: 'Trees & Heaps',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Min-priority queue distinguishing logical priority order from internal heap array.',
+    explanation: 'Shows element with highest priority (min value) at head ready to be polled next.',
+    code: `import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        PriorityQueue<Integer> pq = new PriorityQueue<>();
+
+        pq.add(30);
+        pq.add(10);
+        pq.add(20);
+
+        pq.poll();
     }
 }
 `,
   },
 ];
+

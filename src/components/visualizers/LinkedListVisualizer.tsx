@@ -66,7 +66,7 @@ export const LinkedListVisualizer: React.FC<LinkedListVisualizerProps> = ({
         {orderedNodes.length === 0 ? (
           <div className="text-xs text-[#8b949e] font-mono mx-auto">[ Empty List (head is null) ]</div>
         ) : (
-          orderedNodes.map((node, idx) => {
+          orderedNodes.map((node) => {
             const activePtrs = pointersByNodeId[node.id] || [];
             const isHead = node.id === llData.headId;
 

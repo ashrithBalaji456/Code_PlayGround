@@ -27,10 +27,32 @@ export type EventType =
   | 'STACK_PUSH'
   | 'STACK_POP'
   | 'STACK_PEEK'
+  | 'STACK_CLEAR'
+  | 'STACK_ACCESS'
   | 'QUEUE_CREATE'
   | 'QUEUE_ENQUEUE'
   | 'QUEUE_DEQUEUE'
   | 'QUEUE_PEEK'
+  | 'QUEUE_CLEAR'
+  | 'QUEUE_ACCESS'
+  | 'DEQUE_CREATE'
+  | 'DEQUE_ADD_FIRST'
+  | 'DEQUE_ADD_LAST'
+  | 'DEQUE_REMOVE_FIRST'
+  | 'DEQUE_REMOVE_LAST'
+  | 'DEQUE_PEEK_FIRST'
+  | 'DEQUE_PEEK_LAST'
+  | 'DEQUE_CLEAR'
+  | 'LINKEDLIST_CREATE'
+  | 'LINKEDLIST_ADD'
+  | 'LINKEDLIST_ADD_FIRST'
+  | 'LINKEDLIST_ADD_LAST'
+  | 'LINKEDLIST_REMOVE'
+  | 'LINKEDLIST_REMOVE_FIRST'
+  | 'LINKEDLIST_REMOVE_LAST'
+  | 'LINKEDLIST_SET'
+  | 'LINKEDLIST_GET'
+  | 'LINKEDLIST_CLEAR'
   | 'NODE_CREATE'
   | 'NODE_LINK'
   | 'NODE_UNLINK'
@@ -41,10 +63,23 @@ export type EventType =
   | 'MAP_CREATE'
   | 'MAP_INSERT'
   | 'MAP_LOOKUP'
+  | 'MAP_UPDATE'
   | 'MAP_DELETE'
+  | 'MAP_CLEAR'
+  | 'MAP_ACCESS'
+  | 'HASH_CALCULATE'
+  | 'BUCKET_SELECT'
   | 'SET_CREATE'
   | 'SET_ADD'
   | 'SET_REMOVE'
+  | 'SET_LOOKUP'
+  | 'SET_CLEAR'
+  | 'SET_ACCESS'
+  | 'PRIORITYQUEUE_CREATE'
+  | 'PRIORITYQUEUE_ADD'
+  | 'PRIORITYQUEUE_POLL'
+  | 'PRIORITYQUEUE_PEEK'
+  | 'PRIORITYQUEUE_CLEAR'
   | 'GRAPH_NODE_CREATE'
   | 'GRAPH_EDGE_CREATE'
   | 'GRAPH_EDGE_DELETE'
@@ -84,6 +119,10 @@ export interface ExecutionEvent {
   message?: string;
   arrayId?: string;
   step?: number;
+  key?: any;
+  hash?: number;
+  bucket?: number;
+  size?: number;
   detail?: string;
   meta?: Record<string, any>;
 }
@@ -146,13 +185,17 @@ export interface GraphEdgeData {
 export interface DataStructureState {
   id: string;
   name: string;
-  type: 'array' | 'matrix' | 'stack' | 'queue' | 'linkedlist' | 'tree' | 'map' | 'set' | 'graph';
+  type: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'map' | 'set' | 'graph' | 'priorityqueue';
   dataType: string;
+  size?: number;
+  elements?: any[];
   // Specific data representations:
   arrayData?: any[];
   matrixData?: any[][];
   stackData?: any[];
   queueData?: any[];
+  dequeData?: any[];
+  priorityQueueData?: any[];
   linkedListData?: {
     headId: string | null;
     nodes: Record<string, LinkedListNode>;
@@ -170,6 +213,7 @@ export interface DataStructureState {
     nodes: GraphNodeData[];
     edges: GraphEdgeData[];
   };
+  metadata?: Record<string, any>;
   // Visual indicators
   activeIndices?: number[];
   comparingIndices?: number[];

@@ -83,6 +83,214 @@ public class CodeFlowTracer {
         recordEvent("{\\"type\\":\\"ARRAY_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"arrayId\\":\\"" + name + "\\",\\"structureId\\":\\"" + name + "\\",\\"index\\":" + index + ",\\"value\\":" + val + "}");
     }
 
+    // === STACK ===
+    public static void stackCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"STACK_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"stack\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void stackPush(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"STACK_PUSH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void stackPop(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"STACK_POP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void stackPeek(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"STACK_PEEK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void stackClear(String name, int line) {
+        recordEvent("{\\"type\\":\\"STACK_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"size\\":0}");
+    }
+
+    // === QUEUE ===
+    public static void queueCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"QUEUE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"queue\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void queueEnqueue(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"QUEUE_ENQUEUE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void queueDequeue(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"QUEUE_DEQUEUE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void queuePeek(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"QUEUE_PEEK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void queueClear(String name, int line) {
+        recordEvent("{\\"type\\":\\"QUEUE_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"size\\":0}");
+    }
+
+    // === DEQUE ===
+    public static void dequeCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"DEQUE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"deque\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void dequeAddFirst(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DEQUE_ADD_FIRST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void dequeAddLast(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DEQUE_ADD_LAST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void dequeRemoveFirst(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DEQUE_REMOVE_FIRST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void dequeRemoveLast(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DEQUE_REMOVE_LAST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void dequePeekFirst(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DEQUE_PEEK_FIRST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void dequePeekLast(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DEQUE_PEEK_LAST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    // === LINKED LIST ===
+    public static void linkedListCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"LINKEDLIST_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"linkedlist\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void linkedListAdd(String name, Object val, int index, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_ADD\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"index\\":" + index + ",\\"size\\":" + size + "}");
+    }
+
+    public static void linkedListAddFirst(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_ADD_FIRST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void linkedListAddLast(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_ADD_LAST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void linkedListRemove(String name, Object val, int index, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_REMOVE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"index\\":" + index + ",\\"size\\":" + size + "}");
+    }
+
+    public static void linkedListRemoveFirst(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_REMOVE_FIRST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void linkedListRemoveLast(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_REMOVE_LAST\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    public static void linkedListSet(String name, int index, Object oldVal, Object newVal, int line) {
+        String oldStr = formatValue(oldVal);
+        String newStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_SET\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"index\\":" + index + ",\\"oldValue\\":" + oldStr + ",\\"newValue\\":" + newStr + "}");
+    }
+
+    public static void linkedListGet(String name, int index, Object val, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"LINKEDLIST_GET\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"index\\":" + index + ",\\"value\\":" + valStr + "}");
+    }
+
+    public static void linkedListClear(String name, int line) {
+        recordEvent("{\\"type\\":\\"LINKEDLIST_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"size\\":0}");
+    }
+
+    // === HASHMAP ===
+    public static void mapCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"MAP_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"map\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void mapPut(String name, Object key, Object val, Object oldVal, int hash, int bucket, int size, int line) {
+        String keyStr = formatValue(key);
+        String valStr = formatValue(val);
+        String oldStr = formatValue(oldVal);
+        recordEvent("{\\"type\\":\\"MAP_INSERT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"key\\":" + keyStr + ",\\"value\\":" + valStr + ",\\"oldValue\\":" + oldStr + ",\\"hash\\":" + hash + ",\\"bucket\\":" + bucket + ",\\"size\\":" + size + "}");
+    }
+
+    public static void mapGet(String name, Object key, Object val, int hash, int bucket, int line) {
+        String keyStr = formatValue(key);
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"MAP_LOOKUP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"key\\":" + keyStr + ",\\"value\\":" + valStr + ",\\"hash\\":" + hash + ",\\"bucket\\":" + bucket + "}");
+    }
+
+    public static void mapRemove(String name, Object key, Object val, int hash, int bucket, int size, int line) {
+        String keyStr = formatValue(key);
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"MAP_DELETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"key\\":" + keyStr + ",\\"value\\":" + valStr + ",\\"hash\\":" + hash + ",\\"bucket\\":" + bucket + ",\\"size\\":" + size + "}");
+    }
+
+    public static void mapClear(String name, int line) {
+        recordEvent("{\\"type\\":\\"MAP_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"size\\":0}");
+    }
+
+    // === HASHSET ===
+    public static void setCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"SET_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"set\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void setAdd(String name, Object val, boolean added, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"SET_ADD\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"conditionResult\\":" + added + ",\\"size\\":" + size + "}");
+    }
+
+    public static void setRemove(String name, Object val, boolean removed, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"SET_REMOVE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"conditionResult\\":" + removed + ",\\"size\\":" + size + "}");
+    }
+
+    public static void setContains(String name, Object val, boolean found, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"SET_LOOKUP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"conditionResult\\":" + found + "}");
+    }
+
+    public static void setClear(String name, int line) {
+        recordEvent("{\\"type\\":\\"SET_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"size\\":0}");
+    }
+
+    // === PRIORITY QUEUE ===
+    public static void priorityQueueCreate(String name, String type, int line) {
+        recordEvent("{\\"type\\":\\"PRIORITYQUEUE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"priorityqueue\\",\\"dataType\\":\\"" + type + "\\",\\"size\\":0}");
+    }
+
+    public static void priorityQueueAdd(String name, Object val, List<?> elements, int size, int line) {
+        String valStr = formatValue(val);
+        String elemsJson = formatList(elements);
+        recordEvent("{\\"type\\":\\"PRIORITYQUEUE_ADD\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"values\\":" + elemsJson + ",\\"size\\":" + size + "}");
+    }
+
+    public static void priorityQueuePoll(String name, Object val, List<?> elements, int size, int line) {
+        String valStr = formatValue(val);
+        String elemsJson = formatList(elements);
+        recordEvent("{\\"type\\":\\"PRIORITYQUEUE_POLL\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"values\\":" + elemsJson + ",\\"size\\":" + size + "}");
+    }
+
+    public static void priorityQueuePeek(String name, Object val, int size, int line) {
+        String valStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"PRIORITYQUEUE_PEEK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"value\\":" + valStr + ",\\"size\\":" + size + "}");
+    }
+
+    // === CONTROL FLOW & UTILITIES ===
     public static void condition(String expr, boolean result, int line) {
         String cleanExpr = expr.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
         recordEvent("{\\"type\\":\\"CONDITION_EVALUATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"condition\\":\\"" + cleanExpr + "\\",\\"conditionResult\\":" + result + "}");
@@ -122,6 +330,17 @@ public class CodeFlowTracer {
         originalOut.println("__CODEFLOW_EVENTS_BEGIN__");
         originalOut.println("[" + String.join(",", events) + "]");
         originalOut.println("__CODEFLOW_EVENTS_END__");
+    }
+
+    private static String formatList(List<?> list) {
+        if (list == null) return "[]";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(formatValue(list.get(i)));
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     private static String formatValue(Object val) {

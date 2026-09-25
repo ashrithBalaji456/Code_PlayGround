@@ -1,6 +1,6 @@
 import React from 'react';
 import { DataStructureState } from '../../types/execution';
-import { Database, ArrowDown } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 interface HashMapVisualizerProps {
   structure: DataStructureState;

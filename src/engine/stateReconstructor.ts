@@ -22,6 +22,14 @@ function estimateSize(type: string, val: any): number {
       return 8;
     case 'string':
       return 24 + (typeof val === 'string' ? val.length * 2 : 8);
+    case 'stack':
+    case 'queue':
+    case 'deque':
+    case 'linkedlist':
+    case 'hashmap':
+    case 'hashset':
+    case 'priorityqueue':
+      return 32 + (Array.isArray(val) ? val.length * 8 : 16);
     default:
       if (Array.isArray(val)) return 16 + val.length * 4;
       return 8;
@@ -71,6 +79,23 @@ export function reconstructExecutionSteps(
       nextStructures[k] = {
         ...st,
         arrayData: st.arrayData ? [...st.arrayData] : undefined,
+        stackData: st.stackData ? [...st.stackData] : undefined,
+        queueData: st.queueData ? [...st.queueData] : undefined,
+        dequeData: st.dequeData ? [...st.dequeData] : undefined,
+        priorityQueueData: st.priorityQueueData ? [...st.priorityQueueData] : undefined,
+        linkedListData: st.linkedListData
+          ? {
+              headId: st.linkedListData.headId,
+              nodes: { ...st.linkedListData.nodes },
+            }
+          : undefined,
+        mapData: st.mapData
+          ? {
+              bucketCount: st.mapData.bucketCount,
+              entries: st.mapData.entries.map((e) => ({ ...e })),
+            }
+          : undefined,
+        setData: st.setData ? [...st.setData] : undefined,
         activeIndices: [],
         comparingIndices: [],
         swappingIndices: undefined,
@@ -100,6 +125,7 @@ export function reconstructExecutionSteps(
     }
 
     let explanation = `Executing step ${i + 1}`;
+    const stId = ev.structureId || ev.variable || ev.arrayId || 'struct';
 
     switch (ev.type) {
       case 'PROGRAM_START':
@@ -149,6 +175,7 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      // === ARRAY ===
       case 'ARRAY_CREATE': {
         const arrId = ev.structureId || ev.arrayId || 'arr';
         const arrVals = Array.isArray(ev.values) ? [...ev.values] : [];
@@ -158,6 +185,7 @@ export function reconstructExecutionSteps(
           type: 'array',
           dataType: ev.dataType || 'int[]',
           arrayData: arrVals,
+          size: arrVals.length,
           activeIndices: [],
           pointers: {},
           lastOperation: `Allocated int[${arrVals.length}]`,
@@ -202,6 +230,602 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      // === STACK ===
+      case 'STACK_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'stack',
+          dataType: ev.dataType || 'Stack<Integer>',
+          stackData: [],
+          size: 0,
+          lastOperation: 'new Stack<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'Stack<Integer>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created new Stack: ${stId}`;
+        break;
+      }
+
+      case 'STACK_PUSH': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.stackData = [...(st.stackData || []), ev.value];
+          st.size = st.stackData.length;
+          st.lastOperation = `push(${ev.value})`;
+          if (nextVariables[stId]) {
+            nextVariables[stId].value = `size = ${st.size}`;
+          }
+        }
+        explanation = `Pushed ${ev.value} onto stack ${stId}`;
+        break;
+      }
+
+      case 'STACK_POP': {
+        const st = nextStructures[stId];
+        if (st && st.stackData && st.stackData.length > 0) {
+          const popped = st.stackData[st.stackData.length - 1];
+          st.stackData = st.stackData.slice(0, -1);
+          st.size = st.stackData.length;
+          st.lastOperation = `pop() ➔ ${ev.value ?? popped}`;
+          if (nextVariables[stId]) {
+            nextVariables[stId].value = `size = ${st.size}`;
+          }
+        }
+        explanation = `Popped ${ev.value} from stack ${stId}`;
+        break;
+      }
+
+      case 'STACK_PEEK': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `peek() ➔ ${ev.value}`;
+        }
+        explanation = `Inspected top of stack ${stId}: ${ev.value}`;
+        break;
+      }
+
+      case 'STACK_CLEAR': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.stackData = [];
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared stack ${stId}`;
+        break;
+      }
+
+      // === QUEUE ===
+      case 'QUEUE_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'queue',
+          dataType: ev.dataType || 'Queue<Integer>',
+          queueData: [],
+          size: 0,
+          lastOperation: 'new LinkedList<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'Queue<Integer>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created new Queue: ${stId}`;
+        break;
+      }
+
+      case 'QUEUE_ENQUEUE': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.queueData = [...(st.queueData || []), ev.value];
+          st.size = st.queueData.length;
+          st.lastOperation = `add(${ev.value})`;
+          if (nextVariables[stId]) {
+            nextVariables[stId].value = `size = ${st.size}`;
+          }
+        }
+        explanation = `Enqueued ${ev.value} into queue ${stId}`;
+        break;
+      }
+
+      case 'QUEUE_DEQUEUE': {
+        const st = nextStructures[stId];
+        if (st && st.queueData && st.queueData.length > 0) {
+          const dequeued = st.queueData[0];
+          st.queueData = st.queueData.slice(1);
+          st.size = st.queueData.length;
+          st.lastOperation = `poll() ➔ ${ev.value ?? dequeued}`;
+          if (nextVariables[stId]) {
+            nextVariables[stId].value = `size = ${st.size}`;
+          }
+        }
+        explanation = `Dequeued ${ev.value} from queue ${stId}`;
+        break;
+      }
+
+      case 'QUEUE_PEEK': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `peek() ➔ ${ev.value}`;
+        }
+        explanation = `Inspected front of queue ${stId}: ${ev.value}`;
+        break;
+      }
+
+      case 'QUEUE_CLEAR': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.queueData = [];
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared queue ${stId}`;
+        break;
+      }
+
+      // === DEQUE ===
+      case 'DEQUE_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'deque',
+          dataType: ev.dataType || 'Deque<Integer>',
+          dequeData: [],
+          queueData: [],
+          size: 0,
+          lastOperation: 'new ArrayDeque<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'Deque<Integer>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created new Deque: ${stId}`;
+        break;
+      }
+
+      case 'DEQUE_ADD_FIRST': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.dequeData = [ev.value, ...(st.dequeData || [])];
+          st.queueData = st.dequeData;
+          st.size = st.dequeData.length;
+          st.lastOperation = `addFirst(${ev.value})`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Inserted ${ev.value} at FRONT of deque ${stId}`;
+        break;
+      }
+
+      case 'DEQUE_ADD_LAST': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.dequeData = [...(st.dequeData || []), ev.value];
+          st.queueData = st.dequeData;
+          st.size = st.dequeData.length;
+          st.lastOperation = `addLast(${ev.value})`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Inserted ${ev.value} at REAR of deque ${stId}`;
+        break;
+      }
+
+      case 'DEQUE_REMOVE_FIRST': {
+        const st = nextStructures[stId];
+        if (st && st.dequeData && st.dequeData.length > 0) {
+          st.dequeData = st.dequeData.slice(1);
+          st.queueData = st.dequeData;
+          st.size = st.dequeData.length;
+          st.lastOperation = `removeFirst() ➔ ${ev.value}`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Removed FRONT element ${ev.value} from deque ${stId}`;
+        break;
+      }
+
+      case 'DEQUE_REMOVE_LAST': {
+        const st = nextStructures[stId];
+        if (st && st.dequeData && st.dequeData.length > 0) {
+          st.dequeData = st.dequeData.slice(0, -1);
+          st.queueData = st.dequeData;
+          st.size = st.dequeData.length;
+          st.lastOperation = `removeLast() ➔ ${ev.value}`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Removed REAR element ${ev.value} from deque ${stId}`;
+        break;
+      }
+
+      case 'DEQUE_PEEK_FIRST':
+      case 'DEQUE_PEEK_LAST': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `${ev.type === 'DEQUE_PEEK_FIRST' ? 'peekFirst' : 'peekLast'}() ➔ ${ev.value}`;
+        }
+        explanation = `Inspected deque ${stId}: ${ev.value}`;
+        break;
+      }
+
+      // === LINKED LIST ===
+      case 'LINKEDLIST_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'linkedlist',
+          dataType: ev.dataType || 'LinkedList<Integer>',
+          linkedListData: { headId: null, nodes: {} },
+          size: 0,
+          lastOperation: 'new LinkedList<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'LinkedList<Integer>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created new LinkedList: ${stId}`;
+        break;
+      }
+
+      case 'LINKEDLIST_ADD':
+      case 'LINKEDLIST_ADD_FIRST':
+      case 'LINKEDLIST_ADD_LAST': {
+        const st = nextStructures[stId];
+        if (st) {
+          if (!st.linkedListData) st.linkedListData = { headId: null, nodes: {} };
+          const nodes = { ...st.linkedListData.nodes };
+          const nodeId = `Node#${100 + Object.keys(nodes).length + 1}`;
+          const isAddFirst = ev.type === 'LINKEDLIST_ADD_FIRST' || ev.index === 0;
+
+          if (isAddFirst) {
+            const oldHead = st.linkedListData.headId;
+            nodes[nodeId] = {
+              id: nodeId,
+              value: ev.value,
+              nextId: oldHead,
+            };
+            st.linkedListData.headId = nodeId;
+          } else {
+            // Append to end of linked chain
+            let curr = st.linkedListData.headId;
+            while (curr && nodes[curr]?.nextId) {
+              curr = nodes[curr].nextId;
+            }
+
+            nodes[nodeId] = {
+              id: nodeId,
+              value: ev.value,
+              nextId: null,
+            };
+
+            if (curr && nodes[curr]) {
+              nodes[curr] = { ...nodes[curr], nextId: nodeId };
+            } else {
+              st.linkedListData.headId = nodeId;
+            }
+          }
+
+          st.linkedListData.nodes = nodes;
+          st.size = Object.keys(nodes).length;
+          st.lastOperation = `add(${ev.value})`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Added node ${ev.value} to LinkedList ${stId}`;
+        break;
+      }
+
+      case 'LINKEDLIST_REMOVE':
+      case 'LINKEDLIST_REMOVE_FIRST':
+      case 'LINKEDLIST_REMOVE_LAST': {
+        const st = nextStructures[stId];
+        if (st && st.linkedListData) {
+          const nodes = { ...st.linkedListData.nodes };
+          const isRemoveFirst = ev.type === 'LINKEDLIST_REMOVE_FIRST' || ev.index === 0;
+
+          if (isRemoveFirst && st.linkedListData.headId) {
+            const headNode = nodes[st.linkedListData.headId];
+            st.linkedListData.headId = headNode?.nextId || null;
+            if (headNode) delete nodes[headNode.id];
+          } else {
+            // Remove node from chain
+            let curr = st.linkedListData.headId;
+            let prev: string | null = null;
+            let count = 0;
+            const targetIdx = typeof ev.index === 'number' ? ev.index : 9999;
+
+            while (curr && count < targetIdx && nodes[curr]?.nextId) {
+              prev = curr;
+              curr = nodes[curr].nextId;
+              count++;
+            }
+
+            if (curr && nodes[curr]) {
+              const nextOfCurr = nodes[curr].nextId;
+              if (prev && nodes[prev]) {
+                nodes[prev] = { ...nodes[prev], nextId: nextOfCurr };
+              } else {
+                st.linkedListData.headId = nextOfCurr;
+              }
+              delete nodes[curr];
+            }
+          }
+
+          st.linkedListData.nodes = nodes;
+          st.size = Object.keys(nodes).length;
+          st.lastOperation = `remove() ➔ ${ev.value}`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Removed node ${ev.value} from LinkedList ${stId}`;
+        break;
+      }
+
+      case 'LINKEDLIST_CLEAR': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.linkedListData = { headId: null, nodes: {} };
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared LinkedList ${stId}`;
+        break;
+      }
+
+      // === HASHMAP ===
+      case 'MAP_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'map',
+          dataType: ev.dataType || 'HashMap<K, V>',
+          mapData: { entries: [], bucketCount: 8 },
+          size: 0,
+          lastOperation: 'new HashMap<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'HashMap<K, V>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 48,
+        };
+        explanation = `Created new HashMap: ${stId}`;
+        break;
+      }
+
+      case 'MAP_INSERT': {
+        const st = nextStructures[stId];
+        if (st) {
+          if (!st.mapData) st.mapData = { entries: [], bucketCount: 8 };
+          const entries = [...st.mapData.entries];
+          const existingIdx = entries.findIndex((e) => String(e.key) === String(ev.key));
+
+          const hash = ev.hash !== undefined ? ev.hash : Math.abs(String(ev.key).split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0));
+          const bucket = ev.bucket !== undefined ? ev.bucket : Math.abs(hash % (st.mapData.bucketCount || 8));
+
+          if (existingIdx >= 0) {
+            entries[existingIdx] = { key: ev.key, value: ev.value, hash, bucket };
+            st.lastOperation = `put(${ev.key}, ${ev.value}) [updated]`;
+          } else {
+            entries.push({ key: ev.key, value: ev.value, hash, bucket });
+            st.lastOperation = `put(${ev.key}, ${ev.value})`;
+          }
+
+          st.mapData.entries = entries;
+          st.size = entries.length;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `HashMap put: "${ev.key}" ➔ ${ev.value} (hash: ${ev.hash ?? 'computed'}, bucket: ${ev.bucket ?? 0})`;
+        break;
+      }
+
+      case 'MAP_LOOKUP': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `get(${ev.key}) ➔ ${ev.value}`;
+        }
+        explanation = `HashMap get("${ev.key}") returned ${ev.value}`;
+        break;
+      }
+
+      case 'MAP_DELETE': {
+        const st = nextStructures[stId];
+        if (st && st.mapData) {
+          st.mapData.entries = st.mapData.entries.filter((e) => String(e.key) !== String(ev.key));
+          st.size = st.mapData.entries.length;
+          st.lastOperation = `remove(${ev.key}) ➔ ${ev.value}`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `HashMap removed entry: "${ev.key}"`;
+        break;
+      }
+
+      case 'MAP_CLEAR': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.mapData = { entries: [], bucketCount: 8 };
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared HashMap ${stId}`;
+        break;
+      }
+
+      // === HASHSET ===
+      case 'SET_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'set',
+          dataType: ev.dataType || 'HashSet<Integer>',
+          setData: [],
+          size: 0,
+          lastOperation: 'new HashSet<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'HashSet<Integer>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created new HashSet: ${stId}`;
+        break;
+      }
+
+      case 'SET_ADD': {
+        const st = nextStructures[stId];
+        if (st) {
+          const currentSet = st.setData || [];
+          const alreadyExists = currentSet.some((v) => String(v) === String(ev.value));
+
+          if (alreadyExists || ev.conditionResult === false) {
+            st.lastOperation = `add(${ev.value}) ➔ Duplicate rejected`;
+            nextComparison = {
+              left: String(ev.value),
+              right: 'HashSet',
+              operator: '∈',
+              result: false,
+              explanation: `${ev.value} already exists in HashSet! Set size remains ${currentSet.length}.`,
+            };
+          } else {
+            st.setData = [...currentSet, ev.value];
+            st.size = st.setData.length;
+            st.lastOperation = `add(${ev.value})`;
+            if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+          }
+        }
+        explanation = `HashSet add(${ev.value}): ${ev.conditionResult === false ? 'Duplicate rejected' : 'Added successfully'}`;
+        break;
+      }
+
+      case 'SET_REMOVE': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.setData = (st.setData || []).filter((v) => String(v) !== String(ev.value));
+          st.size = st.setData.length;
+          st.lastOperation = `remove(${ev.value})`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Removed ${ev.value} from HashSet ${stId}`;
+        break;
+      }
+
+      case 'SET_LOOKUP': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `contains(${ev.value}) ➔ ${ev.conditionResult ? 'TRUE' : 'FALSE'}`;
+          nextComparison = {
+            left: String(ev.value),
+            right: 'HashSet',
+            operator: '∈',
+            result: !!ev.conditionResult,
+            explanation: `${ev.value} ${ev.conditionResult ? 'is PRESENT' : 'is NOT present'} in HashSet`,
+          };
+        }
+        explanation = `HashSet contains(${ev.value}): ${ev.conditionResult ? 'TRUE ✓' : 'FALSE ✗'}`;
+        break;
+      }
+
+      case 'SET_CLEAR': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.setData = [];
+          st.size = 0;
+          st.lastOperation = 'clear()';
+          if (nextVariables[stId]) nextVariables[stId].value = 'size = 0';
+        }
+        explanation = `Cleared HashSet ${stId}`;
+        break;
+      }
+
+      // === PRIORITY QUEUE ===
+      case 'PRIORITYQUEUE_CREATE': {
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'priorityqueue',
+          dataType: ev.dataType || 'PriorityQueue<Integer>',
+          priorityQueueData: [],
+          size: 0,
+          lastOperation: 'new PriorityQueue<>()',
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'PriorityQueue<Integer>',
+          value: 'size = 0',
+          scope: 'main',
+          isReference: true,
+          refTargetId: stId,
+          estimatedBytes: 32,
+        };
+        explanation = `Created new PriorityQueue: ${stId}`;
+        break;
+      }
+
+      case 'PRIORITYQUEUE_ADD': {
+        const st = nextStructures[stId];
+        if (st) {
+          const rawElems = Array.isArray(ev.values) ? [...ev.values] : [...(st.priorityQueueData || []), ev.value];
+          st.priorityQueueData = rawElems;
+          st.size = rawElems.length;
+          st.lastOperation = `add(${ev.value})`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Inserted ${ev.value} into PriorityQueue ${stId}`;
+        break;
+      }
+
+      case 'PRIORITYQUEUE_POLL': {
+        const st = nextStructures[stId];
+        if (st) {
+          const rawElems = Array.isArray(ev.values) ? [...ev.values] : (st.priorityQueueData || []).slice(1);
+          st.priorityQueueData = rawElems;
+          st.size = rawElems.length;
+          st.lastOperation = `poll() ➔ ${ev.value}`;
+          if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
+        }
+        explanation = `Polled highest priority element ${ev.value} from PriorityQueue ${stId}`;
+        break;
+      }
+
+      case 'PRIORITYQUEUE_PEEK': {
+        const st = nextStructures[stId];
+        if (st) {
+          st.lastOperation = `peek() ➔ ${ev.value}`;
+        }
+        explanation = `Inspected min/max element in PriorityQueue ${stId}: ${ev.value}`;
+        break;
+      }
+
+      // === CONTROL FLOW ===
       case 'CONDITION_EVALUATE': {
         nextComparison = {
           left: ev.condition || 'condition',
@@ -317,6 +941,13 @@ export function reconstructExecutionSteps(
     let heapBytes = 0;
     for (const st of Object.values(nextStructures)) {
       if (st.arrayData) heapBytes += 16 + st.arrayData.length * 4;
+      if (st.stackData) heapBytes += 24 + st.stackData.length * 8;
+      if (st.queueData) heapBytes += 24 + st.queueData.length * 8;
+      if (st.dequeData) heapBytes += 24 + st.dequeData.length * 8;
+      if (st.priorityQueueData) heapBytes += 32 + st.priorityQueueData.length * 8;
+      if (st.linkedListData) heapBytes += 24 + Object.keys(st.linkedListData.nodes).length * 24;
+      if (st.mapData) heapBytes += 48 + st.mapData.entries.length * 32;
+      if (st.setData) heapBytes += 32 + st.setData.length * 8;
     }
 
     currentVariables = nextVariables;

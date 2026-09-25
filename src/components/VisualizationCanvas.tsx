@@ -3,9 +3,12 @@ import { ExecutionStep } from '../types/execution';
 import { ArrayVisualizer } from './visualizers/ArrayVisualizer';
 import { StackVisualizer } from './visualizers/StackVisualizer';
 import { QueueVisualizer } from './visualizers/QueueVisualizer';
+import { DequeVisualizer } from './visualizers/DequeVisualizer';
 import { LinkedListVisualizer } from './visualizers/LinkedListVisualizer';
 import { TreeVisualizer } from './visualizers/TreeVisualizer';
 import { HashMapVisualizer } from './visualizers/HashMapVisualizer';
+import { HashSetVisualizer } from './visualizers/HashSetVisualizer';
+import { PriorityQueueVisualizer } from './visualizers/PriorityQueueVisualizer';
 import { GraphVisualizer } from './visualizers/GraphVisualizer';
 import { Sparkles, AlertCircle, ArrowRightLeft } from 'lucide-react';
 
@@ -116,43 +119,78 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
           No data structures initialized yet in current step.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {structures.map((st) => {
-            switch (st.type) {
-              case 'array':
-              case 'matrix':
-                return (
-                  <ArrayVisualizer
-                    key={st.id}
-                    structure={st}
-                    pointers={currentStep.activePointers}
-                    lastEvent={currentStep.event}
-                  />
-                );
-              case 'stack':
-                return <StackVisualizer key={st.id} structure={st} />;
-              case 'queue':
-                return <QueueVisualizer key={st.id} structure={st} />;
-              case 'linkedlist':
-                return (
-                  <LinkedListVisualizer
-                    key={st.id}
-                    structure={st}
-                    pointers={currentStep.activePointers}
-                  />
-                );
-              case 'tree':
-                return <TreeVisualizer key={st.id} structure={st} />;
-              case 'map':
-                return <HashMapVisualizer key={st.id} structure={st} />;
-              case 'graph':
-                return <GraphVisualizer key={st.id} structure={st} />;
-              default:
-                return null;
-            }
-          })}
+        <div className="flex flex-col gap-4">
+          {/* Top Row for Multiple Stacks if present */}
+          {structures.some((s) => s.type === 'stack') && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {structures
+                .filter((s) => s.type === 'stack')
+                .map((st) => (
+                  <div key={st.id} id={`dsa-struct-${st.id}`} className="transition-all duration-300 rounded-xl">
+                    <StackVisualizer structure={st} />
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* Render All Non-Stack Structures */}
+          {structures
+            .filter((s) => s.type !== 'stack')
+            .map((st) => {
+              let visualizer = null;
+              switch (st.type) {
+                case 'array':
+                case 'matrix':
+                  visualizer = (
+                    <ArrayVisualizer
+                      structure={st}
+                      pointers={currentStep.activePointers}
+                      lastEvent={currentStep.event}
+                    />
+                  );
+                  break;
+                case 'queue':
+                  visualizer = <QueueVisualizer structure={st} />;
+                  break;
+                case 'deque':
+                  visualizer = <DequeVisualizer structure={st} lastEvent={currentStep.event} />;
+                  break;
+                case 'linkedlist':
+                  visualizer = (
+                    <LinkedListVisualizer
+                      structure={st}
+                      pointers={currentStep.activePointers}
+                    />
+                  );
+                  break;
+                case 'map':
+                  visualizer = <HashMapVisualizer structure={st} />;
+                  break;
+                case 'set':
+                  visualizer = <HashSetVisualizer structure={st} lastEvent={currentStep.event} />;
+                  break;
+                case 'priorityqueue':
+                  visualizer = <PriorityQueueVisualizer structure={st} lastEvent={currentStep.event} />;
+                  break;
+                case 'tree':
+                  visualizer = <TreeVisualizer structure={st} />;
+                  break;
+                case 'graph':
+                  visualizer = <GraphVisualizer structure={st} />;
+                  break;
+                default:
+                  visualizer = null;
+              }
+              if (!visualizer) return null;
+              return (
+                <div key={st.id} id={`dsa-struct-${st.id}`} className="transition-all duration-300 rounded-xl">
+                  {visualizer}
+                </div>
+              );
+            })}
         </div>
       )}
     </div>
   );
 };
+

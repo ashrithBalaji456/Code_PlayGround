@@ -5,12 +5,15 @@ import { Variable, ArrowRight } from 'lucide-react';
 interface VariablesPanelProps {
   variables: Record<string, VariableInfo>;
   lastEvent?: ExecutionEvent;
+  onSelectVariable?: (name: string, refTargetId?: string) => void;
 }
 
 export const VariablesPanel: React.FC<VariablesPanelProps> = ({
   variables,
   lastEvent,
+  onSelectVariable,
 }) => {
+
   const varList = Object.values(variables);
 
   return (
@@ -40,18 +43,35 @@ export const VariablesPanel: React.FC<VariablesPanelProps> = ({
                 lastEvent.type === 'VARIABLE_UPDATE' &&
                 lastEvent.variable === v.name;
 
+              const isStructure = v.isReference || /^(Stack|Queue|Deque|LinkedList|HashMap|HashSet|PriorityQueue)/i.test(v.type);
+
+              const handleClick = () => {
+                const targetId = v.refTargetId || v.name;
+                onSelectVariable?.(v.name, targetId);
+                const el = document.getElementById(`dsa-struct-${targetId}`);
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  el.classList.add('ring-2', 'ring-[#58a6ff]', 'shadow-2xl');
+                  setTimeout(() => el.classList.remove('ring-2', 'ring-[#58a6ff]', 'shadow-2xl'), 1500);
+                }
+              };
+
               return (
                 <div
                   key={v.name}
-                  className={`p-3 rounded-lg border font-mono transition-all duration-300 ${
+                  onClick={handleClick}
+                  className={`p-3 rounded-lg border font-mono transition-all duration-300 cursor-pointer ${
                     isUpdated
                       ? 'bg-[#3fb950]/15 border-[#3fb950] shadow-lg shadow-[#3fb950]/20 ring-1 ring-[#3fb950]'
+                      : isStructure
+                      ? 'bg-[#0d1117] border-[#30363d] hover:border-[#58a6ff] hover:bg-[#161b22] hover:shadow-md'
                       : 'bg-[#0d1117] border-[#30363d] hover:border-[#58a6ff]/50'
                   }`}
+                  title={isStructure ? 'Click to highlight structure in Canvas' : undefined}
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-bold text-[#58a6ff] text-sm">{v.name}</span>
-                    <span className="text-[10px] text-[#8b949e] bg-[#21262d] px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] text-[#8b949e] bg-[#21262d] px-1.5 py-0.5 rounded font-mono">
                       {v.type}
                     </span>
                   </div>
@@ -68,7 +88,11 @@ export const VariablesPanel: React.FC<VariablesPanelProps> = ({
                       </div>
                     ) : (
                       <span className="text-[#f0f6fc] text-sm truncate">
-                        {v.isReference ? (
+                        {isStructure ? (
+                          <span className="text-[#3fb950] font-semibold">
+                            {String(v.value)}
+                          </span>
+                        ) : v.isReference ? (
                           <span className="text-[#bc8cff]" title={String(v.value)}>
                             {v.refTargetId || String(v.value)}
                           </span>
@@ -81,7 +105,11 @@ export const VariablesPanel: React.FC<VariablesPanelProps> = ({
 
                   <div className="mt-2 pt-1 border-t border-[#30363d]/50 flex items-center justify-between text-[10px] text-[#8b949e]">
                     <span>Scope: {v.scope}</span>
-                    <span className="text-[#3fb950]">{v.estimatedBytes} B</span>
+                    {isStructure ? (
+                      <span className="text-[#58a6ff] hover:underline font-bold">Focus ↗</span>
+                    ) : (
+                      <span className="text-[#3fb950]">{v.estimatedBytes} B</span>
+                    )}
                   </div>
                 </div>
               );

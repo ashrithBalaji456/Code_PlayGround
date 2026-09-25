@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DataStructureState, ExecutionEvent } from '../../types/execution';
-import { BarChart2, Layers, ArrowRight } from 'lucide-react';
+import { BarChart2, Layers } from 'lucide-react';
 
 interface ArrayVisualizerProps {
   structure: DataStructureState;
