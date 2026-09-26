@@ -284,6 +284,25 @@ export function reconstructExecutionSteps(
       balanceFactors: currentAlgorithmState.balanceFactors ? { ...currentAlgorithmState.balanceFactors } : undefined,
       coordMapping: currentAlgorithmState.coordMapping ? { ...currentAlgorithmState.coordMapping } : undefined,
       monoStackElements: currentAlgorithmState.monoStackElements ? [...currentAlgorithmState.monoStackElements] : undefined,
+      // Phase 7 DP Deep Cloning for Step Immutability & Replay
+      dpCellStatus: currentAlgorithmState.dpCellStatus ? { ...currentAlgorithmState.dpCellStatus } : undefined,
+      dpDimensions: currentAlgorithmState.dpDimensions ? [...currentAlgorithmState.dpDimensions] : undefined,
+      dpRowLabels: currentAlgorithmState.dpRowLabels ? [...currentAlgorithmState.dpRowLabels] : undefined,
+      dpColLabels: currentAlgorithmState.dpColLabels ? [...currentAlgorithmState.dpColLabels] : undefined,
+      dpDependencies: currentAlgorithmState.dpDependencies ? [...currentAlgorithmState.dpDependencies] : undefined,
+      dpCandidateValues: currentAlgorithmState.dpCandidateValues ? currentAlgorithmState.dpCandidateValues.map((c) => ({ ...c })) : undefined,
+      dpSparseMap: currentAlgorithmState.dpSparseMap ? { ...currentAlgorithmState.dpSparseMap } : undefined,
+      knapsackItems: currentAlgorithmState.knapsackItems ? currentAlgorithmState.knapsackItems.map((it) => ({ ...it })) : undefined,
+      coins: currentAlgorithmState.coins ? [...currentAlgorithmState.coins] : undefined,
+      lcsReconstructionPath: currentAlgorithmState.lcsReconstructionPath ? currentAlgorithmState.lcsReconstructionPath.map((p) => [...p] as [number, number]) : undefined,
+      lisArray: currentAlgorithmState.lisArray ? [...currentAlgorithmState.lisArray] : undefined,
+      lisParents: currentAlgorithmState.lisParents ? [...currentAlgorithmState.lisParents] : undefined,
+      lisReconstructedIndices: currentAlgorithmState.lisReconstructedIndices ? [...currentAlgorithmState.lisReconstructedIndices] : undefined,
+      gridObstacles: currentAlgorithmState.gridObstacles ? currentAlgorithmState.gridObstacles.map((o) => [...o] as [number, number]) : undefined,
+      treeDpNodeStates: currentAlgorithmState.treeDpNodeStates ? { ...currentAlgorithmState.treeDpNodeStates } : undefined,
+      bitmaskSelectedBits: currentAlgorithmState.bitmaskSelectedBits ? [...currentAlgorithmState.bitmaskSelectedBits] : undefined,
+      digitOptions: currentAlgorithmState.digitOptions ? [...currentAlgorithmState.digitOptions] : undefined,
+      reconstructionSequence: currentAlgorithmState.reconstructionSequence ? [...currentAlgorithmState.reconstructionSequence] : undefined,
     };
 
     let explanation = `Executing step ${i + 1}`;
@@ -4344,6 +4363,1142 @@ export function reconstructExecutionSteps(
       case 'MONO_STACK_END': {
         nextAlgorithmState.status = 'Completed';
         explanation = 'Monotonic stack processing completed';
+        break;
+      }
+
+      // ==========================================
+      // === PHASE 7 ADVANCED DYNAMIC PROGRAMMING ===
+      // ==========================================
+
+      // --- Core DP & Table ---
+      case 'DP_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = ev.algorithmName || 'Dynamic Programming';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpSparseMap = {};
+        nextAlgorithmState.dpDependencies = [];
+        nextAlgorithmState.dpCandidateValues = [];
+        if (!nextAlgorithmState.theoreticalComplexity) {
+          nextAlgorithmState.theoreticalComplexity = { time: 'Algorithm dependent', space: 'Algorithm dependent' };
+        }
+        explanation = `Started ${ev.algorithmName || 'Dynamic Programming'} algorithm`;
+        break;
+      }
+
+      case 'DP_TABLE_CREATE': {
+        nextAlgorithmState.dpDimensions = ev.dimensions ? [...ev.dimensions] : [0, 0];
+        if (ev.rowLabels) nextAlgorithmState.dpRowLabels = [...ev.rowLabels];
+        if (ev.colLabels) nextAlgorithmState.dpColLabels = [...ev.colLabels];
+        if (ev.dimensions && ev.dimensions.length === 1) {
+          nextAlgorithmState.dpTable1D = new Array(ev.dimensions[0]).fill(0);
+          nextAlgorithmState.dpType = 'TABULATION_1D';
+        } else if (ev.dimensions && ev.dimensions.length === 2) {
+          nextAlgorithmState.dpTable2D = Array.from({ length: ev.dimensions[0] }, () => new Array(ev.dimensions![1]).fill(0));
+          nextAlgorithmState.dpType = 'TABULATION_2D';
+        }
+        explanation = `Initialized DP table with dimensions [${ev.dimensions ? ev.dimensions.join(' × ') : ''}]`;
+        break;
+      }
+
+      case 'DP_TABLE_ACCESS':
+      case 'DP_STATE_ACCESS': {
+        nextMetrics.accesses++;
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[idxStr] = 'CURRENT';
+        explanation = `Accessed DP state dp[${idxStr}] = ${ev.value}`;
+        break;
+      }
+
+      case 'DP_STATE_COMPUTE': {
+        nextAlgorithmState.dpTransitionFormula = ev.transitionFormula;
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[idxStr] = 'COMPUTING';
+        explanation = `Computing dp[${idxStr}] using formula: ${ev.transitionFormula}`;
+        break;
+      }
+
+      case 'DP_STATE_COMPARE': {
+        nextMetrics.comparisons++;
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        nextComparison = {
+          left: `Candidate 1: ${ev.leftVal}`,
+          right: `Candidate 2: ${ev.rightVal}`,
+          operator: 'vs',
+          result: true,
+          explanation: `Compared candidates for dp[${idxStr}]. Selected optimal value: ${ev.value}`,
+        };
+        nextAlgorithmState.dpCandidateValues = [
+          { label: 'Candidate 1', value: ev.leftVal, selected: ev.value === ev.leftVal },
+          { label: 'Candidate 2', value: ev.rightVal, selected: ev.value === ev.rightVal },
+        ];
+        explanation = `Comparing options for dp[${idxStr}]: (${ev.leftVal} vs ${ev.rightVal}) ➔ Optimal: ${ev.value}`;
+        break;
+      }
+
+      case 'DP_STATE_TRANSITION': {
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        const deps = Array.isArray(ev.dependencies) ? ev.dependencies : [];
+        nextAlgorithmState.dpDependencies = deps;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        deps.forEach((dep) => {
+          const dStr = Array.isArray(dep) ? dep.join(',') : String(dep);
+          nextAlgorithmState.dpCellStatus![dStr] = 'DEPENDENCY';
+        });
+        explanation = `State transition for dp[${idxStr}] from dependencies: ${deps.map(d => Array.isArray(d) ? `dp[${d.join('][')}]` : `dp[${d}]`).join(', ')}`;
+        break;
+      }
+
+      case 'DP_TABLE_UPDATE':
+      case 'DP_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[idxStr] = 'UPDATED';
+
+        if (Array.isArray(ev.indices)) {
+          if (ev.indices.length === 1 && typeof ev.indices[0] === 'number') {
+            if (!nextAlgorithmState.dpTable1D) nextAlgorithmState.dpTable1D = [];
+            nextAlgorithmState.dpTable1D[ev.indices[0]] = ev.newValue;
+          } else if (ev.indices.length === 2 && typeof ev.indices[0] === 'number' && typeof ev.indices[1] === 'number') {
+            const [r, c] = ev.indices as [number, number];
+            if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+            while (nextAlgorithmState.dpTable2D.length <= r) nextAlgorithmState.dpTable2D.push([]);
+            nextAlgorithmState.dpTable2D[r][c] = ev.newValue;
+            nextAlgorithmState.dpCurrentCell = [r, c];
+          }
+        }
+        if (!nextAlgorithmState.dpSparseMap) nextAlgorithmState.dpSparseMap = {};
+        nextAlgorithmState.dpSparseMap[idxStr] = ev.newValue;
+
+        explanation = `Updated dp[${idxStr}]: ${ev.oldValue} ➔ ${ev.newValue}`;
+        break;
+      }
+
+      case 'DP_STATE_COMPLETE': {
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[idxStr] = 'FINAL';
+        explanation = `State dp[${idxStr}] computation finalized = ${ev.value}`;
+        break;
+      }
+
+      case 'DP_CACHE_LOOKUP': {
+        const key = String(ev.stateKey ?? '');
+        explanation = `Cache lookup for subproblem state (${key})`;
+        break;
+      }
+
+      case 'DP_CACHE_HIT': {
+        nextMetrics.cacheHits++;
+        const key = String(ev.stateKey ?? '');
+        if (!nextAlgorithmState.memoEntries) nextAlgorithmState.memoEntries = [];
+        nextAlgorithmState.memoEntries.push({ key, value: ev.value, status: 'HIT' });
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[key] = 'CACHE_HIT';
+        explanation = `Cache HIT for state (${key}) ➔ Returned cached result ${ev.value} (pruned branch)`;
+        break;
+      }
+
+      case 'DP_CACHE_MISS': {
+        nextMetrics.cacheMisses++;
+        const key = String(ev.stateKey ?? '');
+        if (!nextAlgorithmState.memoEntries) nextAlgorithmState.memoEntries = [];
+        nextAlgorithmState.memoEntries.push({ key, value: null, status: 'MISS' });
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[key] = 'CACHE_MISS';
+        explanation = `Cache MISS for state (${key}) ➔ Computing subproblem...`;
+        break;
+      }
+
+      case 'DP_RECONSTRUCTION_START': {
+        nextAlgorithmState.reconstructionActive = true;
+        nextAlgorithmState.reconstructionSequence = [];
+        explanation = 'Starting optimal solution reconstruction (backtracking DP decisions)';
+        break;
+      }
+
+      case 'DP_RECONSTRUCTION_STEP': {
+        const idxStr = Array.isArray(ev.indices) ? ev.indices.join(',') : String(ev.indices ?? '');
+        if (!nextAlgorithmState.reconstructionSequence) nextAlgorithmState.reconstructionSequence = [];
+        nextAlgorithmState.reconstructionSequence.push({
+          indices: ev.indices,
+          value: ev.value,
+          action: ev.detail,
+        });
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[idxStr] = 'FINAL';
+        explanation = `Reconstruction step at [${idxStr}] (${ev.value}): ${ev.detail || 'Chosen'}`;
+        break;
+      }
+
+      case 'DP_RECONSTRUCTION_END': {
+        nextAlgorithmState.reconstructionActive = false;
+        nextAlgorithmState.reconstructionFinalResult = ev.reconstructionPath || ev.value;
+        explanation = `Optimal solution reconstruction completed: ${JSON.stringify(ev.reconstructionPath || ev.value)}`;
+        break;
+      }
+
+      case 'DP_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Dynamic Programming finished with optimal result: ${ev.value}`;
+        break;
+      }
+
+      // --- 0/1 Knapsack ---
+      case 'KNAPSACK_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = '0/1 Knapsack';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.knapsackCapacity = ev.capacity;
+        nextAlgorithmState.knapsackItems = Array.isArray((ev as any).items) ? [...(ev as any).items] : [];
+        nextAlgorithmState.dpType = 'TABULATION_2D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N × W)', space: 'O(N × W)' };
+        explanation = `Started 0/1 Knapsack: Items = ${ev.size || (nextAlgorithmState.knapsackItems?.length ?? 0)}, Capacity = ${ev.capacity}`;
+        break;
+      }
+
+      case 'KNAPSACK_ITEM_SELECT': {
+        nextAlgorithmState.knapsackCurrentItem = ev.itemIndex;
+        if (!nextAlgorithmState.knapsackItems) nextAlgorithmState.knapsackItems = [];
+        const itemIdx = ev.itemIndex ?? nextAlgorithmState.knapsackItems.length;
+        nextAlgorithmState.knapsackItems[itemIdx] = {
+          weight: ev.weight ?? 0,
+          value: ev.itemValue ?? ev.value ?? 0,
+          name: `Item ${itemIdx}`,
+        };
+        explanation = `Evaluating Item ${ev.itemIndex}: Weight = ${ev.weight}, Value = ${ev.itemValue ?? ev.value}`;
+        break;
+      }
+
+      case 'KNAPSACK_CAPACITY_SELECT': {
+        nextAlgorithmState.knapsackCurrentCapacity = ev.capacity;
+        explanation = `Considering knapsack capacity w = ${ev.capacity} for Item ${ev.itemIndex}`;
+        break;
+      }
+
+      case 'KNAPSACK_FIT_CHECK': {
+        nextAlgorithmState.knapsackFit = !!ev.fit;
+        explanation = `Fit check: Item weight (${ev.weight}) ${ev.fit ? '<=' : '>'} current capacity (${ev.capacity}) ➔ ${ev.fit ? 'FITS' : 'DOES NOT FIT'}`;
+        break;
+      }
+
+      case 'KNAPSACK_EXCLUDE': {
+        nextAlgorithmState.knapsackExcludeVal = Number(ev.value);
+        nextAlgorithmState.knapsackDecision = 'EXCLUDE';
+        explanation = `Exclude option dp[${(ev.itemIndex || 1) - 1}][${ev.capacity}] = ${ev.value}`;
+        break;
+      }
+
+      case 'KNAPSACK_INCLUDE': {
+        nextAlgorithmState.knapsackIncludeVal = Number(ev.value);
+        nextAlgorithmState.knapsackDecision = 'INCLUDE';
+        explanation = `Include option (value + dp[${(ev.itemIndex || 1) - 1}][w - wt]) = ${ev.value}`;
+        break;
+      }
+
+      case 'KNAPSACK_COMPARE': {
+        nextMetrics.comparisons++;
+        const ex = Number(ev.leftVal ?? 0);
+        const inc = Number(ev.rightVal ?? 0);
+        const chosen = Number(ev.value ?? ev.candidateValue ?? 0);
+        nextComparison = {
+          left: `Exclude: ${ex}`,
+          right: `Include: ${inc}`,
+          operator: 'max',
+          result: chosen,
+          explanation: `Max(exclude: ${ex}, include: ${inc}) = ${chosen}`,
+        };
+        nextAlgorithmState.knapsackDecision = (ev.status as any) || (chosen === inc ? 'INCLUDE' : 'EXCLUDE');
+        explanation = `Comparing: Exclude (${ex}) vs Include (${inc}) ➔ Decision: ${nextAlgorithmState.knapsackDecision} (${chosen})`;
+        break;
+      }
+
+      case 'KNAPSACK_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const i = ev.itemIndex ?? 0;
+        const w = ev.capacity ?? 0;
+        if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+        while (nextAlgorithmState.dpTable2D.length <= i) nextAlgorithmState.dpTable2D.push([]);
+        nextAlgorithmState.dpTable2D[i][w] = ev.newValue;
+        nextAlgorithmState.dpCurrentCell = [i, w];
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${i},${w}`] = 'UPDATED';
+        explanation = `dp[${i}][${w}] updated to ${ev.newValue}`;
+        break;
+      }
+
+      case 'KNAPSACK_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `0/1 Knapsack completed. Maximum value achieved = ${ev.value}`;
+        break;
+      }
+
+      // --- Unbounded Knapsack ---
+      case 'UNBOUNDED_KNAPSACK_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Unbounded Knapsack';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.knapsackCapacity = ev.capacity;
+        nextAlgorithmState.dpType = 'TABULATION_1D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N × W)', space: 'O(W)' };
+        explanation = `Started Unbounded Knapsack (items may be reused indefinitely): Capacity = ${ev.capacity}`;
+        break;
+      }
+
+      case 'UNBOUNDED_ITEM_SELECT': {
+        nextAlgorithmState.knapsackCurrentItem = ev.itemIndex;
+        if (!nextAlgorithmState.knapsackItems) nextAlgorithmState.knapsackItems = [];
+        nextAlgorithmState.knapsackItems[ev.itemIndex ?? 0] = {
+          weight: ev.weight ?? 0,
+          value: ev.itemValue ?? 0,
+          name: `Item ${ev.itemIndex}`,
+        };
+        explanation = `Selecting Item ${ev.itemIndex}: Weight = ${ev.weight}, Value = ${ev.itemValue} (reusable)`;
+        break;
+      }
+
+      case 'UNBOUNDED_CAPACITY_SELECT': {
+        nextAlgorithmState.knapsackCurrentCapacity = ev.capacity;
+        explanation = `Unbounded capacity iteration: w = ${ev.capacity}`;
+        break;
+      }
+
+      case 'UNBOUNDED_FIT_CHECK': {
+        nextAlgorithmState.knapsackFit = !!ev.fit;
+        explanation = `Fit check: Weight ${ev.weight} ${ev.fit ? '<=' : '>'} Capacity ${ev.capacity}`;
+        break;
+      }
+
+      case 'UNBOUNDED_INCLUDE': {
+        nextAlgorithmState.knapsackIncludeVal = Number(ev.value);
+        explanation = `Unbounded include transition: value + dp[w - weight] = ${ev.value}`;
+        break;
+      }
+
+      case 'UNBOUNDED_EXCLUDE': {
+        nextAlgorithmState.knapsackExcludeVal = Number(ev.value);
+        explanation = `Unbounded retain previous: dp[w] = ${ev.value}`;
+        break;
+      }
+
+      case 'UNBOUNDED_COMPARE': {
+        nextMetrics.comparisons++;
+        nextAlgorithmState.knapsackDecision = Number(ev.value) === Number(ev.rightVal) ? 'INCLUDE' : 'EXCLUDE';
+        explanation = `Comparing unbounded options at w=${ev.capacity}: Keep (${ev.leftVal}) vs Reuse (${ev.rightVal}) ➔ ${ev.value}`;
+        break;
+      }
+
+      case 'UNBOUNDED_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const w = ev.capacity ?? 0;
+        if (!nextAlgorithmState.dpTable1D) nextAlgorithmState.dpTable1D = [];
+        nextAlgorithmState.dpTable1D[w] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${w}`] = 'UPDATED';
+        explanation = `dp[${w}] updated to ${ev.newValue}`;
+        break;
+      }
+
+      case 'UNBOUNDED_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Unbounded Knapsack completed. Maximum value = ${ev.value}`;
+        break;
+      }
+
+      // --- Coin Change ---
+      case 'COIN_CHANGE_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = ev.algorithmId || ev.algorithmName || 'Coin Change';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.coinAmount = ev.amount;
+        nextAlgorithmState.coins = Array.isArray((ev as any).coins) ? [...(ev as any).coins] : [];
+        nextAlgorithmState.dpType = 'TABULATION_1D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(Coins × Amount)', space: 'O(Amount)' };
+        explanation = `Started ${nextAlgorithmState.algorithmName} for Target Amount = ${ev.amount}`;
+        break;
+      }
+
+      case 'COIN_SELECT': {
+        nextAlgorithmState.currentCoin = ev.coin;
+        if (!nextAlgorithmState.coins) nextAlgorithmState.coins = [];
+        if (ev.coin !== undefined && !nextAlgorithmState.coins.includes(ev.coin)) {
+          nextAlgorithmState.coins.push(ev.coin);
+        }
+        explanation = `Selected coin denomination = ${ev.coin}`;
+        break;
+      }
+
+      case 'COIN_AMOUNT_SELECT': {
+        nextAlgorithmState.coinAmount = ev.amount;
+        explanation = `Evaluating target sub-amount = ${ev.amount} with coin = ${ev.coin}`;
+        break;
+      }
+
+      case 'COIN_FIT_CHECK': {
+        explanation = `Coin fit check: Coin ${ev.coin} ${ev.fit ? '<=' : '>'} Amount ${ev.amount} ➔ ${ev.fit ? 'Valid' : 'Skip'}`;
+        break;
+      }
+
+      case 'COIN_CANDIDATE': {
+        nextAlgorithmState.coinCandidate = ev.candidateValue;
+        explanation = `Candidate value for amount ${ev.amount} using coin ${ev.coin}: ${ev.candidateValue}`;
+        break;
+      }
+
+      case 'COIN_COMPARE': {
+        nextMetrics.comparisons++;
+        nextComparison = {
+          left: `Previous: ${ev.leftVal}`,
+          right: `New Candidate: ${ev.rightVal}`,
+          operator: 'compare',
+          result: ev.value,
+          explanation: `Updated optimal answer for amount ${ev.amount} to ${ev.value}`,
+        };
+        explanation = `Comparing candidates for amount ${ev.amount}: (${ev.leftVal} vs ${ev.rightVal}) ➔ Optimal: ${ev.value}`;
+        break;
+      }
+
+      case 'COIN_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const amt = ev.amount ?? 0;
+        if (!nextAlgorithmState.dpTable1D) nextAlgorithmState.dpTable1D = [];
+        nextAlgorithmState.dpTable1D[amt] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${amt}`] = 'UPDATED';
+        explanation = `dp[${amt}] updated to ${ev.newValue}`;
+        break;
+      }
+
+      case 'COIN_CHANGE_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Coin Change completed. Result = ${ev.value ?? (ev as any).result}`;
+        break;
+      }
+
+      // --- Subset Sum ---
+      case 'SUBSET_SUM_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Subset Sum';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.subsetTarget = ev.target;
+        nextAlgorithmState.dpType = 'TABULATION_2D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N × Sum)', space: 'O(N × Sum)' };
+        explanation = `Started Subset Sum: Array size = ${ev.size || ((ev as any).values?.length ?? 0)}, Target Sum = ${ev.target}`;
+        break;
+      }
+
+      case 'SUBSET_ELEMENT_SELECT': {
+        nextAlgorithmState.knapsackCurrentItem = ev.itemIndex;
+        if (!nextAlgorithmState.knapsackItems) nextAlgorithmState.knapsackItems = [];
+        const itemIdx = ev.itemIndex ?? 0;
+        nextAlgorithmState.knapsackItems[itemIdx] = {
+          weight: ev.itemValue ?? 0,
+          value: ev.itemValue ?? 0,
+          name: `Element ${itemIdx}`,
+        };
+        explanation = `Evaluating array element at index ${ev.itemIndex}: value = ${ev.itemValue}`;
+        break;
+      }
+
+      case 'SUBSET_TARGET_SELECT': {
+        nextAlgorithmState.knapsackCurrentCapacity = ev.target;
+        explanation = `Checking if target sum ${ev.target} can be formed`;
+        break;
+      }
+
+      case 'SUBSET_EXCLUDE': {
+        explanation = `Exclude element: dp[${(ev.itemIndex || 1) - 1}][${ev.target}] = ${ev.conditionResult}`;
+        break;
+      }
+
+      case 'SUBSET_INCLUDE': {
+        explanation = `Include element: dp[${(ev.itemIndex || 1) - 1}][${ev.target} - val] = ${ev.conditionResult}`;
+        break;
+      }
+
+      case 'SUBSET_COMPARE': {
+        nextMetrics.comparisons++;
+        explanation = `Boolean OR: Exclude || Include ➔ ${ev.conditionResult ? 'True' : 'False'}`;
+        break;
+      }
+
+      case 'SUBSET_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const i = ev.itemIndex ?? 0;
+        const s = ev.target ?? 0;
+        if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+        while (nextAlgorithmState.dpTable2D.length <= i) nextAlgorithmState.dpTable2D.push([]);
+        nextAlgorithmState.dpTable2D[i][s] = ev.newValue ?? (ev.conditionResult ? 1 : 0);
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${i},${s}`] = 'UPDATED';
+        explanation = `dp[${i}][${s}] = ${ev.conditionResult ? 'TRUE' : 'FALSE'}`;
+        break;
+      }
+
+      case 'SUBSET_SUM_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Subset Sum finished. Target sum feasible: ${ev.conditionResult ? 'YES (TRUE)' : 'NO (FALSE)'}`;
+        break;
+      }
+
+      // --- Longest Common Subsequence & Longest Common Substring ---
+      case 'LCS_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Longest Common Subsequence';
+        nextAlgorithmState.status = 'Running';
+        const parts = String(ev.detail || '').split('|');
+        nextAlgorithmState.lcsStringA = (ev as any).a || parts[0] || '';
+        nextAlgorithmState.lcsStringB = (ev as any).b || parts[1] || '';
+        nextAlgorithmState.dpType = 'TABULATION_2D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(M × N)', space: 'O(M × N)' };
+        explanation = `Started LCS on strings "${nextAlgorithmState.lcsStringA}" and "${nextAlgorithmState.lcsStringB}"`;
+        break;
+      }
+
+      case 'LCS_CHARACTER_COMPARE': {
+        nextMetrics.comparisons++;
+        nextAlgorithmState.lcsI = ev.row ?? (ev as any).i;
+        nextAlgorithmState.lcsJ = ev.col ?? (ev as any).j;
+        nextAlgorithmState.lcsCharA = ev.iChar;
+        nextAlgorithmState.lcsCharB = ev.jChar;
+        nextAlgorithmState.lcsMatched = ev.charMatched !== undefined ? !!ev.charMatched : (ev.iChar === ev.jChar);
+        nextComparison = {
+          left: `A[${(nextAlgorithmState.lcsI || 1) - 1}]: '${ev.iChar}'`,
+          right: `B[${(nextAlgorithmState.lcsJ || 1) - 1}]: '${ev.jChar}'`,
+          operator: '==',
+          result: nextAlgorithmState.lcsMatched,
+          explanation: nextAlgorithmState.lcsMatched ? `Characters match ('${ev.iChar}' == '${ev.jChar}') ➔ Diagonal + 1` : `Characters mismatch ('${ev.iChar}' != '${ev.jChar}') ➔ Max(Top, Left)`,
+        };
+        explanation = `Comparing A[${(nextAlgorithmState.lcsI || 1) - 1}] ('${ev.iChar}') with B[${(nextAlgorithmState.lcsJ || 1) - 1}] ('${ev.jChar}') ➔ ${nextAlgorithmState.lcsMatched ? 'MATCH' : 'MISMATCH'}`;
+        break;
+      }
+
+      case 'LCS_MATCH': {
+        const i = ev.row ?? (ev as any).i ?? 1;
+        const j = ev.col ?? (ev as any).j ?? 1;
+        nextAlgorithmState.lcsMatched = true;
+        nextAlgorithmState.dpPreviousCells = [[i - 1, j - 1]];
+        explanation = `Match: Take diagonal value dp[${i - 1}][${j - 1}] (${ev.oldValue}) + 1 = ${ev.newValue}`;
+        break;
+      }
+
+      case 'LCS_MISMATCH': {
+        const i = ev.row ?? (ev as any).i ?? 1;
+        const j = ev.col ?? (ev as any).j ?? 1;
+        nextAlgorithmState.lcsMatched = false;
+        nextAlgorithmState.dpPreviousCells = [[i - 1, j], [i, j - 1]];
+        explanation = `Mismatch: Max(dp[${i - 1}][${j}] = ${ev.leftVal}, dp[${i}][${j - 1}] = ${ev.rightVal}) = ${ev.value}`;
+        break;
+      }
+
+      case 'LCS_DEPENDENCY_SELECT': {
+        explanation = `Selected dependency: ${ev.detail} for dp[${ev.row}][${ev.col}]`;
+        break;
+      }
+
+      case 'LCS_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const r = ev.row ?? (ev as any).i ?? 0;
+        const c = ev.col ?? (ev as any).j ?? 0;
+        if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+        while (nextAlgorithmState.dpTable2D.length <= r) nextAlgorithmState.dpTable2D.push([]);
+        nextAlgorithmState.dpTable2D[r][c] = ev.newValue;
+        nextAlgorithmState.dpCurrentCell = [r, c];
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${r},${c}`] = 'UPDATED';
+        explanation = `dp[${r}][${c}] = ${ev.newValue}`;
+        break;
+      }
+
+      case 'LCS_RECONSTRUCTION_START': {
+        nextAlgorithmState.reconstructionActive = true;
+        nextAlgorithmState.lcsReconstructionPath = ev.row !== undefined ? [[ev.row ?? 0, ev.col ?? 0]] : [];
+        explanation = `Tracing back optimal subsequence from dp[${ev.row}][${ev.col}]`;
+        break;
+      }
+
+      case 'LCS_RECONSTRUCTION_STEP': {
+        if (!nextAlgorithmState.lcsReconstructionPath) nextAlgorithmState.lcsReconstructionPath = [];
+        const r = ev.row ?? (ev as any).i ?? 0;
+        const c = ev.col ?? (ev as any).j ?? 0;
+        nextAlgorithmState.lcsReconstructionPath.push([r, c]);
+        explanation = `Traceback at [${r}][${c}]: ${ev.detail || `Included character '${ev.char || (ev as any).iChar}'`}`;
+        break;
+      }
+
+      case 'LCS_RECONSTRUCTION_END': {
+        nextAlgorithmState.reconstructionActive = false;
+        nextAlgorithmState.lcsResult = ev.word || (ev as any).result;
+        explanation = `LCS reconstruction complete. Subsequence = "${nextAlgorithmState.lcsResult}"`;
+        break;
+      }
+
+      case 'LCS_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `LCS calculation finished. Max common subsequence length = ${ev.value ?? (ev as any).result}`;
+        break;
+      }
+
+      case 'LCSTR_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Longest Common Substring';
+        nextAlgorithmState.status = 'Running';
+        const parts = String(ev.detail || '').split('|');
+        nextAlgorithmState.lcsStringA = (ev as any).a || parts[0] || '';
+        nextAlgorithmState.lcsStringB = (ev as any).b || parts[1] || '';
+        nextAlgorithmState.dpType = 'TABULATION_2D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(M × N)', space: 'O(M × N)' };
+        explanation = `Started Longest Common Substring on "${nextAlgorithmState.lcsStringA}" and "${nextAlgorithmState.lcsStringB}"`;
+        break;
+      }
+
+      case 'LCSTR_CHARACTER_COMPARE': {
+        nextMetrics.comparisons++;
+        nextAlgorithmState.lcsI = ev.row ?? (ev as any).i;
+        nextAlgorithmState.lcsJ = ev.col ?? (ev as any).j;
+        nextAlgorithmState.lcsCharA = ev.iChar;
+        nextAlgorithmState.lcsCharB = ev.jChar;
+        nextAlgorithmState.lcsMatched = ev.charMatched !== undefined ? !!ev.charMatched : (ev.iChar === ev.jChar);
+        explanation = `Substring compare: A[${(nextAlgorithmState.lcsI || 1) - 1}] ('${ev.iChar}') vs B[${(nextAlgorithmState.lcsJ || 1) - 1}] ('${ev.jChar}') ➔ ${nextAlgorithmState.lcsMatched ? 'MATCH' : 'MISMATCH (RESET TO 0)'}`;
+        break;
+      }
+
+      case 'LCSTR_MATCH': {
+        nextAlgorithmState.lcsMatched = true;
+        explanation = `Characters match! dp[${ev.row}][${ev.col}] = dp[${(ev.row || 1) - 1}][${(ev.col || 1) - 1}] + 1 = ${ev.newValue}`;
+        break;
+      }
+
+      case 'LCSTR_RESET': {
+        nextAlgorithmState.lcsMatched = false;
+        const r = ev.row ?? (ev as any).i ?? 0;
+        const c = ev.col ?? (ev as any).j ?? 0;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${r},${c}`] = 'UPDATED';
+        explanation = `Characters do not match in contiguous substring. Resetting dp[${r}][${c}] = 0`;
+        break;
+      }
+
+      case 'LCSTR_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const r = ev.row ?? (ev as any).i ?? 0;
+        const c = ev.col ?? (ev as any).j ?? 0;
+        if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+        while (nextAlgorithmState.dpTable2D.length <= r) nextAlgorithmState.dpTable2D.push([]);
+        nextAlgorithmState.dpTable2D[r][c] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${r},${c}`] = 'UPDATED';
+        explanation = `dp[${r}][${c}] = ${ev.newValue}`;
+        break;
+      }
+
+      case 'LCSTR_MAX_UPDATE': {
+        nextAlgorithmState.lcstrMaxLen = Number(ev.newValue ?? ev.value);
+        explanation = `New maximum common substring length found = ${nextAlgorithmState.lcstrMaxLen}`;
+        break;
+      }
+
+      case 'LCSTR_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Longest Common Substring completed. Maximum length = ${ev.value}`;
+        break;
+      }
+
+      // --- Longest Increasing Subsequence (LIS) ---
+      case 'LIS_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Longest Increasing Subsequence';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.lisArray = Array.isArray((ev as any).values) ? [...(ev as any).values] : [];
+        nextAlgorithmState.lisParents = new Array(ev.size ?? (nextAlgorithmState.lisArray?.length || 0)).fill(null);
+        nextAlgorithmState.dpType = 'TABULATION_1D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N²)', space: 'O(N)' };
+        explanation = `Started LIS for array of size ${ev.size || (nextAlgorithmState.lisArray?.length || 0)}`;
+        break;
+      }
+
+      case 'LIS_INDEX_SELECT': {
+        nextAlgorithmState.lisCurrentI = (ev as any).i ?? ev.index;
+        nextAlgorithmState.lisCurrentJ = (ev as any).j ?? ev.toIndex;
+        explanation = `Computing LIS ending at index i = ${nextAlgorithmState.lisCurrentI}`;
+        break;
+      }
+
+      case 'LIS_COMPARE': {
+        nextMetrics.comparisons++;
+        nextAlgorithmState.lisCurrentJ = (ev as any).j ?? ev.toIndex;
+        nextAlgorithmState.lisComparison = !!ev.conditionResult;
+        nextComparison = {
+          left: `arr[${nextAlgorithmState.lisCurrentJ}]: ${ev.rightVal}`,
+          right: `arr[${nextAlgorithmState.lisCurrentI}]: ${ev.leftVal}`,
+          operator: '<',
+          result: !!ev.conditionResult,
+          explanation: ev.conditionResult ? `arr[${nextAlgorithmState.lisCurrentJ}] < arr[${nextAlgorithmState.lisCurrentI}] (${ev.rightVal} < ${ev.leftVal}) ➔ Can extend subsequence` : `Not increasing (${ev.rightVal} >= ${ev.leftVal})`,
+        };
+        explanation = `Comparing arr[${nextAlgorithmState.lisCurrentJ}] < arr[${nextAlgorithmState.lisCurrentI}] ➔ ${ev.conditionResult ? 'TRUE (can extend)' : 'FALSE'}`;
+        break;
+      }
+
+      case 'LIS_CANDIDATE': {
+        explanation = `Candidate LIS length extending from index ${nextAlgorithmState.lisCurrentJ}: dp[${nextAlgorithmState.lisCurrentJ}] + 1 = ${ev.candidateValue}`;
+        break;
+      }
+
+      case 'LIS_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const idx = (ev as any).i ?? ev.index ?? 0;
+        if (!nextAlgorithmState.dpTable1D) nextAlgorithmState.dpTable1D = [];
+        nextAlgorithmState.dpTable1D[idx] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${idx}`] = 'UPDATED';
+        explanation = `dp[${idx}] updated to ${ev.newValue}`;
+        break;
+      }
+
+      case 'LIS_PARENT_UPDATE': {
+        if (!nextAlgorithmState.lisParents) nextAlgorithmState.lisParents = [];
+        const idx = (ev as any).i ?? ev.index ?? 0;
+        nextAlgorithmState.lisParents[idx] = (ev as any).parentIndex ?? ev.toIndex ?? null;
+        explanation = `Parent pointer updated: parent[${idx}] = ${nextAlgorithmState.lisParents[idx]}`;
+        break;
+      }
+
+      case 'LIS_RECONSTRUCTION_START': {
+        nextAlgorithmState.reconstructionActive = true;
+        nextAlgorithmState.lisReconstructedIndices = [];
+        explanation = `Starting LIS reconstruction starting from index ${ev.index}`;
+        break;
+      }
+
+      case 'LIS_RECONSTRUCTION_STEP': {
+        if (!nextAlgorithmState.lisReconstructedIndices) nextAlgorithmState.lisReconstructedIndices = [];
+        const idx = (ev as any).i ?? ev.index ?? 0;
+        if (!nextAlgorithmState.lisReconstructedIndices.includes(idx)) {
+          nextAlgorithmState.lisReconstructedIndices.push(idx);
+        }
+        explanation = `Backtracking LIS chain: Included index ${idx} (value = ${ev.value})`;
+        break;
+      }
+
+      case 'LIS_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `LIS completed. Longest increasing subsequence length = ${ev.value}`;
+        break;
+      }
+
+      // --- Grid DP ---
+      case 'GRID_DP_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = ev.algorithmName || 'Grid DP';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.gridRows = ev.row ?? (ev as any).rows;
+        nextAlgorithmState.gridCols = ev.col ?? (ev as any).cols;
+        nextAlgorithmState.gridObstacles = Array.isArray((ev as any).obstacles)
+          ? (ev as any).obstacles.map((o: any) => typeof o === 'string' ? o.split(',').map(Number) as [number, number] : o)
+          : [];
+        nextAlgorithmState.dpType = 'TABULATION_2D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(M × N)', space: 'O(M × N)' };
+        explanation = `Started ${nextAlgorithmState.algorithmName} on ${nextAlgorithmState.gridRows} × ${nextAlgorithmState.gridCols} grid`;
+        break;
+      }
+
+      case 'GRID_CELL_SELECT': {
+        const r = ev.row ?? (ev as any).r ?? 0;
+        const c = ev.col ?? (ev as any).c ?? 0;
+        nextAlgorithmState.gridCurrentCell = [r, c];
+        explanation = `Visiting grid cell (${r}, ${c})`;
+        break;
+      }
+
+      case 'GRID_OBSTACLE_CHECK': {
+        const r = ev.row ?? (ev as any).r ?? 0;
+        const c = ev.col ?? (ev as any).c ?? 0;
+        if (ev.conditionResult || (ev as any).obstacle) {
+          if (!nextAlgorithmState.gridObstacles) nextAlgorithmState.gridObstacles = [];
+          nextAlgorithmState.gridObstacles.push([r, c]);
+        }
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${r},${c}`] = 'CURRENT';
+        explanation = `Obstacle check at (${r}, ${c}) ➔ ${ev.conditionResult || (ev as any).obstacle ? 'OBSTACLE DETECTED' : 'CLEAR'}`;
+        break;
+      }
+
+      case 'GRID_DEPENDENCY_ACCESS': {
+        const deps = Array.isArray(ev.dependencies) ? ev.dependencies : [];
+        nextAlgorithmState.dpDependencies = deps;
+        explanation = `Grid cell dependencies: ${deps.map(d => Array.isArray(d) ? `(${d[0]},${d[1]})` : String(d)).join(' and ')}`;
+        break;
+      }
+
+      case 'GRID_CANDIDATE': {
+        explanation = `Top candidate = ${ev.leftVal ?? ev.candidateValue}, Left candidate = ${ev.rightVal}`;
+        break;
+      }
+
+      case 'GRID_COMPARE': {
+        nextMetrics.comparisons++;
+        explanation = `Comparing grid paths: Top (${ev.leftVal}) vs Left (${ev.rightVal}) ➔ Optimal = ${ev.value}`;
+        break;
+      }
+
+      case 'GRID_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const r = ev.row ?? (ev as any).r ?? 0;
+        const c = ev.col ?? (ev as any).c ?? 0;
+        if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+        while (nextAlgorithmState.dpTable2D.length <= r) nextAlgorithmState.dpTable2D.push([]);
+        nextAlgorithmState.dpTable2D[r][c] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${r},${c}`] = 'UPDATED';
+        explanation = `Grid dp[${r}][${c}] = ${ev.newValue}`;
+        break;
+      }
+
+      case 'GRID_DP_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Grid DP completed with final result = ${ev.value ?? (ev as any).result}`;
+        break;
+      }
+
+      // --- Interval DP ---
+      case 'INTERVAL_DP_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Interval DP';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.intervalLength = (ev as any).length ?? ev.size;
+        nextAlgorithmState.dpType = 'TABULATION_2D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N³)', space: 'O(N²)' };
+        explanation = `Started Interval DP for sequence of size ${nextAlgorithmState.intervalLength}`;
+        break;
+      }
+
+      case 'INTERVAL_LENGTH_UPDATE': {
+        nextAlgorithmState.intervalLength = (ev as any).length ?? ev.windowSize;
+        explanation = `Considering interval length L = ${nextAlgorithmState.intervalLength}`;
+        break;
+      }
+
+      case 'INTERVAL_SELECT': {
+        nextAlgorithmState.intervalLeft = ev.leftIndex;
+        nextAlgorithmState.intervalRight = ev.rightIndex;
+        explanation = `Solving subproblem interval [${ev.leftIndex} ... ${ev.rightIndex}]`;
+        break;
+      }
+
+      case 'INTERVAL_SPLIT_SELECT': {
+        nextAlgorithmState.intervalSplit = ev.splitIndex;
+        explanation = `Trying split point k = ${ev.splitIndex} ➔ [${ev.leftIndex}..${ev.splitIndex}] and [${(ev.splitIndex || 0) + 1}..${ev.rightIndex}]`;
+        break;
+      }
+
+      case 'INTERVAL_LEFT_DEPENDENCY': {
+        explanation = `Left subproblem dp[${ev.leftIndex}][${ev.splitIndex}] cost = ${ev.value}`;
+        break;
+      }
+
+      case 'INTERVAL_RIGHT_DEPENDENCY': {
+        explanation = `Right subproblem dp[${ev.splitIndex}][${ev.rightIndex}] cost = ${ev.value}`;
+        break;
+      }
+
+      case 'INTERVAL_COMBINE': {
+        explanation = `Combined interval cost with split k=${ev.splitIndex}: ${ev.candidateValue}`;
+        break;
+      }
+
+      case 'INTERVAL_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const l = ev.leftIndex ?? 0;
+        const r = ev.rightIndex ?? 0;
+        if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
+        while (nextAlgorithmState.dpTable2D.length <= l) nextAlgorithmState.dpTable2D.push([]);
+        nextAlgorithmState.dpTable2D[l][r] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[`${l},${r}`] = 'UPDATED';
+        explanation = `Optimal interval cost dp[${l}][${r}] = ${ev.newValue}`;
+        break;
+      }
+
+      case 'INTERVAL_DP_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Interval DP completed. Optimal value = ${ev.value}`;
+        break;
+      }
+
+      // --- Tree DP ---
+      case 'TREE_DP_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Tree DP';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.treeDpNodeStates = {};
+        nextAlgorithmState.treeDpCurrentNode = (ev as any).rootNodeId ?? ev.nodeId;
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(N)', space: 'O(N)' };
+        explanation = `Started Tree DP rooted at node ${nextAlgorithmState.treeDpCurrentNode}`;
+        break;
+      }
+
+      case 'TREE_DP_NODE_ENTER': {
+        nextAlgorithmState.treeDpCurrentNode = ev.nodeId;
+        explanation = `Entered tree node ${ev.nodeId}`;
+        break;
+      }
+
+      case 'TREE_DP_CHILD_PROCESS': {
+        explanation = `Processing subtree child ${ev.childNodeId} of node ${ev.nodeId}`;
+        break;
+      }
+
+      case 'TREE_DP_STATE_ACCESS': {
+        nextMetrics.accesses++;
+        explanation = `Accessed subtree DP state of child ${ev.childNodeId || ev.nodeId} = ${ev.value}`;
+        break;
+      }
+
+      case 'TREE_DP_TRANSITION': {
+        explanation = `Subtree transition formula at node ${ev.nodeId}: ${ev.detail || (ev as any).formula}`;
+        break;
+      }
+
+      case 'TREE_DP_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        if (!nextAlgorithmState.treeDpNodeStates) nextAlgorithmState.treeDpNodeStates = {};
+        nextAlgorithmState.treeDpNodeStates[ev.nodeId || ''] = ev.newValue ?? ev.value;
+        explanation = `Tree DP state for node ${ev.nodeId} updated = ${ev.newValue ?? ev.value}`;
+        break;
+      }
+
+      case 'TREE_DP_NODE_COMPLETE': {
+        explanation = `Subtree computation for node ${ev.nodeId} completed = ${ev.value}`;
+        break;
+      }
+
+      case 'TREE_DP_RETURN': {
+        explanation = `Returning DP state from node ${ev.nodeId}: ${ev.value ?? ev.returnValue}`;
+        break;
+      }
+
+      case 'TREE_DP_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Tree DP completed. Root result = ${ev.value ?? (ev as any).result}`;
+        break;
+      }
+
+      // --- Bitmask DP ---
+      case 'BITMASK_DP_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Bitmask DP';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.bitmask = 0;
+        nextAlgorithmState.bitmaskLength = (ev as any).length ?? ev.size;
+        nextAlgorithmState.bitmaskSelectedBits = [];
+        nextAlgorithmState.dpType = 'TABULATION_1D';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(2^N × N)', space: 'O(2^N)' };
+        explanation = `Started Bitmask DP for ${nextAlgorithmState.bitmaskLength} elements (2^${nextAlgorithmState.bitmaskLength} states)`;
+        break;
+      }
+
+      case 'BITMASK_CREATE': {
+        nextAlgorithmState.bitmask = ev.mask;
+        const bLen = nextAlgorithmState.bitmaskLength || 4;
+        const binStr = (ev.mask ?? 0).toString(2).padStart(bLen, '0');
+        const sel: number[] = Array.isArray((ev as any).selectedBits) ? [...(ev as any).selectedBits] : [];
+        if (sel.length === 0) {
+          for (let b = 0; b < bLen; b++) {
+            if ((ev.mask ?? 0) & (1 << b)) sel.push(b);
+          }
+        }
+        nextAlgorithmState.bitmaskSelectedBits = sel;
+        explanation = `Active mask: ${ev.mask} (binary: ${binStr}), Selected items: [${sel.join(', ')}]`;
+        break;
+      }
+
+      case 'BITMASK_BIT_CHECK': {
+        nextAlgorithmState.bitmaskBit = ev.bitIndex;
+        nextAlgorithmState.bitmaskBitVal = !!ev.bitSet;
+        explanation = `Bit check: mask & (1 << ${ev.bitIndex}) ➔ Bit is ${ev.bitSet ? 'SET (1)' : 'CLEAR (0)'}`;
+        break;
+      }
+
+      case 'BITMASK_BIT_SET': {
+        nextAlgorithmState.bitmask = (ev as any).newMask ?? ev.mask ?? Number(ev.value);
+        if (!nextAlgorithmState.bitmaskSelectedBits) nextAlgorithmState.bitmaskSelectedBits = [];
+        if (ev.bitIndex !== undefined && !nextAlgorithmState.bitmaskSelectedBits.includes(ev.bitIndex)) {
+          nextAlgorithmState.bitmaskSelectedBits.push(ev.bitIndex);
+        }
+        explanation = `Set bit ${ev.bitIndex}: mask ${ev.mask} | (1 << ${ev.bitIndex}) ➔ New mask ${nextAlgorithmState.bitmask}`;
+        break;
+      }
+
+      case 'BITMASK_BIT_CLEAR': {
+        nextAlgorithmState.bitmask = Number(ev.value);
+        if (nextAlgorithmState.bitmaskSelectedBits && ev.bitIndex !== undefined) {
+          nextAlgorithmState.bitmaskSelectedBits = nextAlgorithmState.bitmaskSelectedBits.filter(b => b !== ev.bitIndex);
+        }
+        explanation = `Clear bit ${ev.bitIndex}: mask ${ev.mask} & ~(1 << ${ev.bitIndex}) ➔ New mask ${ev.value}`;
+        break;
+      }
+
+      case 'BITMASK_STATE_ACCESS': {
+        nextMetrics.accesses++;
+        explanation = `Accessed dp[mask=${ev.mask}][item=${ev.index}] = ${ev.value}`;
+        break;
+      }
+
+      case 'BITMASK_TRANSITION': {
+        explanation = `Bitmask state transition: mask ${ev.mask} ➔ nextMask ${ev.value} (candidate = ${ev.candidateValue})`;
+        break;
+      }
+
+      case 'BITMASK_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        const m = ev.mask ?? 0;
+        const sub = ev.bitIndex ?? (ev as any).itemIndex;
+        const key = sub !== undefined ? `${m},${sub}` : `${m}`;
+        if (!nextAlgorithmState.dpTable1D) nextAlgorithmState.dpTable1D = [];
+        nextAlgorithmState.dpTable1D[m] = ev.newValue;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[key] = 'UPDATED';
+        explanation = `Updated dp[mask=${m}]: ${ev.oldValue} ➔ ${ev.newValue}`;
+        break;
+      }
+
+      case 'BITMASK_DP_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Bitmask DP completed with result: ${ev.value}`;
+        break;
+      }
+
+      // --- Digit DP ---
+      case 'DIGIT_DP_START': {
+        nextAlgorithmState.category = 'Dynamic Programming';
+        nextAlgorithmState.algorithmName = 'Digit DP';
+        nextAlgorithmState.status = 'Running';
+        nextAlgorithmState.theoreticalComplexity = { time: 'O(Digits × Sum × Constraints)', space: 'O(Digits × Sum)' };
+        explanation = `Started Digit DP for ${ev.size || (ev as any).target} digits`;
+        break;
+      }
+
+      case 'DIGIT_POSITION': {
+        nextAlgorithmState.digitPosition = ev.position;
+        nextAlgorithmState.digitTight = !!ev.tight;
+        nextAlgorithmState.digitStarted = !!ev.started;
+        nextAlgorithmState.digitSum = ev.sum;
+        nextAlgorithmState.digitRemainder = ev.remainder;
+        explanation = `Digit DP state: pos = ${ev.position}, tight = ${ev.tight}, started = ${ev.started}, sum = ${ev.sum}`;
+        break;
+      }
+
+      case 'DIGIT_OPTION_SELECT': {
+        nextAlgorithmState.digitSelected = ev.digit;
+        if (Array.isArray((ev as any).options)) nextAlgorithmState.digitOptions = [...(ev as any).options];
+        explanation = `Selected digit ${ev.digit} at position ${ev.position}`;
+        break;
+      }
+
+      case 'DIGIT_TIGHT_UPDATE': {
+        nextAlgorithmState.digitTight = ev.tight !== undefined ? !!ev.tight : !!ev.conditionResult;
+        explanation = `Tight constraint updated at position ${ev.position}: ${nextAlgorithmState.digitTight}`;
+        break;
+      }
+
+      case 'DIGIT_STARTED_UPDATE': {
+        nextAlgorithmState.digitStarted = !!ev.started;
+        explanation = `Number formation started: ${ev.started}`;
+        break;
+      }
+
+      case 'DIGIT_CACHE_LOOKUP': {
+        explanation = `Checking memoized digit state (pos=${ev.position}, tight=${ev.tight}, sum=${ev.sum})`;
+        break;
+      }
+
+      case 'DIGIT_CACHE_HIT': {
+        nextMetrics.cacheHits++;
+        explanation = `Digit DP Cache HIT at pos=${ev.position}, sum=${ev.sum} ➔ ${ev.value} (pruned)`;
+        break;
+      }
+
+      case 'DIGIT_CACHE_MISS': {
+        nextMetrics.cacheMisses++;
+        explanation = `Digit DP Cache MISS at pos=${ev.position}, sum=${ev.sum} ➔ Computing branches...`;
+        break;
+      }
+
+      case 'DIGIT_STATE_TRANSITION': {
+        explanation = `Digit transition: placed digit ${ev.digit} ➔ New running sum = ${ev.sum}`;
+        break;
+      }
+
+      case 'DIGIT_STATE_UPDATE': {
+        nextMetrics.assignments++;
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[String(ev.position ?? 0)] = 'UPDATED';
+        explanation = `Stored memoized count for (pos=${ev.position}, tight=${ev.tight}, sum=${ev.sum}) = ${ev.newValue}`;
+        break;
+      }
+
+      case 'DIGIT_DP_END': {
+        nextAlgorithmState.status = 'Completed';
+        explanation = `Digit DP completed. Total valid numbers matching criteria = ${ev.value ?? (ev as any).result}`;
+        break;
+      }
+
+      // --- Memoization ---
+      case 'MEMO_LOOKUP': {
+        const key = String(ev.key ?? '');
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[key] = (ev as any).hit ? 'CACHE_HIT' : 'CACHE_MISS';
+        explanation = `Memoization lookup for key: ${JSON.stringify(ev.key)}`;
+        break;
+      }
+
+      case 'MEMO_HIT': {
+        nextMetrics.cacheHits++;
+        const key = String(ev.key ?? '');
+        if (!nextAlgorithmState.memoEntries) nextAlgorithmState.memoEntries = [];
+        nextAlgorithmState.memoEntries.push({ key: ev.key, value: ev.value, status: 'HIT' });
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[key] = 'CACHE_HIT';
+        explanation = `Memoization HIT: key ${JSON.stringify(ev.key)} ➔ Return cached ${ev.value}`;
+        break;
+      }
+
+      case 'MEMO_MISS': {
+        nextMetrics.cacheMisses++;
+        const key = String(ev.key ?? '');
+        if (!nextAlgorithmState.memoEntries) nextAlgorithmState.memoEntries = [];
+        nextAlgorithmState.memoEntries.push({ key: ev.key, value: null, status: 'MISS' });
+        if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
+        nextAlgorithmState.dpCellStatus[key] = 'CACHE_MISS';
+        explanation = `Memoization MISS: key ${JSON.stringify(ev.key)} not yet in cache`;
+        break;
+      }
+
+      case 'MEMO_COMPUTE': {
+        explanation = `Computing state for key: ${JSON.stringify(ev.key)}`;
+        break;
+      }
+
+      case 'MEMO_STORE': {
+        nextMetrics.assignments++;
+        if (!nextAlgorithmState.memoEntries) nextAlgorithmState.memoEntries = [];
+        const existing = nextAlgorithmState.memoEntries.find(e => JSON.stringify(e.key) === JSON.stringify(ev.key));
+        if (existing) {
+          existing.value = ev.value;
+        } else {
+          nextAlgorithmState.memoEntries.push({ key: ev.key, value: ev.value, status: 'HIT' });
+        }
+        if (!nextAlgorithmState.dpSparseMap) nextAlgorithmState.dpSparseMap = {};
+        nextAlgorithmState.dpSparseMap[String(ev.key)] = ev.value;
+        explanation = `Stored in memoization cache: ${JSON.stringify(ev.key)} ➔ ${ev.value}`;
+        break;
+      }
+
+      case 'MEMO_RETURN': {
+        explanation = `Returning subproblem result: ${ev.value} for key ${JSON.stringify(ev.key)}`;
         break;
       }
 

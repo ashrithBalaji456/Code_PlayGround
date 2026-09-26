@@ -2600,6 +2600,854 @@ public class Main {
 }
 `,
   },
+  // ====================================================
+  // === PHASE 7: ADVANCED DYNAMIC PROGRAMMING PRESETS ===
+  // ====================================================
+  {
+    id: 'p7-01-knapsack',
+    title: '0/1 Knapsack Problem (Tabulation)',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N × W)',
+    spaceComplexity: 'O(N × W)',
+    description: 'Solves the canonical 0/1 Knapsack problem using a 2D dynamic programming table comparing include vs exclude decisions.',
+    explanation: 'For each item and capacity w, determines whether including the item achieves higher total value than excluding it.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] weights = {1, 3, 4};
+        int[] values = {15, 20, 30};
+        int W = 4;
+        int n = weights.length;
+        int[][] dp = new int[n + 1][W + 1];
+
+        CodeFlowTracer.knapsackStart("dp", n, W, 8);
+
+        for (int i = 1; i <= n; i++) {
+            int wt = weights[i - 1];
+            int val = values[i - 1];
+            CodeFlowTracer.knapsackItemSelect("dp", i, wt, val, 13);
+
+            for (int w = 0; w <= W; w++) {
+                CodeFlowTracer.knapsackCapacitySelect("dp", i, w, 16);
+                if (wt <= w) {
+                    CodeFlowTracer.knapsackFitCheck("dp", i, w, wt, true, 18);
+                    int excludeVal = dp[i - 1][w];
+                    int includeVal = val + dp[i - 1][w - wt];
+                    CodeFlowTracer.knapsackExclude("dp", i, w, excludeVal, 21);
+                    CodeFlowTracer.knapsackInclude("dp", i, w, includeVal, 22);
+                    dp[i][w] = Math.max(excludeVal, includeVal);
+                    CodeFlowTracer.knapsackCompare("dp", i, w, excludeVal, includeVal, dp[i][w], 24);
+                } else {
+                    CodeFlowTracer.knapsackFitCheck("dp", i, w, wt, false, 26);
+                    dp[i][w] = dp[i - 1][w];
+                    CodeFlowTracer.knapsackExclude("dp", i, w, dp[i][w], 28);
+                }
+                CodeFlowTracer.knapsackStateUpdate("dp", i, w, 0, dp[i][w], 30);
+            }
+        }
+
+        CodeFlowTracer.knapsackEnd("dp", dp[n][W], 34);
+        System.out.println("Maximum Value: " + dp[n][W]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-unbounded-knapsack',
+    title: 'Unbounded Knapsack Problem',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N × W)',
+    spaceComplexity: 'O(W)',
+    description: 'Solves the Unbounded Knapsack problem using a 1D state array where items can be selected multiple times.',
+    explanation: 'Iterates through capacities w from 1 to W, attempting to reuse each item to maximize accumulated value.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] weights = {1, 2, 3};
+        int[] values = {10, 15, 40};
+        int W = 4;
+        int[] dp = new int[W + 1];
+
+        CodeFlowTracer.unboundedKnapsackStart("dp", W, 8);
+
+        for (int w = 1; w <= W; w++) {
+            CodeFlowTracer.unboundedCapacitySelect("dp", w, 11);
+            for (int i = 0; i < weights.length; i++) {
+                int wt = weights[i];
+                int val = values[i];
+                CodeFlowTracer.unboundedItemSelect("dp", i, wt, val, 15);
+                if (wt <= w) {
+                    CodeFlowTracer.unboundedFitCheck("dp", w, wt, true, 17);
+                    int prev = dp[w];
+                    int cand = val + dp[w - wt];
+                    CodeFlowTracer.unboundedInclude("dp", w, cand, 20);
+                    if (cand > dp[w]) {
+                        CodeFlowTracer.unboundedCompare("dp", w, prev, cand, cand, 22);
+                        dp[w] = cand;
+                        CodeFlowTracer.unboundedStateUpdate("dp", w, prev, dp[w], 24);
+                    }
+                }
+            }
+        }
+
+        CodeFlowTracer.unboundedEnd("dp", dp[W], 30);
+        System.out.println("Max Unbounded Value: " + dp[W]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-coin-change-min',
+    title: 'Coin Change — Minimum Coins',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(Coins × Amount)',
+    spaceComplexity: 'O(Amount)',
+    description: 'Computes the minimum number of coins needed to make up a given target amount using 1D DP tabulation.',
+    explanation: 'Initializes base case dp[0] = 0 and updates dp[a] = min(dp[a], dp[a - c] + 1) for each coin denomination.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] coins = {1, 2, 5};
+        int amount = 5;
+        int[] dp = new int[amount + 1];
+        java.util.Arrays.fill(dp, amount + 1);
+        dp[0] = 0;
+
+        CodeFlowTracer.coinChangeStart("dp", "Coin Change (Minimum Coins)", amount, 9);
+        CodeFlowTracer.coinStateUpdate("dp", 0, 0, 0, 10);
+
+        for (int c : coins) {
+            CodeFlowTracer.coinSelect("dp", c, 13);
+            for (int a = c; a <= amount; a++) {
+                CodeFlowTracer.coinAmountSelect("dp", c, a, 15);
+                CodeFlowTracer.coinFitCheck("dp", c, a, true, 16);
+                int cand = dp[a - c] + 1;
+                CodeFlowTracer.coinCandidate("dp", c, a, cand, 18);
+                if (cand < dp[a]) {
+                    CodeFlowTracer.coinCompare("dp", a, dp[a], cand, cand, 20);
+                    int oldVal = dp[a];
+                    dp[a] = cand;
+                    CodeFlowTracer.coinStateUpdate("dp", a, oldVal, dp[a], 23);
+                }
+            }
+        }
+
+        int res = dp[amount] > amount ? -1 : dp[amount];
+        CodeFlowTracer.coinChangeEnd("dp", res, 29);
+        System.out.println("Min Coins for " + amount + ": " + res);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-coin-change-ways',
+    title: 'Coin Change — Number of Ways',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(Coins × Amount)',
+    spaceComplexity: 'O(Amount)',
+    description: 'Counts the number of distinct combinations of coins that sum up to a target amount.',
+    explanation: 'Accumulates combinations iteratively: dp[a] += dp[a - c] for each coin denomination.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] coins = {1, 2, 5};
+        int amount = 5;
+        int[] dp = new int[amount + 1];
+        dp[0] = 1;
+
+        CodeFlowTracer.coinChangeStart("dp", "Coin Change (Number of Ways)", amount, 8);
+        CodeFlowTracer.coinStateUpdate("dp", 0, 0, 1, 9);
+
+        for (int c : coins) {
+            CodeFlowTracer.coinSelect("dp", c, 12);
+            for (int a = c; a <= amount; a++) {
+                CodeFlowTracer.coinAmountSelect("dp", c, a, 14);
+                int oldVal = dp[a];
+                dp[a] += dp[a - c];
+                CodeFlowTracer.coinStateUpdate("dp", a, oldVal, dp[a], 17);
+            }
+        }
+
+        CodeFlowTracer.coinChangeEnd("dp", dp[amount], 21);
+        System.out.println("Total Ways: " + dp[amount]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-subset-sum',
+    title: 'Subset Sum Problem',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N × Target)',
+    spaceComplexity: 'O(N × Target)',
+    description: 'Determines whether a subset of integers exists that sums exactly to a specified target value.',
+    explanation: 'Uses a 2D boolean table where dp[i][s] is true if a subset of the first i elements sums to s.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] nums = {2, 3, 7, 8};
+        int target = 11;
+        int n = nums.length;
+        boolean[][] dp = new boolean[n + 1][target + 1];
+
+        CodeFlowTracer.subsetSumStart("dp", n, target, 8);
+
+        for (int i = 0; i <= n; i++) {
+            dp[i][0] = true;
+            CodeFlowTracer.subsetStateUpdate("dp", i, 0, false, true, 12);
+        }
+
+        for (int i = 1; i <= n; i++) {
+            int val = nums[i - 1];
+            CodeFlowTracer.subsetElementSelect("dp", i, val, 17);
+            for (int s = 1; s <= target; s++) {
+                CodeFlowTracer.subsetTargetSelect("dp", i, s, 19);
+                boolean exclude = dp[i - 1][s];
+                CodeFlowTracer.subsetExclude("dp", i, s, exclude, 21);
+                boolean include = false;
+                if (val <= s) {
+                    include = dp[i - 1][s - val];
+                    CodeFlowTracer.subsetInclude("dp", i, s, include, 25);
+                }
+                dp[i][s] = exclude || include;
+                CodeFlowTracer.subsetCompare("dp", i, s, dp[i][s], 28);
+                CodeFlowTracer.subsetStateUpdate("dp", i, s, false, dp[i][s], 29);
+            }
+        }
+
+        CodeFlowTracer.subsetSumEnd("dp", dp[n][target], 33);
+        System.out.println("Subset with sum " + target + " exists: " + dp[n][target]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-partition-subset-sum',
+    title: 'Partition Equal Subset Sum',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N × TotalSum)',
+    spaceComplexity: 'O(N × TotalSum)',
+    description: 'Reduces the problem of partitioning an array into two equal subsets to the 0/1 Subset Sum problem with target = sum / 2.',
+    explanation: 'Computes total sum, verifies it is even, derives target = total / 2, and runs subset sum DP.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] nums = {1, 5, 11, 5};
+        int total = 0;
+        for (int x : nums) total += x;
+        System.out.println("Total Sum: " + total);
+
+        if (total % 2 != 0) {
+            System.out.println("Cannot partition odd sum");
+            return;
+        }
+
+        int target = total / 2;
+        int n = nums.length;
+        boolean[][] dp = new boolean[n + 1][target + 1];
+        CodeFlowTracer.subsetSumStart("dp", n, target, 16);
+
+        for (int i = 0; i <= n; i++) dp[i][0] = true;
+
+        for (int i = 1; i <= n; i++) {
+            int val = nums[i - 1];
+            CodeFlowTracer.subsetElementSelect("dp", i, val, 22);
+            for (int s = 1; s <= target; s++) {
+                boolean exc = dp[i - 1][s];
+                boolean inc = (val <= s) ? dp[i - 1][s - val] : false;
+                dp[i][s] = exc || inc;
+                CodeFlowTracer.subsetStateUpdate("dp", i, s, false, dp[i][s], 27);
+            }
+        }
+
+        CodeFlowTracer.subsetSumEnd("dp", dp[n][target], 31);
+        System.out.println("Equal partition exists: " + dp[n][target]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-lcs',
+    title: 'Longest Common Subsequence (LCS)',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(M × N)',
+    spaceComplexity: 'O(M × N)',
+    description: 'Finds the length of the longest subsequence present in both strings in the same relative order.',
+    explanation: 'Compares characters diagonally on match, or takes max of top and left dependencies on mismatch.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        String s1 = "abcde";
+        String s2 = "ace";
+        int m = s1.length();
+        int n = s2.length();
+        int[][] dp = new int[m + 1][n + 1];
+
+        CodeFlowTracer.lcsStart("dp", s1, s2, 9);
+
+        for (int i = 1; i <= m; i++) {
+            char c1 = s1.charAt(i - 1);
+            for (int j = 1; j <= n; j++) {
+                char c2 = s2.charAt(j - 1);
+                boolean match = (c1 == c2);
+                CodeFlowTracer.lcsCharCompare("dp", i, j, c1, c2, match, 16);
+                if (match) {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                    CodeFlowTracer.lcsMatch("dp", i, j, dp[i - 1][j - 1], dp[i][j], 19);
+                } else {
+                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    CodeFlowTracer.lcsMismatch("dp", i, j, dp[i - 1][j], dp[i][j - 1], dp[i][j], 22);
+                }
+                CodeFlowTracer.lcsStateUpdate("dp", i, j, 0, dp[i][j], 24);
+            }
+        }
+
+        CodeFlowTracer.lcsEnd("dp", dp[m][n], 28);
+        System.out.println("LCS Length: " + dp[m][n]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-lcs-reconstruction',
+    title: 'LCS with Solution Reconstruction',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(M × N)',
+    spaceComplexity: 'O(M × N)',
+    description: 'Computes the LCS matrix and backtracks through the optimal decision path to reconstruct the actual string.',
+    explanation: 'Traces back from dp[m][n]: if characters match, prepends char; otherwise moves toward the larger adjacent cell.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        String s1 = "abcde";
+        String s2 = "ace";
+        int m = s1.length(), n = s2.length();
+        int[][] dp = new int[m + 1][n + 1];
+        CodeFlowTracer.lcsStart("dp", s1, s2, 7);
+
+        for (int i = 1; i <= m; i++) {
+            for (int j = 1; j <= n; j++) {
+                if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                } else {
+                    dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                }
+                CodeFlowTracer.lcsStateUpdate("dp", i, j, 0, dp[i][j], 15);
+            }
+        }
+
+        // Traceback / Reconstruction
+        StringBuilder sb = new StringBuilder();
+        int i = m, j = n;
+        CodeFlowTracer.lcsReconstructionStart("dp", i, j, 21);
+
+        while (i > 0 && j > 0) {
+            if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                sb.append(s1.charAt(i - 1));
+                CodeFlowTracer.lcsReconstructionStep("dp", i, j, s1.charAt(i - 1), "Matched character " + s1.charAt(i - 1), 26);
+                i--; j--;
+            } else if (dp[i - 1][j] > dp[i][j - 1]) {
+                CodeFlowTracer.lcsReconstructionStep("dp", i, j, ' ', "Move UP to [" + (i - 1) + "][" + j + "]", 29);
+                i--;
+            } else {
+                CodeFlowTracer.lcsReconstructionStep("dp", i, j, ' ', "Move LEFT to [" + i + "][" + (j - 1) + "]", 32);
+                j--;
+            }
+        }
+
+        String lcsStr = sb.reverse().toString();
+        CodeFlowTracer.lcsReconstructionEnd("dp", lcsStr, 38);
+        System.out.println("Reconstructed LCS: " + lcsStr);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-lcstr',
+    title: 'Longest Common Substring',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(M × N)',
+    spaceComplexity: 'O(M × N)',
+    description: 'Finds the length of the longest contiguous common substring, resetting the state to 0 on character mismatch.',
+    explanation: 'Contiguous characters increment the diagonal cell; any mismatch immediately resets the substring length to zero.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        String s1 = "zxabcdezy";
+        String s2 = "yzabcdezx";
+        int m = s1.length(), n = s2.length();
+        int[][] dp = new int[m + 1][n + 1];
+        int maxLen = 0;
+
+        CodeFlowTracer.lcstrStart("dp", s1, s2, 9);
+
+        for (int i = 1; i <= m; i++) {
+            char c1 = s1.charAt(i - 1);
+            for (int j = 1; j <= n; j++) {
+                char c2 = s2.charAt(j - 1);
+                boolean match = (c1 == c2);
+                CodeFlowTracer.lcstrCharCompare("dp", i, j, c1, c2, match, 16);
+                if (match) {
+                    dp[i][j] = dp[i - 1][j - 1] + 1;
+                    CodeFlowTracer.lcstrMatch("dp", i, j, dp[i - 1][j - 1], dp[i][j], 19);
+                    if (dp[i][j] > maxLen) {
+                        maxLen = dp[i][j];
+                        CodeFlowTracer.lcstrMaxUpdate("dp", maxLen, 22);
+                    }
+                } else {
+                    dp[i][j] = 0;
+                    CodeFlowTracer.lcstrReset("dp", i, j, 26);
+                }
+                CodeFlowTracer.lcstrStateUpdate("dp", i, j, 0, dp[i][j], 28);
+            }
+        }
+
+        CodeFlowTracer.lcstrEnd("dp", maxLen, 32);
+        System.out.println("Longest Common Substring Length: " + maxLen);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-lis',
+    title: 'Longest Increasing Subsequence (LIS)',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N²)',
+    spaceComplexity: 'O(N)',
+    description: 'Finds the length of the longest strictly increasing subsequence in an array using 1D DP tabulation.',
+    explanation: 'For each index i, checks all previous indices j < i where arr[j] < arr[i] to update dp[i] = max(dp[i], dp[j] + 1).',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] arr = {10, 9, 2, 5, 3, 7, 101, 18};
+        int n = arr.length;
+        int[] dp = new int[n];
+        java.util.Arrays.fill(dp, 1);
+
+        CodeFlowTracer.lisStart("dp", n, 8);
+
+        for (int i = 0; i < n; i++) {
+            CodeFlowTracer.lisIndexSelect("dp", i, 11);
+            for (int j = 0; j < i; j++) {
+                boolean less = arr[j] < arr[i];
+                CodeFlowTracer.lisCompare("dp", i, j, arr[i], arr[j], less, 14);
+                if (less && dp[j] + 1 > dp[i]) {
+                    CodeFlowTracer.lisCandidate("dp", i, j, dp[j] + 1, 16);
+                    dp[i] = dp[j] + 1;
+                    CodeFlowTracer.lisStateUpdate("dp", i, 0, dp[i], 18);
+                }
+            }
+        }
+
+        int maxVal = 0;
+        for (int x : dp) if (x > maxVal) maxVal = x;
+        CodeFlowTracer.lisEnd("dp", maxVal, 25);
+        System.out.println("LIS Length: " + maxVal);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-grid-unique-paths',
+    title: 'Grid DP — Unique Paths',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(M × N)',
+    spaceComplexity: 'O(M × N)',
+    description: 'Calculates the number of possible unique paths from top-left to bottom-right in an M × N grid.',
+    explanation: 'From any cell, robot can only move right or down. Therefore, dp[i][j] = dp[i - 1][j] + dp[i][j - 1].',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int m = 3, n = 3;
+        int[][] dp = new int[m][n];
+        CodeFlowTracer.gridDpStart("dp", "Unique Paths", m, n, 6);
+
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                CodeFlowTracer.gridCellSelect("dp", i, j, 10);
+                if (i == 0 || j == 0) {
+                    dp[i][j] = 1;
+                } else {
+                    CodeFlowTracer.gridDependencyAccess("dp", i, j, "[[" + (i-1) + "," + j + "],[" + i + "," + (j-1) + "]]", 14);
+                    dp[i][j] = dp[i - 1][j] + dp[i][j - 1];
+                }
+                CodeFlowTracer.gridStateUpdate("dp", i, j, 0, dp[i][j], 17);
+            }
+        }
+
+        CodeFlowTracer.gridDpEnd("dp", dp[m - 1][n - 1], 21);
+        System.out.println("Unique Paths: " + dp[m - 1][n - 1]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-grid-min-path-sum',
+    title: 'Grid DP — Minimum Path Sum',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(M × N)',
+    spaceComplexity: 'O(M × N)',
+    description: 'Finds a path from top-left to bottom-right which minimizes the sum of all numbers along its path.',
+    explanation: 'Compares top and left incoming paths: dp[i][j] = grid[i][j] + min(dp[i - 1][j], dp[i][j - 1]).',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[][] grid = {
+            {1, 3, 1},
+            {1, 5, 1},
+            {4, 2, 1}
+        };
+        int m = grid.length, n = grid[0].length;
+        int[][] dp = new int[m][n];
+        CodeFlowTracer.gridDpStart("dp", "Minimum Path Sum", m, n, 10);
+
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                CodeFlowTracer.gridCellSelect("dp", i, j, 14);
+                if (i == 0 && j == 0) {
+                    dp[i][j] = grid[0][0];
+                } else if (i == 0) {
+                    dp[i][j] = dp[0][j - 1] + grid[0][j];
+                } else if (j == 0) {
+                    dp[i][j] = dp[i - 1][0] + grid[i][0];
+                } else {
+                    int top = dp[i - 1][j];
+                    int left = dp[i][j - 1];
+                    CodeFlowTracer.gridCandidate("dp", i, j, top, left, 23);
+                    dp[i][j] = Math.min(top, left) + grid[i][j];
+                    CodeFlowTracer.gridCompare("dp", i, j, top, left, dp[i][j], 25);
+                }
+                CodeFlowTracer.gridStateUpdate("dp", i, j, 0, dp[i][j], 27);
+            }
+        }
+
+        CodeFlowTracer.gridDpEnd("dp", dp[m - 1][n - 1], 31);
+        System.out.println("Minimum Path Sum: " + dp[m - 1][n - 1]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-grid-obstacles',
+    title: 'Grid DP with Obstacles',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(M × N)',
+    spaceComplexity: 'O(M × N)',
+    description: 'Finds unique paths in a grid containing obstacles that block passage.',
+    explanation: 'If a cell contains an obstacle, its path count is 0; otherwise it receives the sum of top and left entries.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[][] obstacleGrid = {
+            {0, 0, 0},
+            {0, 1, 0},
+            {0, 0, 0}
+        };
+        int m = obstacleGrid.length, n = obstacleGrid[0].length;
+        int[][] dp = new int[m][n];
+        CodeFlowTracer.gridDpStart("dp", "Unique Paths with Obstacles", m, n, 10);
+
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                CodeFlowTracer.gridCellSelect("dp", i, j, 14);
+                boolean isObs = (obstacleGrid[i][j] == 1);
+                CodeFlowTracer.gridObstacleCheck("dp", i, j, isObs, 16);
+                if (isObs) {
+                    dp[i][j] = 0;
+                } else if (i == 0 && j == 0) {
+                    dp[i][j] = 1;
+                } else {
+                    int fromTop = (i > 0) ? dp[i - 1][j] : 0;
+                    int fromLeft = (j > 0) ? dp[i][j - 1] : 0;
+                    dp[i][j] = fromTop + fromLeft;
+                }
+                CodeFlowTracer.gridStateUpdate("dp", i, j, 0, dp[i][j], 25);
+            }
+        }
+
+        CodeFlowTracer.gridDpEnd("dp", dp[m - 1][n - 1], 29);
+        System.out.println("Paths avoiding obstacles: " + dp[m - 1][n - 1]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-interval-dp',
+    title: 'Interval DP — Matrix Chain Multiplication',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(N³)',
+    spaceComplexity: 'O(N²)',
+    description: 'Computes the minimum number of scalar multiplications needed to multiply a chain of matrices.',
+    explanation: 'Iterates over interval length L from 2 to N, testing all split points k between i and j.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] p = {10, 20, 30, 40};
+        int n = p.length - 1;
+        int[][] dp = new int[n + 1][n + 1];
+
+        CodeFlowTracer.intervalDpStart("dp", n, 7);
+
+        for (int len = 2; len <= n; len++) {
+            CodeFlowTracer.intervalLengthUpdate("dp", len, 10);
+            for (int i = 1; i <= n - len + 1; i++) {
+                int j = i + len - 1;
+                dp[i][j] = Integer.MAX_VALUE;
+                CodeFlowTracer.intervalSelect("dp", i, j, 14);
+
+                for (int k = i; k < j; k++) {
+                    CodeFlowTracer.intervalSplitSelect("dp", i, j, k, 17);
+                    int cost = dp[i][k] + dp[k + 1][j] + p[i - 1] * p[k] * p[j];
+                    CodeFlowTracer.intervalCombine("dp", i, j, k, cost, 19);
+                    if (cost < dp[i][j]) {
+                        dp[i][j] = cost;
+                    }
+                }
+                CodeFlowTracer.intervalStateUpdate("dp", i, j, 0, dp[i][j], 24);
+            }
+        }
+
+        CodeFlowTracer.intervalDpEnd("dp", dp[1][n], 28);
+        System.out.println("Min Cost Matrix Multiplication: " + dp[1][n]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-tree-dp',
+    title: 'Tree DP — Subtree State Computation',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(N)',
+    description: 'Executes post-order DFS to compute subproblem values on tree vertices and propagate state upward.',
+    explanation: 'Combines child subtree sizes into parent state dp[u] = 1 + sum(dp[v]).',
+    code: `public class Main {
+    static java.util.Map<Integer, java.util.List<Integer>> tree = new java.util.HashMap<>();
+    static int[] dp = new int[5];
+
+    static void dfs(int u, int p) {
+        CodeFlowTracer.treeDpNodeEnter("tree", "node_" + u, 7);
+        dp[u] = 1;
+
+        for (int v : tree.getOrDefault(u, java.util.Collections.emptyList())) {
+            if (v != p) {
+                CodeFlowTracer.treeDpChildProcess("tree", "node_" + u, "node_" + v, 12);
+                dfs(v, u);
+                CodeFlowTracer.treeDpStateAccess("tree", "node_" + v, dp[v], 14);
+                dp[u] += dp[v];
+            }
+        }
+        CodeFlowTracer.treeDpStateUpdate("tree", "node_" + u, 0, dp[u], 18);
+        CodeFlowTracer.treeDpNodeComplete("tree", "node_" + u, dp[u], 19);
+    }
+
+    public static void main(String[] args) {
+        tree.put(1, java.util.Arrays.asList(2, 3));
+        tree.put(2, java.util.Arrays.asList(4));
+        CodeFlowTracer.treeDpStart("tree", "node_1", 25);
+        dfs(1, 0);
+        CodeFlowTracer.treeDpEnd("tree", dp[1], 27);
+        System.out.println("Tree Size at Root: " + dp[1]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-bitmask-dp',
+    title: 'Bitmask Dynamic Programming',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(2ᴺ × N)',
+    spaceComplexity: 'O(2ᴺ)',
+    description: 'Uses integer bit representations to encode subsets and transitions between subset states.',
+    explanation: 'Iterates through masks from 0 to 2^n - 1, checking unused bits and setting them to transition to the next state.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int n = 3;
+        int totalMasks = 1 << n;
+        int[] dp = new int[totalMasks];
+        dp[0] = 1;
+
+        CodeFlowTracer.bitmaskDpStart("dp", n, 8);
+
+        for (int mask = 0; mask < totalMasks; mask++) {
+            CodeFlowTracer.bitmaskCreate("dp", mask, 11);
+            for (int i = 0; i < n; i++) {
+                boolean isSet = ((mask & (1 << i)) != 0);
+                CodeFlowTracer.bitmaskBitCheck("dp", mask, i, isSet, 14);
+                if (!isSet) {
+                    int nextMask = mask | (1 << i);
+                    CodeFlowTracer.bitmaskBitSet("dp", mask, i, nextMask, 17);
+                    int oldVal = dp[nextMask];
+                    dp[nextMask] += dp[mask];
+                    CodeFlowTracer.bitmaskStateUpdate("dp", nextMask, 0, oldVal, dp[nextMask], 20);
+                }
+            }
+        }
+
+        CodeFlowTracer.bitmaskDpEnd("dp", dp[totalMasks - 1], 25);
+        System.out.println("Permutations via Bitmask: " + dp[totalMasks - 1]);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-digit-dp',
+    title: 'Digit Dynamic Programming',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(Digits × Sum)',
+    spaceComplexity: 'O(Digits × Sum)',
+    description: 'Counts valid integers within a range satisfying digit-level constraints with memoized states.',
+    explanation: 'Uses recursive parameters (position, tight, sum) and prunes duplicate branch computations via cache.',
+    code: `public class Main {
+    static int countDigits(int pos, boolean tight, int sum) {
+        CodeFlowTracer.digitPosition("dp", pos, tight, true, sum, 4);
+        if (pos == 2) {
+            return (sum == 3) ? 1 : 0;
+        }
+
+        CodeFlowTracer.digitCacheLookup("dp", pos, tight, sum, 9);
+        int limit = tight ? 3 : 9;
+        int total = 0;
+
+        for (int d = 0; d <= limit; d++) {
+            CodeFlowTracer.digitOptionSelect("dp", pos, d, 14);
+            boolean newTight = tight && (d == limit);
+            CodeFlowTracer.digitTightUpdate("dp", pos, tight, newTight, 16);
+            CodeFlowTracer.digitStateTransition("dp", pos, d, sum + d, 17);
+            total += countDigits(pos + 1, newTight, sum + d);
+        }
+
+        CodeFlowTracer.digitStateUpdate("dp", pos, tight, sum, total, 21);
+        return total;
+    }
+
+    public static void main(String[] args) {
+        CodeFlowTracer.digitDpStart("dp", 2, 26);
+        int result = countDigits(0, true, 0);
+        CodeFlowTracer.digitDpEnd("dp", result, 28);
+        System.out.println("Valid Numbers with sum 3: " + result);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-memoization',
+    title: 'Top-Down Memoization (Fibonacci Cache)',
+    category: 'Algorithms',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(N)',
+    spaceComplexity: 'O(N)',
+    description: 'Demonstrates recursive top-down dynamic programming with HashMap cache lookup, hits, misses, and stores.',
+    explanation: 'Checks cache on every function invocation; returns immediately on hit, preventing exponential branch recomputation.',
+    code: `public class Main {
+    static java.util.Map<Integer, Integer> memo = new java.util.HashMap<>();
+
+    static int fib(int n) {
+        CodeFlowTracer.memoLookup("memo", n, 6);
+        if (n <= 1) return n;
+        if (memo.containsKey(n)) {
+            CodeFlowTracer.memoHit("memo", n, memo.get(n), 9);
+            return memo.get(n);
+        }
+        CodeFlowTracer.memoMiss("memo", n, 12);
+        CodeFlowTracer.memoCompute("memo", n, 13);
+        int val = fib(n - 1) + fib(n - 2);
+        memo.put(n, val);
+        CodeFlowTracer.memoStore("memo", n, val, 16);
+        CodeFlowTracer.memoReturn("memo", n, val, 17);
+        return val;
+    }
+
+    public static void main(String[] args) {
+        CodeFlowTracer.dpStart("memo", "Fibonacci Memoization", 22);
+        int ans = fib(5);
+        CodeFlowTracer.dpEnd("memo", ans, 24);
+        System.out.println("Fib(5) = " + ans);
+    }
+}
+`,
+  },
+  {
+    id: 'p7-comprehensive-dp-demo',
+    title: 'Phase 7 Final Comprehensive DP Demo (Multi-DP Integration)',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'Multi-Phase',
+    spaceComplexity: 'Multi-Structure',
+    description: 'Demonstrates 0/1 Knapsack, Coin Change, LCS, LIS, Tree DP, Bitmask DP, and Memoization in a single unified execution.',
+    explanation: 'Proves that all Phase 7 dynamic programming algorithms use the SAME Java execution engine, event system, and visualization architecture.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        // 1. 0/1 Knapsack
+        int[] weights = {1, 3};
+        int[] values = {10, 25};
+        int W = 3;
+        int[][] knap = new int[3][4];
+        CodeFlowTracer.knapsackStart("knap", 2, W, 9);
+        knap[1][1] = 10;
+        CodeFlowTracer.knapsackStateUpdate("knap", 1, 1, 0, 10, 11);
+        knap[2][3] = 25;
+        CodeFlowTracer.knapsackStateUpdate("knap", 2, 3, 0, 25, 13);
+        CodeFlowTracer.knapsackEnd("knap", 25, 14);
+
+        // 2. Coin Change (Min Coins)
+        int[] coins = {1, 2};
+        CodeFlowTracer.coinChangeStart("coinsDp", "Coin Change", 3, 18);
+        CodeFlowTracer.coinStateUpdate("coinsDp", 1, 0, 1, 19);
+        CodeFlowTracer.coinStateUpdate("coinsDp", 2, 0, 1, 20);
+        CodeFlowTracer.coinChangeEnd("coinsDp", 2, 21);
+
+        // 3. Longest Common Subsequence
+        CodeFlowTracer.lcsStart("lcsMat", "AB", "B", 24);
+        CodeFlowTracer.lcsCharCompare("lcsMat", 1, 1, 'A', 'B', false, 25);
+        CodeFlowTracer.lcsCharCompare("lcsMat", 2, 1, 'B', 'B', true, 26);
+        CodeFlowTracer.lcsStateUpdate("lcsMat", 2, 1, 0, 1, 27);
+        CodeFlowTracer.lcsEnd("lcsMat", 1, 28);
+
+        // 4. Longest Increasing Subsequence
+        CodeFlowTracer.lisStart("lisArr", 3, 31);
+        CodeFlowTracer.lisStateUpdate("lisArr", 0, 0, 1, 32);
+        CodeFlowTracer.lisStateUpdate("lisArr", 1, 0, 2, 33);
+        CodeFlowTracer.lisEnd("lisArr", 2, 34);
+
+        // 5. Tree DP
+        CodeFlowTracer.treeDpStart("treeDp", "root", 37);
+        CodeFlowTracer.treeDpStateUpdate("treeDp", "root", 0, 3, 38);
+        CodeFlowTracer.treeDpEnd("treeDp", 3, 39);
+
+        // 6. Bitmask DP
+        CodeFlowTracer.bitmaskDpStart("maskDp", 2, 42);
+        CodeFlowTracer.bitmaskCreate("maskDp", 3, 43);
+        CodeFlowTracer.bitmaskStateUpdate("maskDp", 3, 0, 0, 2, 44);
+        CodeFlowTracer.bitmaskDpEnd("maskDp", 2, 45);
+
+        System.out.println("Phase 7 Comprehensive DP Execution Completed Successfully.");
+    }
+}
+`,
+  },
 ];
 
 

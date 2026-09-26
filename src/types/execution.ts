@@ -246,16 +246,152 @@ export type EventType =
   | 'BACKTRACK_UNDO'
   | 'BACKTRACK_RETURN'
   | 'BACKTRACK_END'
-  // Dynamic Programming
+  // Dynamic Programming & Phase 7 Advanced DP
   | 'DP_START'
   | 'DP_STATE_CREATE'
   | 'DP_STATE_ACCESS'
-  | 'DP_STATE_UPDATE'
+  | 'DP_STATE_COMPUTE'
+  | 'DP_STATE_COMPARE'
+  | 'DP_STATE_TRANSITION'
   | 'DP_TRANSITION'
+  | 'DP_STATE_UPDATE'
+  | 'DP_STATE_COMPLETE'
+  | 'DP_CACHE_LOOKUP'
   | 'DP_CACHE_HIT'
   | 'DP_CACHE_MISS'
   | 'DP_BASE_CASE'
+  | 'DP_TABLE_CREATE'
+  | 'DP_TABLE_ACCESS'
+  | 'DP_TABLE_UPDATE'
+  | 'DP_RECONSTRUCTION_START'
+  | 'DP_RECONSTRUCTION_STEP'
+  | 'DP_RECONSTRUCTION_END'
   | 'DP_END'
+  // 0/1 Knapsack
+  | 'KNAPSACK_START'
+  | 'KNAPSACK_ITEM_SELECT'
+  | 'KNAPSACK_CAPACITY_SELECT'
+  | 'KNAPSACK_FIT_CHECK'
+  | 'KNAPSACK_EXCLUDE'
+  | 'KNAPSACK_INCLUDE'
+  | 'KNAPSACK_COMPARE'
+  | 'KNAPSACK_STATE_UPDATE'
+  | 'KNAPSACK_END'
+  // Unbounded Knapsack
+  | 'UNBOUNDED_KNAPSACK_START'
+  | 'UNBOUNDED_ITEM_SELECT'
+  | 'UNBOUNDED_CAPACITY_SELECT'
+  | 'UNBOUNDED_FIT_CHECK'
+  | 'UNBOUNDED_INCLUDE'
+  | 'UNBOUNDED_EXCLUDE'
+  | 'UNBOUNDED_COMPARE'
+  | 'UNBOUNDED_STATE_UPDATE'
+  | 'UNBOUNDED_END'
+  // Coin Change
+  | 'COIN_CHANGE_START'
+  | 'COIN_SELECT'
+  | 'COIN_AMOUNT_SELECT'
+  | 'COIN_FIT_CHECK'
+  | 'COIN_CANDIDATE'
+  | 'COIN_COMPARE'
+  | 'COIN_STATE_UPDATE'
+  | 'COIN_CHANGE_END'
+  // Subset Sum
+  | 'SUBSET_SUM_START'
+  | 'SUBSET_ELEMENT_SELECT'
+  | 'SUBSET_TARGET_SELECT'
+  | 'SUBSET_INCLUDE'
+  | 'SUBSET_EXCLUDE'
+  | 'SUBSET_COMPARE'
+  | 'SUBSET_STATE_UPDATE'
+  | 'SUBSET_SUM_END'
+  // Longest Common Subsequence
+  | 'LCS_START'
+  | 'LCS_CHARACTER_COMPARE'
+  | 'LCS_MATCH'
+  | 'LCS_MISMATCH'
+  | 'LCS_DEPENDENCY_SELECT'
+  | 'LCS_STATE_UPDATE'
+  | 'LCS_RECONSTRUCTION_START'
+  | 'LCS_RECONSTRUCTION_STEP'
+  | 'LCS_RECONSTRUCTION_END'
+  | 'LCS_END'
+  // Longest Common Substring
+  | 'LCSTR_START'
+  | 'LCSTR_CHARACTER_COMPARE'
+  | 'LCSTR_MATCH'
+  | 'LCSTR_RESET'
+  | 'LCSTR_STATE_UPDATE'
+  | 'LCSTR_MAX_UPDATE'
+  | 'LCSTR_END'
+  // Longest Increasing Subsequence
+  | 'LIS_START'
+  | 'LIS_INDEX_SELECT'
+  | 'LIS_COMPARE'
+  | 'LIS_CANDIDATE'
+  | 'LIS_STATE_UPDATE'
+  | 'LIS_PARENT_UPDATE'
+  | 'LIS_RECONSTRUCTION_START'
+  | 'LIS_RECONSTRUCTION_STEP'
+  | 'LIS_END'
+  // Grid DP
+  | 'GRID_DP_START'
+  | 'GRID_CELL_SELECT'
+  | 'GRID_OBSTACLE_CHECK'
+  | 'GRID_DEPENDENCY_ACCESS'
+  | 'GRID_CANDIDATE'
+  | 'GRID_COMPARE'
+  | 'GRID_STATE_UPDATE'
+  | 'GRID_DP_END'
+  // Interval DP
+  | 'INTERVAL_DP_START'
+  | 'INTERVAL_SELECT'
+  | 'INTERVAL_LENGTH_UPDATE'
+  | 'INTERVAL_SPLIT_SELECT'
+  | 'INTERVAL_LEFT_DEPENDENCY'
+  | 'INTERVAL_RIGHT_DEPENDENCY'
+  | 'INTERVAL_COMBINE'
+  | 'INTERVAL_STATE_UPDATE'
+  | 'INTERVAL_DP_END'
+  // Tree DP
+  | 'TREE_DP_START'
+  | 'TREE_DP_NODE_ENTER'
+  | 'TREE_DP_CHILD_PROCESS'
+  | 'TREE_DP_STATE_ACCESS'
+  | 'TREE_DP_TRANSITION'
+  | 'TREE_DP_STATE_UPDATE'
+  | 'TREE_DP_NODE_COMPLETE'
+  | 'TREE_DP_RETURN'
+  | 'TREE_DP_END'
+  // Bitmask DP
+  | 'BITMASK_DP_START'
+  | 'BITMASK_CREATE'
+  | 'BITMASK_BIT_CHECK'
+  | 'BITMASK_BIT_SET'
+  | 'BITMASK_BIT_CLEAR'
+  | 'BITMASK_STATE_ACCESS'
+  | 'BITMASK_TRANSITION'
+  | 'BITMASK_STATE_UPDATE'
+  | 'BITMASK_DP_END'
+  // Digit DP
+  | 'DIGIT_DP_START'
+  | 'DIGIT_POSITION'
+  | 'DIGIT_OPTION_SELECT'
+  | 'DIGIT_STATE_TRANSITION'
+  | 'DIGIT_TIGHT_UPDATE'
+  | 'DIGIT_STARTED_UPDATE'
+  | 'DIGIT_CACHE_LOOKUP'
+  | 'DIGIT_CACHE_HIT'
+  | 'DIGIT_CACHE_MISS'
+  | 'DIGIT_STATE_UPDATE'
+  | 'DIGIT_DP_END'
+  // Memoization
+  | 'MEMO_LOOKUP'
+  | 'MEMO_HIT'
+  | 'MEMO_MISS'
+  | 'MEMO_COMPUTE'
+  | 'MEMO_STORE'
+  | 'MEMO_RETURN'
   // Phase 6 Advanced Algorithm Events
   // Bellman-Ford
   | 'BELLMAN_FORD_START'
@@ -476,6 +612,36 @@ export interface ExecutionEvent {
   rotationType?: 'LL' | 'RR' | 'LR' | 'RL';
   feasible?: boolean;
   monoType?: 'INCREASING' | 'DECREASING';
+  // Phase 7 Advanced Dynamic Programming fields
+  indices?: (number | string)[];
+  candidateValue?: any;
+  dependencies?: (number | [number, number] | string)[];
+  capacity?: number;
+  itemIndex?: number;
+  itemValue?: any;
+  fit?: boolean;
+  coin?: number;
+  amount?: number;
+  iChar?: string;
+  jChar?: string;
+  charMatched?: boolean;
+  leftIndex?: number;
+  rightIndex?: number;
+  splitIndex?: number;
+  mask?: number;
+  bitIndex?: number;
+  bitSet?: boolean;
+  position?: number;
+  digit?: number;
+  tight?: boolean;
+  started?: boolean;
+  sum?: number;
+  remainder?: number;
+  reconstructionPath?: any[];
+  reconstructionResult?: any;
+  status?: string;
+  rowLabels?: string[];
+  colLabels?: string[];
 }
 
 export interface VariableInfo {
@@ -773,6 +939,71 @@ export interface AlgorithmState {
   dpTransitionFormula?: string;
   dpPreviousCells?: [number, number][];
   memoEntries?: { key: any; value: any; status: 'HIT' | 'MISS' }[];
+  // Phase 7 DP Core & Reusable Table Engine
+  dpCellStatus?: Record<string, 'UNVISITED' | 'CURRENT' | 'DEPENDENCY' | 'COMPUTING' | 'UPDATED' | 'CACHE_HIT' | 'CACHE_MISS' | 'FINAL'>;
+  dpDimensions?: number[];
+  dpRowLabels?: (string | number)[];
+  dpColLabels?: (string | number)[];
+  dpDependencies?: (number | [number, number] | string)[];
+  dpCandidateValues?: { label: string; value: any; selected?: boolean }[];
+  dpSparseMap?: Record<string, any>;
+  dpExplanation?: string;
+  dpActiveViewMode?: 'TABLE' | 'DEPENDENCY' | 'RECURSION';
+  // Phase 7 Specific DP State
+  knapsackItems?: { weight: number; value: number; name?: string }[];
+  knapsackCapacity?: number;
+  knapsackCurrentItem?: number;
+  knapsackCurrentCapacity?: number;
+  knapsackFit?: boolean;
+  knapsackIncludeVal?: number;
+  knapsackExcludeVal?: number;
+  knapsackDecision?: 'INCLUDE' | 'EXCLUDE' | 'CANNOT_FIT' | 'PENDING';
+  coins?: number[];
+  coinAmount?: number;
+  currentCoin?: number;
+  coinCandidate?: any;
+  subsetTarget?: number;
+  lcsStringA?: string;
+  lcsStringB?: string;
+  lcsI?: number;
+  lcsJ?: number;
+  lcsCharA?: string;
+  lcsCharB?: string;
+  lcsMatched?: boolean;
+  lcsReconstructionPath?: [number, number][];
+  lcsResult?: string;
+  lcstrMaxLen?: number;
+  lisArray?: number[];
+  lisCurrentI?: number;
+  lisCurrentJ?: number;
+  lisComparison?: boolean;
+  lisParents?: (number | null)[];
+  lisReconstructedIndices?: number[];
+  gridRows?: number;
+  gridCols?: number;
+  gridObstacles?: [number, number][];
+  gridCurrentCell?: [number, number];
+  intervalLeft?: number;
+  intervalRight?: number;
+  intervalLength?: number;
+  intervalSplit?: number;
+  treeDpNodeStates?: Record<string, any>;
+  treeDpCurrentNode?: string;
+  bitmask?: number;
+  bitmaskLength?: number;
+  bitmaskBit?: number;
+  bitmaskBitVal?: boolean;
+  bitmaskSelectedBits?: number[];
+  digitPosition?: number;
+  digitTight?: boolean;
+  digitStarted?: boolean;
+  digitSum?: number;
+  digitRemainder?: number;
+  digitOptions?: number[];
+  digitSelected?: number;
+  reconstructionActive?: boolean;
+  reconstructionSequence?: any[];
+  reconstructionFinalResult?: any;
   // Greedy
   candidates?: any[];
   chosenCandidate?: any;

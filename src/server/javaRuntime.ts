@@ -1041,7 +1041,7 @@ public class CodeFlowTracer {
 
     public static void dpEnd(String dpId, Object finalResult, int line) {
         String rStr = formatValue(finalResult);
-        recordEvent("{\\"type\\":\\"DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"dpId\\":\\"" + dpId + "\\",\\"value\\":" + rStr + "}");
+        recordEvent("{\\"type\\":\\"DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + dpId + "\\",\\"dpId\\":\\"" + dpId + "\\",\\"value\\":" + rStr + "}");
     }
 
     // === PHASE 6: ADVANCED ALGORITHMS ===
@@ -1424,6 +1424,585 @@ public class CodeFlowTracer {
 
     public static void monoStackEnd(String name, int line) {
         recordEvent("{\\"type\\":\\"MONO_STACK_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\"}");
+    }
+
+    // ==========================================
+    // === PHASE 7 ADVANCED DYNAMIC PROGRAMMING ===
+    // ==========================================
+
+    // --- Core DP & Table ---
+    public static void dpStart(String structId, String algoName, int line) {
+        recordEvent("{\\"type\\":\\"DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"algorithmName\\":\\"" + algoName + "\\"}");
+    }
+
+    public static void dpTableCreate(String structId, String dimsJson, int line) {
+        recordEvent("{\\"type\\":\\"DP_TABLE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"dimensions\\":" + dimsJson + "}");
+    }
+
+    public static void dpStateAccess(String structId, String indicesJson, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DP_STATE_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"indices\\":" + indicesJson + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void dpStateCompute(String structId, String indicesJson, String formula, int line) {
+        String cleanF = formula.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"DP_STATE_COMPUTE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"indices\\":" + indicesJson + ",\\"transitionFormula\\":\\"" + cleanF + "\\"}");
+    }
+
+    public static void dpStateCompare(String structId, String indicesJson, Object cand1, Object cand2, Object chosen, int line) {
+        String c1 = formatValue(cand1);
+        String c2 = formatValue(cand2);
+        String ch = formatValue(chosen);
+        recordEvent("{\\"type\\":\\"DP_STATE_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"indices\\":" + indicesJson + ",\\"leftVal\\":" + c1 + ",\\"rightVal\\":" + c2 + ",\\"value\\":" + ch + "}");
+    }
+
+    public static void dpStateTransition(String structId, String indicesJson, String depsJson, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DP_STATE_TRANSITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"indices\\":" + indicesJson + ",\\"dependencies\\":" + depsJson + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void dpStateUpdate(String structId, String indicesJson, Object oldVal, Object newVal, int line) {
+        String oStr = formatValue(oldVal);
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"DP_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"indices\\":" + indicesJson + ",\\"oldValue\\":" + oStr + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void dpCacheLookup(String structId, String keyStr, int line) {
+        recordEvent("{\\"type\\":\\"DP_CACHE_LOOKUP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"stateKey\\":\\"" + keyStr + "\\"}");
+    }
+
+    public static void dpCacheHit(String structId, String keyStr, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"DP_CACHE_HIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"stateKey\\":\\"" + keyStr + "\\",\\"value\\":" + vStr + "}");
+    }
+
+    public static void dpCacheMiss(String structId, String keyStr, int line) {
+        recordEvent("{\\"type\\":\\"DP_CACHE_MISS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"stateKey\\":\\"" + keyStr + "\\"}");
+    }
+
+    public static void dpReconstructionStart(String structId, int line) {
+        recordEvent("{\\"type\\":\\"DP_RECONSTRUCTION_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\"}");
+    }
+
+    public static void dpReconstructionStep(String structId, String indicesJson, Object val, String action, int line) {
+        String vStr = formatValue(val);
+        String cleanAction = action.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"DP_RECONSTRUCTION_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"indices\\":" + indicesJson + ",\\"value\\":" + vStr + ",\\"detail\\":\\"" + cleanAction + "\\"}");
+    }
+
+    public static void dpReconstructionEnd(String structId, String resultJson, int line) {
+        recordEvent("{\\"type\\":\\"DP_RECONSTRUCTION_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"reconstructionPath\\":" + resultJson + "}");
+    }
+
+    // --- 0/1 Knapsack ---
+    public static void knapsackStart(String structId, int numItems, int capacity, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"size\\":" + numItems + ",\\"capacity\\":" + capacity + "}");
+    }
+
+    public static void knapsackItemSelect(String structId, int itemIdx, int weight, int val, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_ITEM_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"weight\\":" + weight + ",\\"itemValue\\":" + val + "}");
+    }
+
+    public static void knapsackCapacitySelect(String structId, int itemIdx, int cap, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_CAPACITY_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"capacity\\":" + cap + "}");
+    }
+
+    public static void knapsackFitCheck(String structId, int itemIdx, int cap, int weight, boolean fits, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_FIT_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"capacity\\":" + cap + ",\\"weight\\":" + weight + ",\\"fit\\":" + fits + "}");
+    }
+
+    public static void knapsackExclude(String structId, int itemIdx, int cap, int excludeVal, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_EXCLUDE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"capacity\\":" + cap + ",\\"value\\":" + excludeVal + "}");
+    }
+
+    public static void knapsackInclude(String structId, int itemIdx, int cap, int includeVal, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_INCLUDE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"capacity\\":" + cap + ",\\"value\\":" + includeVal + "}");
+    }
+
+    public static void knapsackCompare(String structId, int itemIdx, int cap, int excludeVal, int includeVal, int chosenVal, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"capacity\\":" + cap + ",\\"leftVal\\":" + excludeVal + ",\\"rightVal\\":" + includeVal + ",\\"value\\":" + chosenVal + "}");
+    }
+
+    public static void knapsackStateUpdate(String structId, int itemIdx, int cap, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"capacity\\":" + cap + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void knapsackEnd(String structId, int maxVal, int line) {
+        recordEvent("{\\"type\\":\\"KNAPSACK_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + maxVal + "}");
+    }
+
+    // --- Unbounded Knapsack ---
+    public static void unboundedKnapsackStart(String structId, int capacity, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_KNAPSACK_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + capacity + "}");
+    }
+
+    public static void unboundedItemSelect(String structId, int itemIdx, int weight, int val, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_ITEM_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + itemIdx + ",\\"weight\\":" + weight + ",\\"itemValue\\":" + val + "}");
+    }
+
+    public static void unboundedCapacitySelect(String structId, int cap, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_CAPACITY_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + cap + "}");
+    }
+
+    public static void unboundedFitCheck(String structId, int cap, int weight, boolean fits, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_FIT_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + cap + ",\\"weight\\":" + weight + ",\\"fit\\":" + fits + "}");
+    }
+
+    public static void unboundedInclude(String structId, int cap, int includeVal, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_INCLUDE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + cap + ",\\"value\\":" + includeVal + "}");
+    }
+
+    public static void unboundedExclude(String structId, int cap, int excludeVal, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_EXCLUDE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + cap + ",\\"value\\":" + excludeVal + "}");
+    }
+
+    public static void unboundedCompare(String structId, int cap, int excludeVal, int includeVal, int chosenVal, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + cap + ",\\"leftVal\\":" + excludeVal + ",\\"rightVal\\":" + includeVal + ",\\"value\\":" + chosenVal + "}");
+    }
+
+    public static void unboundedStateUpdate(String structId, int cap, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"capacity\\":" + cap + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void unboundedEnd(String structId, int maxVal, int line) {
+        recordEvent("{\\"type\\":\\"UNBOUNDED_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + maxVal + "}");
+    }
+
+    // --- Coin Change ---
+    public static void coinChangeStart(String structId, String algo, int amount, int line) {
+        recordEvent("{\\"type\\":\\"COIN_CHANGE_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"algorithmName\\":\\"" + algo + "\\",\\"amount\\":" + amount + "}");
+    }
+
+    public static void coinSelect(String structId, int coin, int line) {
+        recordEvent("{\\"type\\":\\"COIN_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"coin\\":" + coin + "}");
+    }
+
+    public static void coinAmountSelect(String structId, int coin, int amount, int line) {
+        recordEvent("{\\"type\\":\\"COIN_AMOUNT_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"coin\\":" + coin + ",\\"amount\\":" + amount + "}");
+    }
+
+    public static void coinFitCheck(String structId, int coin, int amount, boolean fits, int line) {
+        recordEvent("{\\"type\\":\\"COIN_FIT_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"coin\\":" + coin + ",\\"amount\\":" + amount + ",\\"fit\\":" + fits + "}");
+    }
+
+    public static void coinCandidate(String structId, int coin, int amount, Object candidateVal, int line) {
+        String cStr = formatValue(candidateVal);
+        recordEvent("{\\"type\\":\\"COIN_CANDIDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"coin\\":" + coin + ",\\"amount\\":" + amount + ",\\"candidateValue\\":" + cStr + "}");
+    }
+
+    public static void coinCompare(String structId, int amount, Object prevVal, Object candVal, Object chosenVal, int line) {
+        String pStr = formatValue(prevVal);
+        String cStr = formatValue(candVal);
+        String chStr = formatValue(chosenVal);
+        recordEvent("{\\"type\\":\\"COIN_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"amount\\":" + amount + ",\\"leftVal\\":" + pStr + ",\\"rightVal\\":" + cStr + ",\\"value\\":" + chStr + "}");
+    }
+
+    public static void coinStateUpdate(String structId, int amount, Object oldVal, Object newVal, int line) {
+        String oStr = formatValue(oldVal);
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"COIN_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"amount\\":" + amount + ",\\"oldValue\\":" + oStr + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void coinChangeEnd(String structId, Object result, int line) {
+        String rStr = formatValue(result);
+        recordEvent("{\\"type\\":\\"COIN_CHANGE_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + rStr + "}");
+    }
+
+    // --- Subset Sum ---
+    public static void subsetSumStart(String structId, int n, int target, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_SUM_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"size\\":" + n + ",\\"target\\":" + target + "}");
+    }
+
+    public static void subsetElementSelect(String structId, int idx, int val, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_ELEMENT_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + idx + ",\\"itemValue\\":" + val + "}");
+    }
+
+    public static void subsetTargetSelect(String structId, int idx, int s, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_TARGET_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + idx + ",\\"target\\":" + s + "}");
+    }
+
+    public static void subsetExclude(String structId, int idx, int s, boolean excludeVal, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_EXCLUDE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + idx + ",\\"target\\":" + s + ",\\"conditionResult\\":" + excludeVal + "}");
+    }
+
+    public static void subsetInclude(String structId, int idx, int s, boolean includeVal, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_INCLUDE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + idx + ",\\"target\\":" + s + ",\\"conditionResult\\":" + includeVal + "}");
+    }
+
+    public static void subsetCompare(String structId, int idx, int s, boolean res, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + idx + ",\\"target\\":" + s + ",\\"conditionResult\\":" + res + "}");
+    }
+
+    public static void subsetStateUpdate(String structId, int idx, int s, boolean oldVal, boolean newVal, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"itemIndex\\":" + idx + ",\\"target\\":" + s + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void subsetSumEnd(String structId, boolean result, int line) {
+        recordEvent("{\\"type\\":\\"SUBSET_SUM_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"conditionResult\\":" + result + "}");
+    }
+
+    // --- Longest Common Subsequence & Longest Common Substring ---
+    public static void lcsStart(String structId, String s1, String s2, int line) {
+        String clean1 = s1.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        String clean2 = s2.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"LCS_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"detail\\":\\"" + clean1 + "|" + clean2 + "\\"}");
+    }
+
+    public static void lcsCharCompare(String structId, int i, int j, char c1, char c2, boolean match, int line) {
+        recordEvent("{\\"type\\":\\"LCS_CHARACTER_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"iChar\\":\\"" + c1 + "\\",\\"jChar\\":\\"" + c2 + "\\",\\"charMatched\\":" + match + "}");
+    }
+
+    public static void lcsMatch(String structId, int i, int j, int diagVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"LCS_MATCH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"oldValue\\":" + diagVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void lcsMismatch(String structId, int i, int j, int topVal, int leftVal, int maxVal, int line) {
+        recordEvent("{\\"type\\":\\"LCS_MISMATCH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"leftVal\\":" + topVal + ",\\"rightVal\\":" + leftVal + ",\\"value\\":" + maxVal + "}");
+    }
+
+    public static void lcsDependencySelect(String structId, int i, int j, String chosenDep, int line) {
+        recordEvent("{\\"type\\":\\"LCS_DEPENDENCY_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"detail\\":\\"" + chosenDep + "\\"}");
+    }
+
+    public static void lcsStateUpdate(String structId, int i, int j, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"LCS_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void lcsReconstructionStart(String structId, int i, int j, int line) {
+        recordEvent("{\\"type\\":\\"LCS_RECONSTRUCTION_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + "}");
+    }
+
+    public static void lcsReconstructionStep(String structId, int i, int j, char c, String action, int line) {
+        recordEvent("{\\"type\\":\\"LCS_RECONSTRUCTION_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"char\\":\\"" + c + "\\",\\"detail\\":\\"" + action + "\\"}");
+    }
+
+    public static void lcsReconstructionEnd(String structId, String lcsString, int line) {
+        String clean = lcsString.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"LCS_RECONSTRUCTION_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"word\\":\\"" + clean + "\\"}");
+    }
+
+    public static void lcsEnd(String structId, int maxLen, int line) {
+        recordEvent("{\\"type\\":\\"LCS_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + maxLen + "}");
+    }
+
+    public static void lcstrStart(String structId, String s1, String s2, int line) {
+        String clean1 = s1.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        String clean2 = s2.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"LCSTR_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"detail\\":\\"" + clean1 + "|" + clean2 + "\\"}");
+    }
+
+    public static void lcstrCharCompare(String structId, int i, int j, char c1, char c2, boolean match, int line) {
+        recordEvent("{\\"type\\":\\"LCSTR_CHARACTER_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"iChar\\":\\"" + c1 + "\\",\\"jChar\\":\\"" + c2 + "\\",\\"charMatched\\":" + match + "}");
+    }
+
+    public static void lcstrMatch(String structId, int i, int j, int diagVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"LCSTR_MATCH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"oldValue\\":" + diagVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void lcstrReset(String structId, int i, int j, int line) {
+        recordEvent("{\\"type\\":\\"LCSTR_RESET\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"newValue\\":0}");
+    }
+
+    public static void lcstrStateUpdate(String structId, int i, int j, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"LCSTR_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + i + ",\\"col\\":" + j + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void lcstrMaxUpdate(String structId, int newMax, int line) {
+        recordEvent("{\\"type\\":\\"LCSTR_MAX_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + newMax + "}");
+    }
+
+    public static void lcstrEnd(String structId, int maxLen, int line) {
+        recordEvent("{\\"type\\":\\"LCSTR_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + maxLen + "}");
+    }
+
+    // --- Longest Increasing Subsequence (LIS) ---
+    public static void lisStart(String structId, int n, int line) {
+        recordEvent("{\\"type\\":\\"LIS_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"size\\":" + n + "}");
+    }
+
+    public static void lisIndexSelect(String structId, int i, int line) {
+        recordEvent("{\\"type\\":\\"LIS_INDEX_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + i + "}");
+    }
+
+    public static void lisCompare(String structId, int i, int j, int valI, int valJ, boolean condition, int line) {
+        recordEvent("{\\"type\\":\\"LIS_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + i + ",\\"toIndex\\":" + j + ",\\"leftVal\\":" + valI + ",\\"rightVal\\":" + valJ + ",\\"conditionResult\\":" + condition + "}");
+    }
+
+    public static void lisCandidate(String structId, int i, int j, int candVal, int line) {
+        recordEvent("{\\"type\\":\\"LIS_CANDIDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"fromIndex\\":" + i + ",\\"toIndex\\":" + j + ",\\"candidateValue\\":" + candVal + "}");
+    }
+
+    public static void lisStateUpdate(String structId, int i, int oldVal, int newVal, int line) {
+        recordEvent("{\\"type\\":\\"LIS_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + i + ",\\"oldValue\\":" + oldVal + ",\\"newValue\\":" + newVal + "}");
+    }
+
+    public static void lisParentUpdate(String structId, int i, int parentIdx, int line) {
+        recordEvent("{\\"type\\":\\"LIS_PARENT_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + i + ",\\"toIndex\\":" + parentIdx + "}");
+    }
+
+    public static void lisReconstructionStart(String structId, int startIdx, int line) {
+        recordEvent("{\\"type\\":\\"LIS_RECONSTRUCTION_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + startIdx + "}");
+    }
+
+    public static void lisReconstructionStep(String structId, int currIdx, int val, int parentIdx, int line) {
+        recordEvent("{\\"type\\":\\"LIS_RECONSTRUCTION_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"index\\":" + currIdx + ",\\"value\\":" + val + ",\\"toIndex\\":" + parentIdx + "}");
+    }
+
+    public static void lisEnd(String structId, int maxLen, int line) {
+        recordEvent("{\\"type\\":\\"LIS_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + maxLen + "}");
+    }
+
+    // --- Grid DP ---
+    public static void gridDpStart(String structId, String algo, int rows, int cols, int line) {
+        recordEvent("{\\"type\\":\\"GRID_DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"algorithmName\\":\\"" + algo + "\\",\\"row\\":" + rows + ",\\"col\\":" + cols + "}");
+    }
+
+    public static void gridCellSelect(String structId, int r, int c, int line) {
+        recordEvent("{\\"type\\":\\"GRID_CELL_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + r + ",\\"col\\":" + c + "}");
+    }
+
+    public static void gridObstacleCheck(String structId, int r, int c, boolean isObstacle, int line) {
+        recordEvent("{\\"type\\":\\"GRID_OBSTACLE_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"conditionResult\\":" + isObstacle + "}");
+    }
+
+    public static void gridDependencyAccess(String structId, int r, int c, String depsJson, int line) {
+        recordEvent("{\\"type\\":\\"GRID_DEPENDENCY_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"dependencies\\":" + depsJson + "}");
+    }
+
+    public static void gridCandidate(String structId, int r, int c, Object topVal, Object leftVal, int line) {
+        String tStr = formatValue(topVal);
+        String lStr = formatValue(leftVal);
+        recordEvent("{\\"type\\":\\"GRID_CANDIDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"leftVal\\":" + tStr + ",\\"rightVal\\":" + lStr + "}");
+    }
+
+    public static void gridCompare(String structId, int r, int c, Object cand1, Object cand2, Object chosen, int line) {
+        String c1 = formatValue(cand1);
+        String c2 = formatValue(cand2);
+        String ch = formatValue(chosen);
+        recordEvent("{\\"type\\":\\"GRID_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"leftVal\\":" + c1 + ",\\"rightVal\\":" + c2 + ",\\"value\\":" + ch + "}");
+    }
+
+    public static void gridStateUpdate(String structId, int r, int c, Object oldVal, Object newVal, int line) {
+        String oStr = formatValue(oldVal);
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"GRID_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"row\\":" + r + ",\\"col\\":" + c + ",\\"oldValue\\":" + oStr + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void gridDpEnd(String structId, Object finalResult, int line) {
+        String fStr = formatValue(finalResult);
+        recordEvent("{\\"type\\":\\"GRID_DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + fStr + "}");
+    }
+
+    // --- Interval DP ---
+    public static void intervalDpStart(String structId, int n, int line) {
+        recordEvent("{\\"type\\":\\"INTERVAL_DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"size\\":" + n + "}");
+    }
+
+    public static void intervalLengthUpdate(String structId, int len, int line) {
+        recordEvent("{\\"type\\":\\"INTERVAL_LENGTH_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"windowSize\\":" + len + "}");
+    }
+
+    public static void intervalSelect(String structId, int left, int right, int line) {
+        recordEvent("{\\"type\\":\\"INTERVAL_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"leftIndex\\":" + left + ",\\"rightIndex\\":" + right + "}");
+    }
+
+    public static void intervalSplitSelect(String structId, int left, int right, int split, int line) {
+        recordEvent("{\\"type\\":\\"INTERVAL_SPLIT_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"leftIndex\\":" + left + ",\\"rightIndex\\":" + right + ",\\"splitIndex\\":" + split + "}");
+    }
+
+    public static void intervalLeftDependency(String structId, int left, int split, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"INTERVAL_LEFT_DEPENDENCY\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"leftIndex\\":" + left + ",\\"splitIndex\\":" + split + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void intervalRightDependency(String structId, int splitPlus1, int right, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"INTERVAL_RIGHT_DEPENDENCY\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"splitIndex\\":" + splitPlus1 + ",\\"rightIndex\\":" + right + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void intervalCombine(String structId, int left, int right, int split, Object cost, int line) {
+        String cStr = formatValue(cost);
+        recordEvent("{\\"type\\":\\"INTERVAL_COMBINE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"leftIndex\\":" + left + ",\\"rightIndex\\":" + right + ",\\"splitIndex\\":" + split + ",\\"candidateValue\\":" + cStr + "}");
+    }
+
+    public static void intervalStateUpdate(String structId, int left, int right, Object oldVal, Object newVal, int line) {
+        String oStr = formatValue(oldVal);
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"INTERVAL_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"leftIndex\\":" + left + ",\\"rightIndex\\":" + right + ",\\"oldValue\\":" + oStr + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void intervalDpEnd(String structId, Object result, int line) {
+        String rStr = formatValue(result);
+        recordEvent("{\\"type\\":\\"INTERVAL_DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + rStr + "}");
+    }
+
+    // --- Tree DP ---
+    public static void treeDpStart(String treeId, String rootId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + rootId + "\\"}");
+    }
+
+    public static void treeDpNodeEnter(String treeId, String nodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_DP_NODE_ENTER\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\"}");
+    }
+
+    public static void treeDpChildProcess(String treeId, String parentNodeId, String childNodeId, int line) {
+        recordEvent("{\\"type\\":\\"TREE_DP_CHILD_PROCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"parentNodeId\\":\\"" + parentNodeId + "\\",\\"childNodeId\\":\\"" + childNodeId + "\\"}");
+    }
+
+    public static void treeDpStateAccess(String treeId, String nodeId, Object stateVal, int line) {
+        String sStr = formatValue(stateVal);
+        recordEvent("{\\"type\\":\\"TREE_DP_STATE_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + sStr + "}");
+    }
+
+    public static void treeDpTransition(String treeId, String nodeId, String formula, Object stateVal, int line) {
+        String sStr = formatValue(stateVal);
+        String cleanF = formula.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"");
+        recordEvent("{\\"type\\":\\"TREE_DP_TRANSITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"transitionFormula\\":\\"" + cleanF + "\\",\\"value\\":" + sStr + "}");
+    }
+
+    public static void treeDpStateUpdate(String treeId, String nodeId, Object oldVal, Object newVal, int line) {
+        String oStr = formatValue(oldVal);
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"TREE_DP_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"oldValue\\":" + oStr + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void treeDpNodeComplete(String treeId, String nodeId, Object finalVal, int line) {
+        String fStr = formatValue(finalVal);
+        recordEvent("{\\"type\\":\\"TREE_DP_NODE_COMPLETE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"value\\":" + fStr + "}");
+    }
+
+    public static void treeDpReturn(String treeId, String nodeId, Object returnVal, int line) {
+        String rStr = formatValue(returnVal);
+        recordEvent("{\\"type\\":\\"TREE_DP_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"nodeId\\":\\"" + nodeId + "\\",\\"returnValue\\":" + rStr + "}");
+    }
+
+    public static void treeDpEnd(String treeId, Object finalResult, int line) {
+        String fStr = formatValue(finalResult);
+        recordEvent("{\\"type\\":\\"TREE_DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + treeId + "\\",\\"value\\":" + fStr + "}");
+    }
+
+    // --- Bitmask DP ---
+    public static void bitmaskDpStart(String structId, int numItems, int line) {
+        recordEvent("{\\"type\\":\\"BITMASK_DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"size\\":" + numItems + "}");
+    }
+
+    public static void bitmaskCreate(String structId, int mask, int line) {
+        recordEvent("{\\"type\\":\\"BITMASK_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + mask + "}");
+    }
+
+    public static void bitmaskBitCheck(String structId, int mask, int bitIdx, boolean isSet, int line) {
+        recordEvent("{\\"type\\":\\"BITMASK_BIT_CHECK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + mask + ",\\"bitIndex\\":" + bitIdx + ",\\"bitSet\\":" + isSet + "}");
+    }
+
+    public static void bitmaskBitSet(String structId, int oldMask, int bitIdx, int newMask, int line) {
+        recordEvent("{\\"type\\":\\"BITMASK_BIT_SET\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + oldMask + ",\\"bitIndex\\":" + bitIdx + ",\\"value\\":" + newMask + "}");
+    }
+
+    public static void bitmaskBitClear(String structId, int oldMask, int bitIdx, int newMask, int line) {
+        recordEvent("{\\"type\\":\\"BITMASK_BIT_CLEAR\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + oldMask + ",\\"bitIndex\\":" + bitIdx + ",\\"value\\":" + newMask + "}");
+    }
+
+    public static void bitmaskStateAccess(String structId, int mask, int idx, Object val, int line) {
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"BITMASK_STATE_ACCESS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + mask + ",\\"index\\":" + idx + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void bitmaskTransition(String structId, int mask, int nextMask, Object candVal, int line) {
+        String cStr = formatValue(candVal);
+        recordEvent("{\\"type\\":\\"BITMASK_TRANSITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + mask + ",\\"value\\":" + nextMask + ",\\"candidateValue\\":" + cStr + "}");
+    }
+
+    public static void bitmaskStateUpdate(String structId, int mask, int idx, Object oldVal, Object newVal, int line) {
+        String oStr = formatValue(oldVal);
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"BITMASK_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"mask\\":" + mask + ",\\"index\\":" + idx + ",\\"oldValue\\":" + oStr + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void bitmaskDpEnd(String structId, Object result, int line) {
+        String rStr = formatValue(result);
+        recordEvent("{\\"type\\":\\"BITMASK_DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + rStr + "}");
+    }
+
+    // --- Digit DP ---
+    public static void digitDpStart(String structId, int numDigits, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_DP_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"size\\":" + numDigits + "}");
+    }
+
+    public static void digitPosition(String structId, int pos, boolean tight, boolean started, int sum, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_POSITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"tight\\":" + tight + ",\\"started\\":" + started + ",\\"sum\\":" + sum + "}");
+    }
+
+    public static void digitOptionSelect(String structId, int pos, int digit, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_OPTION_SELECT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"digit\\":" + digit + "}");
+    }
+
+    public static void digitTightUpdate(String structId, int pos, boolean oldTight, boolean newTight, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_TIGHT_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"conditionResult\\":" + newTight + "}");
+    }
+
+    public static void digitStartedUpdate(String structId, int pos, boolean started, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_STARTED_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"started\\":" + started + "}");
+    }
+
+    public static void digitCacheLookup(String structId, int pos, boolean tight, int sum, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_CACHE_LOOKUP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"tight\\":" + tight + ",\\"sum\\":" + sum + "}");
+    }
+
+    public static void digitCacheHit(String structId, int pos, boolean tight, int sum, Object cachedVal, int line) {
+        String cStr = formatValue(cachedVal);
+        recordEvent("{\\"type\\":\\"DIGIT_CACHE_HIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"tight\\":" + tight + ",\\"sum\\":" + sum + ",\\"value\\":" + cStr + "}");
+    }
+
+    public static void digitCacheMiss(String structId, int pos, boolean tight, int sum, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_CACHE_MISS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"tight\\":" + tight + ",\\"sum\\":" + sum + "}");
+    }
+
+    public static void digitStateTransition(String structId, int pos, int digit, int newSum, int line) {
+        recordEvent("{\\"type\\":\\"DIGIT_STATE_TRANSITION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"digit\\":" + digit + ",\\"sum\\":" + newSum + "}");
+    }
+
+    public static void digitStateUpdate(String structId, int pos, boolean tight, int sum, Object newVal, int line) {
+        String nStr = formatValue(newVal);
+        recordEvent("{\\"type\\":\\"DIGIT_STATE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"position\\":" + pos + ",\\"tight\\":" + tight + ",\\"sum\\":" + sum + ",\\"newValue\\":" + nStr + "}");
+    }
+
+    public static void digitDpEnd(String structId, Object finalResult, int line) {
+        String fStr = formatValue(finalResult);
+        recordEvent("{\\"type\\":\\"DIGIT_DP_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + structId + "\\",\\"value\\":" + fStr + "}");
+    }
+
+    // --- Memoization ---
+    public static void memoLookup(String cacheId, Object key, int line) {
+        String kStr = formatValue(key);
+        recordEvent("{\\"type\\":\\"MEMO_LOOKUP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + cacheId + "\\",\\"key\\":" + kStr + "}");
+    }
+
+    public static void memoHit(String cacheId, Object key, Object val, int line) {
+        String kStr = formatValue(key);
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"MEMO_HIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + cacheId + "\\",\\"key\\":" + kStr + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void memoMiss(String cacheId, Object key, int line) {
+        String kStr = formatValue(key);
+        recordEvent("{\\"type\\":\\"MEMO_MISS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + cacheId + "\\",\\"key\\":" + kStr + "}");
+    }
+
+    public static void memoCompute(String cacheId, Object key, int line) {
+        String kStr = formatValue(key);
+        recordEvent("{\\"type\\":\\"MEMO_COMPUTE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + cacheId + "\\",\\"key\\":" + kStr + "}");
+    }
+
+    public static void memoStore(String cacheId, Object key, Object val, int line) {
+        String kStr = formatValue(key);
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"MEMO_STORE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + cacheId + "\\",\\"key\\":" + kStr + ",\\"value\\":" + vStr + "}");
+    }
+
+    public static void memoReturn(String cacheId, Object key, Object val, int line) {
+        String kStr = formatValue(key);
+        String vStr = formatValue(val);
+        recordEvent("{\\"type\\":\\"MEMO_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + cacheId + "\\",\\"key\\":" + kStr + ",\\"value\\":" + vStr + "}");
     }
 
     // === CONTROL FLOW & UTILITIES ===

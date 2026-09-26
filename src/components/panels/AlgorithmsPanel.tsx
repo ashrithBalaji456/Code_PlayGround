@@ -25,6 +25,7 @@ import {
   Sliders,
   Hash,
   Database,
+  Coins,
 } from 'lucide-react';
 
 interface AlgorithmsPanelProps {
@@ -108,7 +109,7 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
               Recursion Tree
             </button>
           )}
-          {(algoState.dpTable1D || algoState.dpTable2D || algoState.memoEntries) && (
+          {(algoState.dpTable1D || algoState.dpTable2D || algoState.memoEntries || algoState.dpSparseMap || algoState.category === 'Dynamic Programming' || algoState.knapsackCapacity !== undefined || algoState.lcsStringA !== undefined || algoState.lisArray !== undefined || algoState.gridRows !== undefined || algoState.bitmask !== undefined || algoState.digitPosition !== undefined) && (
             <button
               onClick={() => setSubView('dp')}
               className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
@@ -823,6 +824,455 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
             </div>
           )}
 
+          {/* PHASE 7 DYNAMIC PROGRAMMING CARDS */}
+
+          {/* 0/1 & UNBOUNDED KNAPSACK */}
+          {algoState.knapsackCapacity !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#39c5cf] flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5" /> {algoState.algorithmName || 'Knapsack Problem'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono font-bold text-[#f0f6fc] bg-[#0d1117] border border-[#30363d] px-2 py-0.5 rounded">
+                    Capacity W: {algoState.knapsackCapacity}
+                  </span>
+                  {algoState.knapsackDecision && (
+                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${
+                      algoState.knapsackDecision === 'INCLUDE'
+                        ? 'bg-[#3fb950]/15 border-[#3fb950] text-[#3fb950]'
+                        : algoState.knapsackDecision === 'EXCLUDE'
+                        ? 'bg-[#d29922]/15 border-[#d29922] text-[#d29922]'
+                        : 'bg-[#8b949e]/15 border-[#8b949e] text-[#8b949e]'
+                    }`}>
+                      Decision: {algoState.knapsackDecision}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Current Item & Capacity State */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs">
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase font-bold">Current Item</span>
+                  <p className="text-sm font-bold text-[#58a6ff]">#{algoState.knapsackCurrentItem ?? '-'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase font-bold">Sub-Capacity (w)</span>
+                  <p className="text-sm font-bold text-[#d29922]">{algoState.knapsackCurrentCapacity ?? '-'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase font-bold">Exclude Val</span>
+                  <p className="text-sm font-bold text-[#8b949e]">{algoState.knapsackExcludeVal ?? '-'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase font-bold">Include Val</span>
+                  <p className="text-sm font-bold text-[#3fb950]">{algoState.knapsackIncludeVal ?? '-'}</p>
+                </div>
+              </div>
+
+              {/* Items Inventory */}
+              {algoState.knapsackItems && algoState.knapsackItems.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] text-[#8b949e] uppercase font-bold">Items Inventory (Weight, Value)</span>
+                  <div className="flex flex-wrap gap-2">
+                    {algoState.knapsackItems.map((it, idx) => {
+                      const isCurrent = algoState.knapsackCurrentItem === idx;
+                      return (
+                        <div
+                          key={idx}
+                          className={`p-1.5 rounded-lg border font-mono text-xs flex items-center gap-2 ${
+                            isCurrent
+                              ? 'bg-[#39c5cf]/15 border-[#39c5cf] text-[#39c5cf] ring-2 ring-[#39c5cf]'
+                              : 'bg-[#0d1117] border-[#30363d]/60 text-[#c9d1d9]'
+                          }`}
+                        >
+                          <span className="font-bold text-[10px] text-[#8b949e]">#{idx}</span>
+                          <span>wt: <strong className="text-[#f0f6fc]">{it.weight}</strong></span>
+                          <span>val: <strong className="text-[#3fb950]">{it.value}</strong></span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* COIN CHANGE */}
+          {algoState.coinAmount !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#d29922] flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5" /> {algoState.algorithmName || 'Coin Change'}
+                </span>
+                <span className="text-xs font-mono font-bold text-[#d29922] bg-[#d29922]/15 border border-[#d29922]/30 px-2 py-0.5 rounded">
+                  Target Amount: {algoState.coinAmount}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs text-center">
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Active Coin</span>
+                  <p className="text-sm font-bold text-[#58a6ff]">{algoState.currentCoin ?? '-'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Candidate Val</span>
+                  <p className="text-sm font-bold text-[#3fb950]">{algoState.coinCandidate ?? '-'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Available Coins</span>
+                  <div className="flex items-center justify-center gap-1 mt-0.5">
+                    {(algoState.coins || []).map((c, idx) => (
+                      <span
+                        key={idx}
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                          algoState.currentCoin === c ? 'bg-[#58a6ff] text-black' : 'bg-[#21262d] text-[#8b949e]'
+                        }`}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUBSET SUM & PARTITION EQUAL SUBSET SUM */}
+          {algoState.subsetTarget !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#3fb950] flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {algoState.algorithmName || 'Subset Sum'}
+                </span>
+                <span className="text-xs font-mono font-bold text-[#3fb950] bg-[#3fb950]/15 border border-[#3fb950]/30 px-2 py-0.5 rounded">
+                  Target Sum: {algoState.subsetTarget}
+                </span>
+              </div>
+              <p className="text-[#8b949e] font-sans text-xs">
+                Determining if any subset of array elements sums exactly to <strong className="text-[#f0f6fc]">{algoState.subsetTarget}</strong> using 2D boolean dynamic programming.
+              </p>
+            </div>
+          )}
+
+          {/* LONGEST COMMON SUBSEQUENCE & LONGEST COMMON SUBSTRING */}
+          {(algoState.lcsStringA !== undefined || algoState.lcsStringB !== undefined) && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#bc8cff] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" /> {algoState.algorithmName || 'LCS'}
+                </span>
+                {algoState.lcsResult && (
+                  <span className="text-xs font-mono font-bold text-[#3fb950] bg-[#3fb950]/15 border border-[#3fb950]/30 px-2 py-0.5 rounded">
+                    Reconstructed: "{algoState.lcsResult}"
+                  </span>
+                )}
+              </div>
+
+              {/* Character Strips */}
+              <div className="flex flex-col gap-2 font-mono text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8b949e] w-16">String A:</span>
+                  <div className="flex items-center gap-1">
+                    {(algoState.lcsStringA || '').split('').map((ch, idx) => {
+                      const isCurrent = algoState.lcsI === idx + 1;
+                      return (
+                        <span
+                          key={idx}
+                          className={`w-7 h-7 flex items-center justify-center rounded font-bold border ${
+                            isCurrent
+                              ? 'bg-[#bc8cff] text-black border-[#bc8cff]'
+                              : 'bg-[#0d1117] border-[#30363d] text-[#f0f6fc]'
+                          }`}
+                        >
+                          {ch}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8b949e] w-16">String B:</span>
+                  <div className="flex items-center gap-1">
+                    {(algoState.lcsStringB || '').split('').map((ch, idx) => {
+                      const isCurrent = algoState.lcsJ === idx + 1;
+                      return (
+                        <span
+                          key={idx}
+                          className={`w-7 h-7 flex items-center justify-center rounded font-bold border ${
+                            isCurrent
+                              ? 'bg-[#39c5cf] text-black border-[#39c5cf]'
+                              : 'bg-[#0d1117] border-[#30363d] text-[#f0f6fc]'
+                          }`}
+                        >
+                          {ch}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Match Indicator */}
+              {algoState.lcsCharA && algoState.lcsCharB && (
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60 flex items-center justify-between font-mono text-xs">
+                  <span>Comparing: '{algoState.lcsCharA}' == '{algoState.lcsCharB}'</span>
+                  <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                    algoState.lcsMatched ? 'bg-[#3fb950]/20 text-[#3fb950]' : 'bg-[#f85149]/20 text-[#f85149]'
+                  }`}>
+                    {algoState.lcsMatched ? 'MATCH ➔ Take Diagonal + 1' : 'MISMATCH ➔ Max(Top, Left)'}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* LONGEST INCREASING SUBSEQUENCE (LIS) */}
+          {(algoState.lisParents !== undefined || algoState.lisCurrentI !== undefined) && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#58a6ff] flex items-center gap-1.5">
+                  <ArrowUpDown className="w-3.5 h-3.5" /> Longest Increasing Subsequence (LIS)
+                </span>
+                {algoState.lisReconstructedIndices && (
+                  <span className="text-xs font-mono font-bold text-[#3fb950] bg-[#3fb950]/15 border border-[#3fb950]/30 px-2 py-0.5 rounded">
+                    Length: {algoState.lisReconstructedIndices.length}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs text-center">
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Active Index i</span>
+                  <p className="text-sm font-bold text-[#58a6ff]">[{algoState.lisCurrentI ?? '-'}]</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Comparison j</span>
+                  <p className="text-sm font-bold text-[#d29922]">[{algoState.lisCurrentJ ?? '-'}]</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">arr[j] &lt; arr[i]</span>
+                  <p className={`text-sm font-bold ${algoState.lisComparison ? 'text-[#3fb950]' : 'text-[#f85149]'}`}>
+                    {algoState.lisComparison === undefined ? '-' : algoState.lisComparison ? 'TRUE' : 'FALSE'}
+                  </p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Parent Pointer</span>
+                  <p className="text-sm font-bold text-[#bc8cff]">
+                    {algoState.lisCurrentI !== undefined && algoState.lisParents
+                      ? String(algoState.lisParents[algoState.lisCurrentI] ?? 'None')
+                      : '-'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Parent Pointers Reconstruction Strip */}
+              {algoState.lisParents && algoState.lisParents.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] text-[#8b949e] uppercase font-bold">Parent Pointer Array (for Traceback)</span>
+                  <div className="flex flex-wrap gap-1.5 font-mono text-xs">
+                    {algoState.lisParents.map((p, idx) => (
+                      <div key={idx} className="bg-[#0d1117] px-2 py-1 rounded border border-[#30363d]/50 flex flex-col items-center">
+                        <span className="text-[9px] text-[#8b949e]">[{idx}]</span>
+                        <strong className="text-[#bc8cff]">{p === null ? 'null' : p}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* GRID DP (Unique Paths, Min Path Sum, Obstacles) */}
+          {(algoState.gridRows !== undefined || algoState.gridCurrentCell !== undefined) && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#39c5cf] flex items-center gap-1.5">
+                  <TableIcon className="w-3.5 h-3.5" /> {algoState.algorithmName || 'Grid DP'}
+                </span>
+                <span className="text-xs font-mono font-bold text-[#58a6ff] bg-[#58a6ff]/15 border border-[#58a6ff]/30 px-2 py-0.5 rounded">
+                  Grid: {algoState.gridRows} × {algoState.gridCols}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs text-center">
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Current Cell</span>
+                  <p className="text-sm font-bold text-[#39c5cf]">
+                    ({algoState.gridCurrentCell ? `${algoState.gridCurrentCell[0]}, ${algoState.gridCurrentCell[1]}` : '-'})
+                  </p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Obstacles Count</span>
+                  <p className="text-sm font-bold text-[#f85149]">{algoState.gridObstacles?.length ?? 0}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Dependencies</span>
+                  <p className="text-sm font-bold text-[#d29922]">Top ↑ + Left ←</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* INTERVAL DP */}
+          {algoState.intervalLeft !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#bc8cff] flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" /> Interval DP (Matrix Chain / Optimal Tree)
+                </span>
+                <span className="text-xs font-mono font-bold text-[#bc8cff] bg-[#bc8cff]/15 border border-[#bc8cff]/30 px-2 py-0.5 rounded">
+                  Length L: {algoState.intervalLength ?? '-'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 font-mono text-xs text-center">
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Left Bound</span>
+                  <p className="text-sm font-bold text-[#58a6ff]">{algoState.intervalLeft}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Split Point (k)</span>
+                  <p className="text-sm font-bold text-[#d29922]">{algoState.intervalSplit ?? '-'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Right Bound</span>
+                  <p className="text-sm font-bold text-[#bc8cff]">{algoState.intervalRight}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TREE DP */}
+          {algoState.treeDpNodeStates !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#3fb950] flex items-center gap-1.5">
+                  <GitBranch className="w-3.5 h-3.5" /> Tree Dynamic Programming
+                </span>
+                {algoState.treeDpCurrentNode && (
+                  <span className="text-xs font-mono font-bold text-[#3fb950] bg-[#3fb950]/15 border border-[#3fb950]/30 px-2 py-0.5 rounded">
+                    Active Node: {algoState.treeDpCurrentNode}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 font-mono text-xs text-center">
+                {Object.entries(algoState.treeDpNodeStates).map(([node, val]) => (
+                  <div key={node} className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                    <span className="text-[10px] text-[#8b949e]">Node {node}</span>
+                    <p className="text-sm font-bold text-[#3fb950]">{String(val)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* BITMASK DP */}
+          {algoState.bitmask !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#58a6ff] flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5" /> Bitmask Dynamic Programming
+                </span>
+                <span className="text-xs font-mono font-bold text-[#58a6ff] bg-[#58a6ff]/15 border border-[#58a6ff]/30 px-2 py-0.5 rounded">
+                  Mask: {algoState.bitmask}
+                </span>
+              </div>
+
+              {/* Binary Bit Strip */}
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] text-[#8b949e] uppercase font-bold">Binary Mask Representation</span>
+                <div className="flex items-center gap-2 font-mono text-xs">
+                  {Array.from({ length: algoState.bitmaskLength || 4 }).map((_, idx) => {
+                    const bitIdx = (algoState.bitmaskLength || 4) - 1 - idx;
+                    const isSet = ((algoState.bitmask || 0) & (1 << bitIdx)) !== 0;
+                    return (
+                      <div key={bitIdx} className="flex flex-col items-center gap-1">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border ${
+                          isSet ? 'bg-[#58a6ff] text-black border-[#58a6ff]' : 'bg-[#0d1117] border-[#30363d] text-[#8b949e]'
+                        }`}>
+                          {isSet ? '1' : '0'}
+                        </div>
+                        <span className="text-[9px] text-[#8b949e]">b{bitIdx}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selected Items from Mask */}
+              <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60 flex items-center gap-2 font-mono text-xs">
+                <span className="text-[#8b949e]">Selected Elements:</span>
+                <div className="flex items-center gap-1">
+                  {(algoState.bitmaskSelectedBits || []).length === 0 ? (
+                    <span className="text-[#8b949e] italic">[None / Empty set]</span>
+                  ) : (
+                    algoState.bitmaskSelectedBits!.map((b) => (
+                      <span key={b} className="bg-[#58a6ff]/20 text-[#58a6ff] px-2 py-0.5 rounded border border-[#58a6ff]/40 font-bold">
+                        Item {b}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DIGIT DP */}
+          {algoState.digitPosition !== undefined && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#d29922] flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5" /> Digit Dynamic Programming
+                </span>
+                <span className="text-xs font-mono font-bold text-[#d29922] bg-[#d29922]/15 border border-[#d29922]/30 px-2 py-0.5 rounded">
+                  Pos: {algoState.digitPosition}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs text-center">
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Position</span>
+                  <p className="text-sm font-bold text-[#58a6ff]">{algoState.digitPosition}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Tight Constraint</span>
+                  <p className={`text-sm font-bold ${algoState.digitTight ? 'text-[#f85149]' : 'text-[#3fb950]'}`}>
+                    {algoState.digitTight ? 'TRUE (bounded)' : 'FALSE (free)'}
+                  </p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Number Started</span>
+                  <p className="text-sm font-bold text-[#d29922]">{algoState.digitStarted ? 'YES' : 'NO'}</p>
+                </div>
+                <div className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60">
+                  <span className="text-[10px] text-[#8b949e] uppercase">Running Sum</span>
+                  <p className="text-sm font-bold text-[#bc8cff]">{algoState.digitSum ?? 0}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DP RECONSTRUCTION SEQUENCE */}
+          {algoState.reconstructionSequence && algoState.reconstructionSequence.length > 0 && (
+            <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3 font-mono text-xs">
+              <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                <span className="font-semibold text-xs text-[#3fb950] flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> Optimal Solution Reconstruction
+                </span>
+                <span className="text-[10px] bg-[#3fb950]/15 text-[#3fb950] px-2 py-0.5 rounded font-bold">
+                  Backtracking DP Decisions
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {algoState.reconstructionSequence.map((step, idx) => (
+                  <div key={idx} className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/50 flex items-center justify-between">
+                    <span className="text-[#8b949e]">Step #{idx + 1}: [{Array.isArray(step.indices) ? step.indices.join(', ') : step.indices}]</span>
+                    <span className="text-[#f0f6fc] font-bold">{step.action || `Value = ${step.value}`}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ALGORITHM ARCHITECTURE & CROSS-STRUCTURE INTEGRATION */}
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-2.5">
             <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-1.5">
@@ -983,81 +1433,200 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
         </div>
       )}
 
-      {/* DYNAMIC PROGRAMMING TABLE */}
+      {/* DYNAMIC PROGRAMMING REUSABLE TABLE & CACHE ENGINE */}
       {subView === 'dp' && (
-        <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-md flex flex-col gap-3">
+        <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-md flex flex-col gap-4">
           <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
-            <span className="font-semibold text-xs text-[#39c5cf] flex items-center gap-1.5">
-              <TableIcon className="w-3.5 h-3.5" /> Dynamic Programming State Table
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-xs text-[#39c5cf] flex items-center gap-1.5">
+                <TableIcon className="w-3.5 h-3.5" /> Reusable DP State Table & Cache Engine
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#39c5cf]/15 text-[#39c5cf] border border-[#39c5cf]/30 font-bold">
+                {algoState.dpType || (algoState.dpTable2D ? 'TABULATION_2D' : algoState.dpTable1D ? 'TABULATION_1D' : 'MEMOIZATION')}
+              </span>
+            </div>
             <div className="flex items-center gap-3 text-xs font-mono">
-              <span className="text-[#3fb950]">Hits: {metrics.cacheHits}</span>
-              <span className="text-[#f85149]">Misses: {metrics.cacheMisses}</span>
+              <span className="text-[#3fb950] font-bold">Hits: {metrics.cacheHits}</span>
+              <span className="text-[#f85149] font-bold">Misses: {metrics.cacheMisses}</span>
+              <span className="text-[#58a6ff]">
+                Hit Rate: {metrics.cacheHits + metrics.cacheMisses > 0
+                  ? `${Math.round((metrics.cacheHits / (metrics.cacheHits + metrics.cacheMisses)) * 100)}%`
+                  : '0%'}
+              </span>
             </div>
           </div>
 
-          {algoState.dpTransitionFormula && (
-            <div className="bg-[#0d1117] p-2 rounded-lg border border-[#39c5cf]/30 font-mono text-xs flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#39c5cf]" />
-              <span className="text-[#8b949e]">Active Transition:</span>
-              <span className="text-[#39c5cf] font-bold">{algoState.dpTransitionFormula}</span>
-            </div>
-          )}
-
-          {/* 1D DP Table */}
-          {algoState.dpTable1D && (
-            <div className="overflow-x-auto py-2">
-              <div className="flex items-center gap-2 min-w-max">
-                {algoState.dpTable1D.map((val, idx) => {
-                  const isCurrent = algoState.dpCurrentCell && algoState.dpCurrentCell[0] === idx;
-                  const isPrev = algoState.dpPreviousCells?.some((c) => c[0] === idx);
-
-                  let cellClass = 'border-[#30363d] bg-[#0d1117] text-[#f0f6fc]';
-                  if (isCurrent) cellClass = 'border-[#39c5cf] bg-[#39c5cf]/20 text-[#39c5cf] ring-2 ring-[#39c5cf] animate-pulse';
-                  else if (isPrev) cellClass = 'border-[#d29922] bg-[#d29922]/20 text-[#d29922]';
-
-                  return (
-                    <div key={idx} className="flex flex-col items-center gap-1">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-mono font-bold border text-sm shadow ${cellClass}`}>
-                        {val}
-                      </div>
-                      <span className="text-[10px] font-mono text-[#8b949e]">[{idx}]</span>
-                    </div>
-                  );
-                })}
+          {/* Active Transition Formula & Cell Change Explanation */}
+          {(algoState.dpTransitionFormula || algoState.dpExplanation || currentStep.explanation) && (
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#39c5cf]/30 font-mono text-xs flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 text-[#39c5cf] font-bold">
+                <Sparkles className="w-4 h-4 text-[#39c5cf]" />
+                <span>Transition & Recurrence Formula:</span>
+                <span className="text-[#f0f6fc]">{algoState.dpTransitionFormula || 'dp[state] = optimal(subproblems)'}</span>
+              </div>
+              <div className="text-[11px] text-[#8b949e] font-sans">
+                <strong className="text-[#39c5cf]">Why did this state change?</strong> {currentStep.explanation}
               </div>
             </div>
           )}
 
-          {/* 2D DP Table */}
-          {algoState.dpTable2D && (
-            <div className="overflow-x-auto py-2">
-              <div className="flex flex-col gap-1.5 min-w-max">
-                {algoState.dpTable2D.map((row, rIdx) => (
-                  <div key={rIdx} className="flex items-center gap-1.5">
-                    <span className="w-6 text-right font-mono text-[10px] text-[#8b949e]">{rIdx}</span>
-                    {row.map((val, cIdx) => {
-                      const isCurrent = algoState.dpCurrentCell && algoState.dpCurrentCell[0] === rIdx && algoState.dpCurrentCell[1] === cIdx;
-                      const isPrev = algoState.dpPreviousCells?.some((c) => c[0] === rIdx && c[1] === cIdx);
+          {/* Candidates Comparison Panel */}
+          {algoState.dpCandidateValues && algoState.dpCandidateValues.length > 0 && (
+            <div className="bg-[#0d1117] p-2.5 rounded-lg border border-[#30363d]/60 flex items-center justify-between text-xs font-mono">
+              <span className="text-[#8b949e]">Transition Candidates:</span>
+              <div className="flex items-center gap-2">
+                {algoState.dpCandidateValues.map((cand, idx) => (
+                  <span
+                    key={idx}
+                    className={`px-2 py-0.5 rounded font-bold border ${
+                      cand.selected
+                        ? 'bg-[#3fb950]/20 border-[#3fb950] text-[#3fb950]'
+                        : 'bg-[#21262d] border-[#30363d] text-[#8b949e]'
+                    }`}
+                  >
+                    {cand.label}: {String(cand.value)} {cand.selected ? '★ (Chosen)' : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
-                      let cellClass = 'border-[#30363d] bg-[#0d1117] text-[#f0f6fc]';
-                      if (isCurrent) cellClass = 'border-[#39c5cf] bg-[#39c5cf]/20 text-[#39c5cf] ring-2 ring-[#39c5cf]';
-                      else if (isPrev) cellClass = 'border-[#d29922] bg-[#d29922]/20 text-[#d29922]';
+          {/* 1D DP Array Table */}
+          {algoState.dpTable1D && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] text-[#8b949e] uppercase font-bold">1D DP Array / State Buffer</span>
+              <div className="overflow-x-auto py-2">
+                <div className="flex items-center gap-2 min-w-max">
+                  {algoState.dpTable1D.map((val, idx) => {
+                    const status = algoState.dpCellStatus?.[String(idx)];
+                    const isCurrent = status === 'CURRENT' || (algoState.dpCurrentCell && algoState.dpCurrentCell[0] === idx);
+                    const isDep = status === 'DEPENDENCY' || algoState.dpDependencies?.some((d) => Number(d) === idx);
+                    const isUpdated = status === 'UPDATED';
+                    const isFinal = status === 'FINAL';
 
-                      return (
-                        <div
-                          key={cIdx}
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold border shadow ${cellClass}`}
-                        >
-                          {val}
+                    let cellClass = 'border-[#30363d] bg-[#0d1117] text-[#f0f6fc]';
+                    if (isCurrent) cellClass = 'border-[#58a6ff] bg-[#58a6ff]/25 text-[#58a6ff] ring-2 ring-[#58a6ff] animate-pulse';
+                    else if (isUpdated) cellClass = 'border-[#3fb950] bg-[#3fb950]/25 text-[#3fb950] ring-1 ring-[#3fb950]';
+                    else if (isDep) cellClass = 'border-[#d29922] bg-[#d29922]/25 text-[#d29922]';
+                    else if (isFinal) cellClass = 'border-[#bc8cff] bg-[#bc8cff]/25 text-[#bc8cff]';
+
+                    return (
+                      <div key={idx} className="flex flex-col items-center gap-1">
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center font-mono font-bold border text-sm shadow transition-all ${cellClass}`}>
+                          {val === null || val === undefined ? '-' : String(val)}
                         </div>
-                      );
-                    })}
+                        <span className="text-[10px] font-mono text-[#8b949e]">[{idx}]</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2D DP Matrix Table */}
+          {algoState.dpTable2D && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] text-[#8b949e] uppercase font-bold">
+                2D DP Table ({algoState.dpTable2D.length} Rows × {algoState.dpTable2D[0]?.length || 0} Cols)
+              </span>
+              <div className="overflow-x-auto py-2 max-h-96">
+                <table className="border-collapse font-mono text-xs min-w-max">
+                  <thead>
+                    <tr>
+                      <th className="p-1.5 text-[#8b949e] text-[10px] border border-[#30363d]/40 bg-[#0d1117]">i \ j</th>
+                      {(algoState.dpTable2D[0] || []).map((_, cIdx) => (
+                        <th key={cIdx} className="p-1.5 text-[#8b949e] text-[10px] border border-[#30363d]/40 bg-[#0d1117] min-w-[36px] text-center">
+                          {cIdx}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {algoState.dpTable2D.map((row, rIdx) => (
+                      <tr key={rIdx}>
+                        <td className="p-1.5 font-bold text-[#8b949e] border border-[#30363d]/40 bg-[#0d1117] text-center text-[10px]">
+                          {rIdx}
+                        </td>
+                        {row.map((val, cIdx) => {
+                          const key = `${rIdx},${cIdx}`;
+                          const status = algoState.dpCellStatus?.[key];
+                          const isCurrent = status === 'CURRENT' || (algoState.dpCurrentCell && algoState.dpCurrentCell[0] === rIdx && algoState.dpCurrentCell[1] === cIdx);
+                          const isDep = status === 'DEPENDENCY' || algoState.dpPreviousCells?.some((c) => c[0] === rIdx && c[1] === cIdx);
+                          const isUpdated = status === 'UPDATED';
+                          const isFinal = status === 'FINAL';
+
+                          let cellClass = 'border-[#30363d]/40 bg-[#0d1117] text-[#c9d1d9]';
+                          if (isCurrent) cellClass = 'border-[#58a6ff] bg-[#58a6ff]/30 text-[#58a6ff] font-bold ring-2 ring-[#58a6ff]';
+                          else if (isUpdated) cellClass = 'border-[#3fb950] bg-[#3fb950]/20 text-[#3fb950] font-bold';
+                          else if (isDep) cellClass = 'border-[#d29922] bg-[#d29922]/20 text-[#d29922] font-bold';
+                          else if (isFinal) cellClass = 'border-[#bc8cff] bg-[#bc8cff]/20 text-[#bc8cff] font-bold';
+
+                          return (
+                            <td
+                              key={cIdx}
+                              title={`dp[${rIdx}][${cIdx}] = ${val}`}
+                              className={`p-1.5 text-center border transition-all ${cellClass}`}
+                            >
+                              {val === null || val === undefined ? '-' : typeof val === 'boolean' ? (val ? 'T' : 'F') : String(val)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Sparse DP & Memoization Cache Table */}
+          {((algoState.memoEntries && algoState.memoEntries.length > 0) || (algoState.dpSparseMap && Object.keys(algoState.dpSparseMap).length > 0)) && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] text-[#8b949e] uppercase font-bold">Sparse / Memoization Cache Map (State Key ➔ Value)</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+                {(algoState.memoEntries || []).map((entry, idx) => (
+                  <div key={idx} className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60 flex items-center justify-between">
+                    <span className="text-[#8b949e]">{JSON.stringify(entry.key)}</span>
+                    <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                      entry.status === 'HIT' ? 'bg-[#3fb950]/20 text-[#3fb950]' : 'bg-[#f85149]/20 text-[#f85149]'
+                    }`}>
+                      {entry.value !== null ? `➔ ${entry.value}` : 'MISS'}
+                    </span>
+                  </div>
+                ))}
+                {algoState.dpSparseMap && Object.entries(algoState.dpSparseMap).map(([k, v]) => (
+                  <div key={k} className="bg-[#0d1117] p-2 rounded-lg border border-[#30363d]/60 flex items-center justify-between">
+                    <span className="text-[#8b949e]">{k}</span>
+                    <span className="text-[#39c5cf] font-bold">➔ {String(v)}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {/* Educational Comparison: Memoization vs Tabulation */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-[#30363d]/50 font-sans">
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1">
+              <span className="font-bold text-[#bc8cff] text-xs">Top-Down Memoization</span>
+              <p className="text-[11px] text-[#8b949e]">
+                Recursive depth-first traversal starting from original problem down to base cases. Only states that are actively requested get evaluated and cached.
+              </p>
+              <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-[#8b949e]">
+                <span>Call Stack</span> • <span>Cache Lookup</span> • <span>Subproblem Pruning</span>
+              </div>
+            </div>
+
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1">
+              <span className="font-bold text-[#39c5cf] text-xs">Bottom-Up Tabulation</span>
+              <p className="text-[11px] text-[#8b949e]">
+                Iterative loop evaluation from base cases forward in topological dependency order. Avoids recursion stack overhead and fills the table sequentially.
+              </p>
+              <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-[#8b949e]">
+                <span>Iterative Loops</span> • <span>State Table</span> • <span>Zero Recursion Overhead</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1201,6 +1770,84 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
                   <td className="py-1.5 px-2 text-[#3fb950]">O(log(R) · check)</td>
                   <td className="py-1.5 px-2 text-[#3fb950]">O(log(R) · check)</td>
                   <td className="py-1.5 px-2 text-[#58a6ff]">O(1)</td>
+                </tr>
+                {/* Phase 7 Dynamic Programming Algorithms */}
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">0/1 Knapsack</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · W)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · W)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · W)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(N · W)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Unbounded Knapsack</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · W)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · W)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · W)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(W)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Coin Change (Min/Ways)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(Amount)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(Coins · Amount)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(Coins · Amount)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(Amount)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Subset Sum</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(N · Target)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · Target)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N · Target)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(N · Target)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">LCS / LCSubstring</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(M · N)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(M · N)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(M · N)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(M · N)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">LIS (Tabulation)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(N)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N²)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(N²)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(N)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Grid DP (Unique Paths)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(M · N)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(M · N)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(M · N)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(M · N)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Interval DP (MCM)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(N³)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(N³)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(N³)</td>
+                  <td className="py-1.5 px-2 text-[#d29922]">O(N²)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Tree DP</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(N)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(N)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(N)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(N)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Bitmask DP</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(2ᴺ · N)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(2ᴺ · N)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(2ᴺ · N)</td>
+                  <td className="py-1.5 px-2 text-[#f85149]">O(2ᴺ)</td>
+                </tr>
+                <tr className="hover:bg-[#0d1117] bg-[#39c5cf]/10">
+                  <td className="py-1.5 px-2 font-bold text-[#39c5cf]">Digit DP</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(D · S)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(D · S)</td>
+                  <td className="py-1.5 px-2 text-[#3fb950]">O(D · S)</td>
+                  <td className="py-1.5 px-2 text-[#58a6ff]">O(D · S)</td>
                 </tr>
               </tbody>
             </table>
@@ -1356,6 +2003,109 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
                 <span className="bg-[#21262d] text-[#bc8cff] px-1.5 py-0.5 rounded">Stack</span>
                 <span className="text-[#8b949e]">+</span>
                 <span className="bg-[#21262d] text-[#3fb950] px-1.5 py-0.5 rounded">Result Array</span>
+              </div>
+            </div>
+
+            {/* Dynamic Programming Cross-Structure Architecture */}
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#39c5cf] text-sm">0/1 & Unbounded Knapsack</span>
+                <span className="text-[10px] bg-[#39c5cf]/15 text-[#39c5cf] px-1.5 py-0.5 rounded">DP Tabulation</span>
+              </div>
+              <p className="text-[11px] text-[#8b949e] font-sans">
+                Solves optimal subset selection under capacity constraint via include/exclude comparisons.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                <span className="bg-[#21262d] text-[#58a6ff] px-1.5 py-0.5 rounded">Weight/Value Arrays</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#39c5cf] px-1.5 py-0.5 rounded">2D DP Table</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#d29922] px-1.5 py-0.5 rounded">State Transition</span>
+              </div>
+            </div>
+
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#39c5cf] text-sm">Longest Common Subsequence</span>
+                <span className="text-[10px] bg-[#39c5cf]/15 text-[#39c5cf] px-1.5 py-0.5 rounded">String DP</span>
+              </div>
+              <p className="text-[11px] text-[#8b949e] font-sans">
+                Matches character pairs diagonally or propagates maximal prefix lengths from top and left neighbors.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                <span className="bg-[#21262d] text-[#bc8cff] px-1.5 py-0.5 rounded">Strings</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#39c5cf] px-1.5 py-0.5 rounded">2D DP Grid</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#3fb950] px-1.5 py-0.5 rounded">Traceback Path</span>
+              </div>
+            </div>
+
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#39c5cf] text-sm">Longest Increasing Subsequence</span>
+                <span className="text-[10px] bg-[#39c5cf]/15 text-[#39c5cf] px-1.5 py-0.5 rounded">Array DP</span>
+              </div>
+              <p className="text-[11px] text-[#8b949e] font-sans">
+                Finds longest strictly increasing sequence using 1D state array and parent pointers for reconstruction.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                <span className="bg-[#21262d] text-[#58a6ff] px-1.5 py-0.5 rounded">Array</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#39c5cf] px-1.5 py-0.5 rounded">DP Array</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#bc8cff] px-1.5 py-0.5 rounded">Parent Pointers</span>
+              </div>
+            </div>
+
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#39c5cf] text-sm">Tree DP</span>
+                <span className="text-[10px] bg-[#39c5cf]/15 text-[#39c5cf] px-1.5 py-0.5 rounded">Hierarchical DP</span>
+              </div>
+              <p className="text-[11px] text-[#8b949e] font-sans">
+                Post-order DFS computes subtree optimal solutions and merges child subproblem states into parent state.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                <span className="bg-[#21262d] text-[#3fb950] px-1.5 py-0.5 rounded">Tree / BST</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#d29922] px-1.5 py-0.5 rounded">DFS Call Stack</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#39c5cf] px-1.5 py-0.5 rounded">Subtree States</span>
+              </div>
+            </div>
+
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#39c5cf] text-sm">Bitmask DP</span>
+                <span className="text-[10px] bg-[#39c5cf]/15 text-[#39c5cf] px-1.5 py-0.5 rounded">Exponential DP</span>
+              </div>
+              <p className="text-[11px] text-[#8b949e] font-sans">
+                Represents subset states compactly as integer bitmasks (e.g. TSP, assignment problem).
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                <span className="bg-[#21262d] text-[#f0883e] px-1.5 py-0.5 rounded">Bitwise Operators</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#58a6ff] px-1.5 py-0.5 rounded">Binary Mask Strip</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#39c5cf] px-1.5 py-0.5 rounded">State Cache</span>
+              </div>
+            </div>
+
+            <div className="bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#39c5cf] text-sm">Digit DP</span>
+                <span className="text-[10px] bg-[#39c5cf]/15 text-[#39c5cf] px-1.5 py-0.5 rounded">Combinatorial DP</span>
+              </div>
+              <p className="text-[11px] text-[#8b949e] font-sans">
+                Counts numbers in a range satisfying digit-level constraints with memoized (pos, tight, sum) states.
+              </p>
+              <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                <span className="bg-[#21262d] text-[#bc8cff] px-1.5 py-0.5 rounded">Call Stack</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#39c5cf] px-1.5 py-0.5 rounded">Multi-Dim Memo Cache</span>
+                <span className="text-[#8b949e]">+</span>
+                <span className="bg-[#21262d] text-[#3fb950] px-1.5 py-0.5 rounded">Digit Branches</span>
               </div>
             </div>
           </div>
