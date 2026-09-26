@@ -2935,12 +2935,17 @@ public class Main {
 
         for (int i = 1; i <= m; i++) {
             for (int j = 1; j <= n; j++) {
-                if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                char c1 = s1.charAt(i - 1), c2 = s2.charAt(j - 1);
+                boolean match = (c1 == c2);
+                CodeFlowTracer.lcsCharCompare("dp", i, j, c1, c2, match, 11);
+                if (match) {
                     dp[i][j] = dp[i - 1][j - 1] + 1;
+                    CodeFlowTracer.lcsMatch("dp", i, j, dp[i - 1][j - 1], dp[i][j], 13);
                 } else {
                     dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+                    CodeFlowTracer.lcsMismatch("dp", i, j, dp[i - 1][j], dp[i][j - 1], dp[i][j], 15);
                 }
-                CodeFlowTracer.lcsStateUpdate("dp", i, j, 0, dp[i][j], 15);
+                CodeFlowTracer.lcsStateUpdate("dp", i, j, 0, dp[i][j], 17);
             }
         }
 

@@ -821,6 +821,14 @@ export interface DataStructureState {
   pivotIndex?: number; // for quicksort partition
   sortedIndices?: number[]; // indices guaranteed sorted
   lastOperation?: string;
+  // 2D Matrix / Grid visual indicators & reference cells
+  activeCell?: [number, number]; // Currently updating cell [row, col]
+  dependencyCells?: [number, number][]; // Reference cells that activeCell depends on
+  highlightedCells?: [number, number][]; // Reconstructed path or highlighted cells
+  lastUpdatedCell?: [number, number]; // Cell updated in current step
+  rowLabels?: string[];
+  colLabels?: string[];
+  cellExplanation?: string; // Descriptive reference info for current cell update
 }
 
 export interface HeapObject {

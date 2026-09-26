@@ -210,6 +210,13 @@ export function reconstructExecutionSteps(
         searchRange: st.searchRange ? [...st.searchRange] : undefined,
         pivotIndex: st.pivotIndex,
         sortedIndices: st.sortedIndices ? [...st.sortedIndices] : undefined,
+        activeCell: undefined,
+        dependencyCells: undefined,
+        highlightedCells: st.highlightedCells ? st.highlightedCells.map((c) => [...c] as [number, number]) : undefined,
+        lastUpdatedCell: st.lastUpdatedCell ? [...st.lastUpdatedCell] : undefined,
+        rowLabels: st.rowLabels ? [...st.rowLabels] : undefined,
+        colLabels: st.colLabels ? [...st.colLabels] : undefined,
+        cellExplanation: undefined,
       };
     }
 
@@ -387,6 +394,8 @@ export function reconstructExecutionSteps(
       }
 
       case 'ARRAY_UPDATE': {
+        nextMetrics.assignments++;
+        nextMetrics.accesses += 2;
         const arrId = ev.structureId || ev.arrayId || 'arr';
         const st = nextStructures[arrId];
         if (st && st.arrayData && typeof ev.index === 'number') {
@@ -402,6 +411,7 @@ export function reconstructExecutionSteps(
       }
 
       case 'ARRAY_ACCESS': {
+        nextMetrics.accesses++;
         const arrId = ev.structureId || ev.arrayId || 'arr';
         const st = nextStructures[arrId];
         if (st && typeof ev.index === 'number') {
@@ -427,6 +437,8 @@ export function reconstructExecutionSteps(
           lastUpdatedStep: ev.step || 0,
           lastOperation: `Allocated int[${rows}][${cols}]`,
           stateCategory: 'RUNTIME_STATE',
+          rowLabels: ev.rowLabels || (nextAlgorithmState.lcsStringA ? ['Ø', ...nextAlgorithmState.lcsStringA.split('')] : undefined),
+          colLabels: ev.colLabels || (nextAlgorithmState.lcsStringB ? ['Ø', ...nextAlgorithmState.lcsStringB.split('')] : undefined),
         };
         nextVariables[matId] = {
           name: matId,
@@ -442,6 +454,8 @@ export function reconstructExecutionSteps(
       }
 
       case 'MATRIX_UPDATE': {
+        nextMetrics.assignments++;
+        nextMetrics.accesses += 2;
         const matId = ev.structureId || ev.variable || 'matrix';
         const st = nextStructures[matId];
         const r = ev.row ?? 0;
@@ -451,8 +465,51 @@ export function reconstructExecutionSteps(
           st.matrixData[r][c] = ev.newValue;
           st.lastUpdatedStep = ev.step || 0;
           st.lastOperation = `${matId}[${r}][${c}] = ${ev.newValue}`;
+          st.activeCell = [r, c];
+          st.lastUpdatedCell = [r, c];
+
+          const rawDeps = (ev as any).dependencyCells || (ev as any).dependencies;
+          if (rawDeps && Array.isArray(rawDeps)) {
+            st.dependencyCells = rawDeps;
+          } else if (nextAlgorithmState.dpPreviousCells && nextAlgorithmState.dpPreviousCells.length > 0) {
+            st.dependencyCells = [...nextAlgorithmState.dpPreviousCells];
+          } else if (r > 0 && c > 0) {
+            if (nextAlgorithmState.lcsStringA && nextAlgorithmState.lcsStringB) {
+              const chA = nextAlgorithmState.lcsStringA.charAt(r - 1);
+              const chB = nextAlgorithmState.lcsStringB.charAt(c - 1);
+              if (chA === chB) {
+                st.dependencyCells = [[r - 1, c - 1]];
+                st.cellExplanation = `Matched '${chA}' == '${chB}': dp[${r}][${c}] = dp[${r - 1}][${c - 1}] + 1`;
+              } else {
+                st.dependencyCells = [[r - 1, c], [r, c - 1]];
+                st.cellExplanation = `Mismatch '${chA}' != '${chB}': dp[${r}][${c}] = Max(dp[${r - 1}][${c}], dp[${r}][${c - 1}])`;
+              }
+            } else {
+              st.dependencyCells = [[r - 1, c], [r, c - 1]];
+              st.cellExplanation = `Cell dp[${r}][${c}] derived from top [${r - 1}, ${c}] and left [${r}, ${c - 1}]`;
+            }
+          } else if (r > 0) {
+            st.dependencyCells = [[r - 1, c]];
+            st.cellExplanation = `Cell dp[${r}][${c}] derived from top [${r - 1}, ${c}]`;
+          } else if (c > 0) {
+            st.dependencyCells = [[r, c - 1]];
+            st.cellExplanation = `Cell dp[${r}][${c}] derived from left [${r}, ${c - 1}]`;
+          }
         }
         explanation = `Updated matrix ${matId}[${r}][${c}] from ${ev.oldValue} to ${ev.newValue}`;
+        break;
+      }
+
+      case 'MATRIX_ACCESS': {
+        nextMetrics.accesses++;
+        const matId = ev.structureId || ev.variable || 'matrix';
+        const st = nextStructures[matId];
+        const r = ev.row ?? 0;
+        const c = ev.col ?? 0;
+        if (st) {
+          st.activeCell = [r, c];
+        }
+        explanation = `Read matrix ${matId}[${r}][${c}] = ${ev.value}`;
         break;
       }
 
@@ -2473,6 +2530,8 @@ export function reconstructExecutionSteps(
 
       // === CONTROL FLOW ===
       case 'CONDITION_EVALUATE': {
+        nextMetrics.comparisons++;
+        nextMetrics.accesses++;
         nextComparison = {
           left: ev.condition || 'condition',
           right: '',
@@ -2512,7 +2571,11 @@ export function reconstructExecutionSteps(
         break;
 
       case 'FUNCTION_CALL': {
+        nextMetrics.functionCalls++;
         const fnName = ev.functionName || 'function';
+        if (nextCallStack.some((f) => f.functionName === fnName)) {
+          nextMetrics.recursiveCalls++;
+        }
         let parsedArgs: Record<string, any> = {};
         if (typeof ev.arguments === 'string') {
           try {
@@ -2734,6 +2797,7 @@ export function reconstructExecutionSteps(
 
       case 'SORT_COMPARE': {
         nextMetrics.comparisons++;
+        nextMetrics.accesses += 2;
         if (ev.structureId && nextStructures[ev.structureId]) {
           nextStructures[ev.structureId].comparingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
         }
@@ -2750,6 +2814,8 @@ export function reconstructExecutionSteps(
 
       case 'SORT_SWAP': {
         nextMetrics.swaps++;
+        nextMetrics.accesses += 2;
+        nextMetrics.assignments += 2;
         if (ev.structureId && nextStructures[ev.structureId]) {
           const st = nextStructures[ev.structureId];
           st.swappingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
@@ -2935,6 +3001,7 @@ export function reconstructExecutionSteps(
 
       case 'TWO_POINTER_COMPARE': {
         nextMetrics.comparisons++;
+        nextMetrics.accesses += 2;
         if (ev.structureId && nextStructures[ev.structureId]) {
           nextStructures[ev.structureId].comparingIndices = [ev.fromIndex ?? 0, ev.toIndex ?? 0];
         }
@@ -4854,17 +4921,37 @@ export function reconstructExecutionSteps(
         nextAlgorithmState.lcsStringB = (ev as any).b || parts[1] || '';
         nextAlgorithmState.dpType = 'TABULATION_2D';
         nextAlgorithmState.theoreticalComplexity = { time: 'O(M × N)', space: 'O(M × N)' };
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          dpMat.rowLabels = ['Ø', ...(nextAlgorithmState.lcsStringA ? nextAlgorithmState.lcsStringA.split('') : [])];
+          dpMat.colLabels = ['Ø', ...(nextAlgorithmState.lcsStringB ? nextAlgorithmState.lcsStringB.split('') : [])];
+        }
+
         explanation = `Started LCS on strings "${nextAlgorithmState.lcsStringA}" and "${nextAlgorithmState.lcsStringB}"`;
         break;
       }
 
       case 'LCS_CHARACTER_COMPARE': {
         nextMetrics.comparisons++;
+        nextMetrics.accesses += 2;
         nextAlgorithmState.lcsI = ev.row ?? (ev as any).i;
         nextAlgorithmState.lcsJ = ev.col ?? (ev as any).j;
         nextAlgorithmState.lcsCharA = ev.iChar;
         nextAlgorithmState.lcsCharB = ev.jChar;
         nextAlgorithmState.lcsMatched = ev.charMatched !== undefined ? !!ev.charMatched : (ev.iChar === ev.jChar);
+        const r = nextAlgorithmState.lcsI ?? 1;
+        const c = nextAlgorithmState.lcsJ ?? 1;
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          dpMat.activeCell = [r, c];
+          dpMat.dependencyCells = (r > 0 && c > 0) ? [[r - 1, c - 1], [r - 1, c], [r, c - 1]] : undefined;
+          dpMat.cellExplanation = `Comparing A[${r - 1}] ('${ev.iChar}') with B[${c - 1}] ('${ev.jChar}') for dp[${r}][${c}]`;
+        }
+
         nextComparison = {
           left: `A[${(nextAlgorithmState.lcsI || 1) - 1}]: '${ev.iChar}'`,
           right: `B[${(nextAlgorithmState.lcsJ || 1) - 1}]: '${ev.jChar}'`,
@@ -4877,19 +4964,43 @@ export function reconstructExecutionSteps(
       }
 
       case 'LCS_MATCH': {
+        nextMetrics.comparisons++;
         const i = ev.row ?? (ev as any).i ?? 1;
         const j = ev.col ?? (ev as any).j ?? 1;
         nextAlgorithmState.lcsMatched = true;
         nextAlgorithmState.dpPreviousCells = [[i - 1, j - 1]];
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          dpMat.activeCell = [i, j];
+          dpMat.dependencyCells = [[i - 1, j - 1]];
+          const cA = nextAlgorithmState.lcsStringA?.charAt(i - 1) || '';
+          const cB = nextAlgorithmState.lcsStringB?.charAt(j - 1) || '';
+          dpMat.cellExplanation = `Match ('${cA}' == '${cB}'): take diagonal cell dp[${i - 1}][${j - 1}] (${ev.oldValue}) + 1 = ${ev.newValue}`;
+        }
+
         explanation = `Match: Take diagonal value dp[${i - 1}][${j - 1}] (${ev.oldValue}) + 1 = ${ev.newValue}`;
         break;
       }
 
       case 'LCS_MISMATCH': {
+        nextMetrics.comparisons++;
         const i = ev.row ?? (ev as any).i ?? 1;
         const j = ev.col ?? (ev as any).j ?? 1;
         nextAlgorithmState.lcsMatched = false;
         nextAlgorithmState.dpPreviousCells = [[i - 1, j], [i, j - 1]];
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          dpMat.activeCell = [i, j];
+          dpMat.dependencyCells = [[i - 1, j], [i, j - 1]];
+          const cA = nextAlgorithmState.lcsStringA?.charAt(i - 1) || '';
+          const cB = nextAlgorithmState.lcsStringB?.charAt(j - 1) || '';
+          dpMat.cellExplanation = `Mismatch ('${cA}' != '${cB}'): Max(Top dp[${i - 1}][${j}] = ${ev.leftVal}, Left dp[${i}][${j - 1}] = ${ev.rightVal}) = ${ev.value}`;
+        }
+
         explanation = `Mismatch: Max(dp[${i - 1}][${j}] = ${ev.leftVal}, dp[${i}][${j - 1}] = ${ev.rightVal}) = ${ev.value}`;
         break;
       }
@@ -4901,6 +5012,7 @@ export function reconstructExecutionSteps(
 
       case 'LCS_STATE_UPDATE': {
         nextMetrics.assignments++;
+        nextMetrics.accesses += 2;
         const r = ev.row ?? (ev as any).i ?? 0;
         const c = ev.col ?? (ev as any).j ?? 0;
         if (!nextAlgorithmState.dpTable2D) nextAlgorithmState.dpTable2D = [];
@@ -4909,6 +5021,38 @@ export function reconstructExecutionSteps(
         nextAlgorithmState.dpCurrentCell = [r, c];
         if (!nextAlgorithmState.dpCellStatus) nextAlgorithmState.dpCellStatus = {};
         nextAlgorithmState.dpCellStatus[`${r},${c}`] = 'UPDATED';
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          if (dpMat.matrixData) {
+            if (!dpMat.matrixData[r]) dpMat.matrixData[r] = [];
+            dpMat.matrixData[r][c] = ev.newValue;
+          }
+          dpMat.activeCell = [r, c];
+          dpMat.lastUpdatedCell = [r, c];
+          if (nextAlgorithmState.dpPreviousCells && nextAlgorithmState.dpPreviousCells.length > 0) {
+            dpMat.dependencyCells = [...nextAlgorithmState.dpPreviousCells];
+          } else if (r > 0 && c > 0) {
+            dpMat.dependencyCells = [[r - 1, c - 1]];
+          }
+          if (nextAlgorithmState.lcsStringA && nextAlgorithmState.lcsStringB) {
+            dpMat.rowLabels = ['Ø', ...nextAlgorithmState.lcsStringA.split('')];
+            dpMat.colLabels = ['Ø', ...nextAlgorithmState.lcsStringB.split('')];
+            const chA = nextAlgorithmState.lcsStringA.charAt(r - 1);
+            const chB = nextAlgorithmState.lcsStringB.charAt(c - 1);
+            if (chA === chB && r > 0 && c > 0) {
+              dpMat.cellExplanation = `Match ('${chA}' == '${chB}'): dp[${r}][${c}] = diagonal dp[${r - 1}][${c - 1}] + 1 = ${ev.newValue}`;
+            } else if (r > 0 && c > 0) {
+              dpMat.cellExplanation = `Mismatch ('${chA}' != '${chB}'): dp[${r}][${c}] = Max(Top, Left) = ${ev.newValue}`;
+            } else {
+              dpMat.cellExplanation = `dp[${r}][${c}] = ${ev.newValue}`;
+            }
+          } else {
+            dpMat.cellExplanation = `dp[${r}][${c}] = ${ev.newValue}`;
+          }
+        }
+
         explanation = `dp[${r}][${c}] = ${ev.newValue}`;
         break;
       }
@@ -4916,15 +5060,37 @@ export function reconstructExecutionSteps(
       case 'LCS_RECONSTRUCTION_START': {
         nextAlgorithmState.reconstructionActive = true;
         nextAlgorithmState.lcsReconstructionPath = ev.row !== undefined ? [[ev.row ?? 0, ev.col ?? 0]] : [];
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          dpMat.highlightedCells = ev.row !== undefined ? [[ev.row ?? 0, ev.col ?? 0]] : [];
+          dpMat.activeCell = ev.row !== undefined ? [ev.row ?? 0, ev.col ?? 0] : undefined;
+          dpMat.cellExplanation = `Starting traceback reconstruction from dp[${ev.row}][${ev.col}]`;
+        }
+
         explanation = `Tracing back optimal subsequence from dp[${ev.row}][${ev.col}]`;
         break;
       }
 
       case 'LCS_RECONSTRUCTION_STEP': {
+        nextMetrics.accesses += 2;
         if (!nextAlgorithmState.lcsReconstructionPath) nextAlgorithmState.lcsReconstructionPath = [];
         const r = ev.row ?? (ev as any).i ?? 0;
         const c = ev.col ?? (ev as any).j ?? 0;
         nextAlgorithmState.lcsReconstructionPath.push([r, c]);
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          if (!dpMat.highlightedCells) dpMat.highlightedCells = [];
+          if (!dpMat.highlightedCells.some(([hr, hc]) => hr === r && hc === c)) {
+            dpMat.highlightedCells.push([r, c]);
+          }
+          dpMat.activeCell = [r, c];
+          dpMat.cellExplanation = `Traceback path at [${r}][${c}]: ${ev.detail || `Included character '${ev.char || (ev as any).iChar}'`}`;
+        }
+
         explanation = `Traceback at [${r}][${c}]: ${ev.detail || `Included character '${ev.char || (ev as any).iChar}'`}`;
         break;
       }
@@ -4932,6 +5098,13 @@ export function reconstructExecutionSteps(
       case 'LCS_RECONSTRUCTION_END': {
         nextAlgorithmState.reconstructionActive = false;
         nextAlgorithmState.lcsResult = ev.word || (ev as any).result;
+
+        const structKey = ev.structureId || 'dp';
+        const dpMat = nextStructures[structKey] || Object.values(nextStructures).find((s) => s.type === 'matrix');
+        if (dpMat) {
+          dpMat.cellExplanation = `Reconstructed LCS Result: "${nextAlgorithmState.lcsResult}"`;
+        }
+
         explanation = `LCS reconstruction complete. Subsequence = "${nextAlgorithmState.lcsResult}"`;
         break;
       }
