@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DataStructureState, ExecutionEvent } from '../../types/execution';
-import { BarChart2, Layers } from 'lucide-react';
+import { BarChart2, Layers, Network } from 'lucide-react';
 
 interface ArrayVisualizerProps {
   structure: DataStructureState;
@@ -15,7 +15,48 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   pointers,
   lastEvent,
 }) => {
-  const [viewMode, setViewMode] = useState<'boxes' | 'bars'>('boxes');
+  const [viewMode, setViewMode] = useState<'boxes' | 'bars' | 'nested'>('boxes');
+
+  // Helper to render cell value safely (handles booleans, nested arrays, nulls, primitives)
+  const renderCellContent = (val: any) => {
+    if (val === null || val === undefined) {
+      return <span className="text-[#8b949e] italic text-xs font-mono">null</span>;
+    }
+    if (typeof val === 'boolean') {
+      return (
+        <span
+          className={`px-2 py-0.5 rounded text-xs font-mono font-bold tracking-wider ${
+            val
+              ? 'bg-[#238636]/30 text-[#3fb950] border border-[#3fb950]/50 shadow-[0_0_8px_rgba(63,185,80,0.3)]'
+              : 'bg-[#21262d] text-[#8b949e] border border-[#30363d]'
+          }`}
+        >
+          {val ? 'TRUE' : 'FALSE'}
+        </span>
+      );
+    }
+    if (Array.isArray(val)) {
+      return (
+        <div className="flex flex-wrap items-center justify-center gap-1 px-1.5 py-0.5">
+          <span className="text-[#8b949e] font-mono text-xs font-bold">[</span>
+          {val.length === 0 ? (
+            <span className="text-[#8b949e] font-mono text-[11px] italic">empty</span>
+          ) : (
+            val.map((item, itemIdx) => (
+              <span
+                key={itemIdx}
+                className="text-xs font-mono font-bold px-1.5 py-0.2 rounded bg-[#1f6feb]/25 text-[#58a6ff] border border-[#388bfd]/30"
+              >
+                {String(item)}
+              </span>
+            ))
+          )}
+          <span className="text-[#8b949e] font-mono text-xs font-bold">]</span>
+        </div>
+      );
+    }
+    return String(val);
+  };
 
   // If it's a 2D matrix
   if (structure.type === 'matrix' && structure.matrixData) {
@@ -200,7 +241,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                         title={`dp[${rIdx}][${cIdx}] = ${val}`}
                       >
                         {badge}
-                        <span>{val}</span>
+                        <span>{renderCellContent(val)}</span>
                       </div>
                     );
                   })}
@@ -214,7 +255,8 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   }
 
   const arr = structure.arrayData || [];
-  const maxVal = Math.max(...arr.map((v) => (typeof v === 'number' ? Math.abs(v) : 1)), 10);
+  const isNestedList = arr.some((v) => Array.isArray(v));
+  const maxVal = Math.max(...arr.map((v) => (typeof v === 'number' ? Math.abs(v) : Array.isArray(v) ? v.length : 1)), 10);
 
   // Group pointers by index
   const pointersByIndex: Record<number, string[]> = {};
@@ -253,6 +295,18 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
             <Layers className="w-3.5 h-3.5" />
             Cells
           </button>
+          {isNestedList && (
+            <button
+              onClick={() => setViewMode('nested')}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded transition-colors ${
+                viewMode === 'nested' ? 'bg-[#58a6ff] text-black font-semibold' : 'text-[#8b949e] hover:text-[#f0f6fc]'
+              }`}
+              title="Nested Tree Hierarchy"
+            >
+              <Network className="w-3.5 h-3.5" />
+              Hierarchy
+            </button>
+          )}
           <button
             onClick={() => setViewMode('bars')}
             className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded transition-colors ${
@@ -292,7 +346,55 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
         </div>
       )}
 
-      {viewMode === 'boxes' ? (
+      {viewMode === 'nested' ? (
+        /* Hierarchical Nested Tree Representation (Section 10) */
+        <div className="overflow-x-auto py-2">
+          <div className="flex flex-col gap-1.5 font-mono text-xs bg-[#0d1117] p-3 rounded-lg border border-[#30363d]/60 shadow-inner">
+            <div className="flex items-center gap-2 text-[#58a6ff] font-bold pb-2 border-b border-[#30363d]/40">
+              <span>{structure.name}</span>
+              <span className="text-[#8b949e] font-normal text-[11px]">(Nested Collection, {arr.length} elements)</span>
+            </div>
+            {arr.map((sub, sIdx) => {
+              const subItems = Array.isArray(sub) ? sub : [sub];
+              const isLast = sIdx === arr.length - 1;
+              const branchChar = isLast ? '└──' : '├──';
+              const isActive = structure.activeIndices?.includes(sIdx);
+              return (
+                <div key={sIdx} className="flex flex-col">
+                  <div
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-colors ${
+                      isActive ? 'bg-[#1f6feb]/20 border border-[#58a6ff]/40' : 'hover:bg-[#161b22]'
+                    }`}
+                  >
+                    <span className="text-[#8b949e] select-none">{branchChar}</span>
+                    <span className="font-bold text-[#f0f6fc]">list[{sIdx}]</span>
+                    <span className="text-[#8b949e] select-none">➔</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[#8b949e] font-bold">[</span>
+                      {subItems.length === 0 ? (
+                        <span className="text-[#8b949e] italic text-[11px]">empty</span>
+                      ) : (
+                        subItems.map((item, itIdx) => (
+                          <span
+                            key={itIdx}
+                            className="px-2 py-0.5 rounded text-xs font-bold bg-[#1f6feb]/25 text-[#58a6ff] border border-[#388bfd]/30 shadow-sm"
+                          >
+                            {String(item)}
+                          </span>
+                        ))
+                      )}
+                      <span className="text-[#8b949e] font-bold">]</span>
+                    </div>
+                    <span className="text-[10px] text-[#8b949e] ml-auto">
+                      size: {subItems.length}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : viewMode === 'boxes' ? (
         <div className="overflow-x-auto py-3">
           <div className="flex items-end justify-center min-w-max gap-2 px-2">
             {arr.map((val, idx) => {
@@ -357,6 +459,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               }
 
               const dimClass = !inSearchRange ? 'opacity-30 grayscale scale-95' : 'opacity-100 scale-100';
+              const cellWidthClass = isNestedList ? 'min-w-[4.5rem] w-auto px-2.5 h-14' : 'w-14 h-14';
 
               return (
                 <div key={idx} className={`flex flex-col items-center gap-1.5 transition-all duration-200 ${dimClass}`}>
@@ -389,7 +492,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
 
                   {/* Array Cell */}
                   <div
-                    className={`w-14 h-14 rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105 relative`}
+                    className={`${cellWidthClass} rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105 relative`}
                   >
                     {isSorted && (
                       <span className="absolute top-0.5 right-1 text-[9px] text-[#3fb950] font-bold">
@@ -399,15 +502,19 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                     {isUpdated && lastEvent.oldValue !== undefined ? (
                       <div className="flex flex-col items-center justify-center leading-none">
                         <span className="text-[10px] text-[#8b949e] line-through font-mono">
-                          {lastEvent.oldValue}
+                          {typeof lastEvent.oldValue === 'boolean'
+                            ? String(lastEvent.oldValue)
+                            : Array.isArray(lastEvent.oldValue)
+                            ? `[${lastEvent.oldValue.join(', ')}]`
+                            : String(lastEvent.oldValue)}
                         </span>
                         <div className="flex items-center gap-0.5 text-xs text-[#3fb950] font-mono font-bold mt-0.5">
                           <span>↓</span>
-                          <span>{val}</span>
+                          <span>{renderCellContent(val)}</span>
                         </div>
                       </div>
                     ) : (
-                      val
+                      renderCellContent(val)
                     )}
                   </div>
 
@@ -427,7 +534,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               const algoBadges = structure.pointerBadges?.[idx] || [];
               const allBadges = [...new Set([...activePtrs, ...algoBadges])];
               const isActive = structure.activeIndices?.includes(idx);
-              const numVal = typeof val === 'number' ? val : 10;
+              const numVal = typeof val === 'number' ? val : typeof val === 'boolean' ? (val ? 10 : 2) : Array.isArray(val) ? val.length * 2 : 10;
               const barHeightPercent = Math.max(12, Math.min(100, (Math.abs(numVal) / maxVal) * 100));
 
               let barColor = 'bg-[#58a6ff]/70';
@@ -443,7 +550,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                     </div>
                   )}
 
-                  <span className="text-xs font-mono font-bold text-[#f0f6fc]">{val}</span>
+                  <span className="text-xs font-mono font-bold text-[#f0f6fc]">{typeof val === 'boolean' ? String(val) : Array.isArray(val) ? `[${val.length}]` : val}</span>
 
                   <div
                     style={{ height: `${barHeightPercent}%` }}

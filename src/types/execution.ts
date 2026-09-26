@@ -502,7 +502,12 @@ export type EventType =
   | 'OUTPUT'
   | 'MEMORY_ALLOCATE'
   | 'MEMORY_FREE'
-  | 'EXCEPTION';
+  | 'EXCEPTION'
+  // Universal Java Runtime Observation Events
+  | 'NESTED_COLLECTION_UPDATE'
+  | 'CUSTOM_OBJECT_UPDATE'
+  | 'LINKED_LIST_UPDATE'
+  | 'TREE_UPDATE';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -532,6 +537,17 @@ export interface ExecutionEvent {
   size?: number;
   detail?: string;
   meta?: Record<string, any>;
+  // Universal Object & Reference Observation
+  objectId?: string;
+  isReference?: boolean;
+  refTargetId?: string;
+  isGraph?: boolean;
+  className?: string;
+  fields?: Record<string, any>;
+  headId?: string;
+  nodes?: Record<string, any>;
+  rootId?: string;
+  entries?: Array<{ key: any; value: any; hash?: number; bucket?: number }>;
   // Phase 3 Hierarchical fields
   nodeId?: string;
   parentNodeId?: string;

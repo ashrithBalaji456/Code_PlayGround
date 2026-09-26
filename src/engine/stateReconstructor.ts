@@ -12,6 +12,8 @@ import {
   AlgorithmState,
   AlgorithmMetrics,
   RecursionTreeNode,
+  LinkedListNode,
+  TreeNodeData,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -104,7 +106,7 @@ export function reconstructExecutionSteps(
     for (const [k, st] of Object.entries(currentStructures)) {
       nextStructures[k] = {
         ...st,
-        arrayData: st.arrayData ? [...st.arrayData] : undefined,
+        arrayData: st.arrayData ? st.arrayData.map(item => Array.isArray(item) ? [...item] : item) : undefined,
         stackData: st.stackData ? [...st.stackData] : undefined,
         queueData: st.queueData ? [...st.queueData] : undefined,
         dequeData: st.dequeData ? [...st.dequeData] : undefined,
@@ -328,12 +330,14 @@ export function reconstructExecutionSteps(
         const type = ev.dataType || 'int';
         const val = ev.value;
         const bytes = estimateSize(type, val);
+        const isRef = !!ev.isReference || !!ev.objectId;
         const varInfo: VariableInfo = {
           name: ev.variable!,
           type,
           value: val,
           scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
-          isReference: false,
+          isReference: isRef,
+          refTargetId: ev.refTargetId || ev.objectId,
           estimatedBytes: bytes,
         };
         nextVariables[ev.variable!] = varInfo;
@@ -347,19 +351,183 @@ export function reconstructExecutionSteps(
 
       case 'VARIABLE_UPDATE': {
         const v = nextVariables[ev.variable!];
+        const isRef = !!ev.isReference || !!ev.objectId;
         if (v) {
           v.value = ev.newValue;
+          if (isRef) {
+            v.isReference = true;
+            v.refTargetId = ev.refTargetId || ev.objectId;
+          }
         } else {
           nextVariables[ev.variable!] = {
             name: ev.variable!,
             type: ev.dataType || 'int',
             value: ev.newValue,
             scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
-            isReference: false,
+            isReference: isRef,
+            refTargetId: ev.refTargetId || ev.objectId,
             estimatedBytes: estimateSize(ev.dataType || 'int', ev.newValue),
           };
         }
+        const topFrame = nextCallStack[nextCallStack.length - 1];
+        if (topFrame && nextVariables[ev.variable!]) {
+          topFrame.localVariables[ev.variable!] = nextVariables[ev.variable!];
+        }
         explanation = `Updated variable ${ev.variable} from ${ev.oldValue} to ${ev.newValue}`;
+        break;
+      }
+
+      case 'FUNCTION_CALL': {
+        const fnName = ev.functionName || 'func';
+        const frameId = `frame-${fnName}-${nextCallStack.length}`;
+        const newFrame: CallFrame = {
+          id: frameId,
+          functionName: fnName,
+          arguments: ev.arguments || {},
+          localVariables: {},
+          line: ev.line || currentLine,
+          depth: nextCallStack.length + 1,
+        };
+        nextCallStack.push(newFrame);
+        nextMetrics.functionCalls++;
+        explanation = `Called ${fnName}()`;
+        break;
+      }
+
+      case 'FUNCTION_RETURN': {
+        const fnName = ev.functionName || '';
+        if (nextCallStack.length > 1) {
+          nextCallStack.pop();
+        }
+        explanation = `Returned from ${fnName || 'function'}${ev.returnValue !== undefined ? ` with ${ev.returnValue}` : ''}`;
+        break;
+      }
+
+      case 'NESTED_COLLECTION_UPDATE': {
+        const arrId = ev.structureId || ev.variable || 'nested';
+        const rawVals = Array.isArray(ev.values) ? ev.values : [];
+        nextStructures[arrId] = {
+          id: arrId,
+          name: ev.variable || arrId,
+          type: 'array',
+          dataType: ev.dataType || 'List<List<...>>',
+          arrayData: rawVals,
+          size: rawVals.length,
+          lastOperation: `Updated ${arrId} (size ${rawVals.length})`,
+        };
+        if (ev.isGraph && rawVals.length > 0 && Array.isArray(rawVals[0])) {
+          const graphId = `graph_${arrId}`;
+          const nodes: Record<string, GraphNodeData> = {};
+          const edges: Record<string, GraphEdgeData> = {};
+          for (let u = 0; u < rawVals.length; u++) {
+            const uStr = String(u);
+            const nbrs: string[] = [];
+            if (Array.isArray(rawVals[u])) {
+              for (const v of rawVals[u]) {
+                const vStr = String(v);
+                nbrs.push(vStr);
+                const edgeId = `edge_${u}_${v}`;
+                edges[edgeId] = {
+                  id: edgeId,
+                  source: uStr,
+                  target: vStr,
+                  directed: false,
+                };
+              }
+            }
+            nodes[uStr] = {
+              id: uStr,
+              label: uStr,
+              value: u,
+              outNeighbors: nbrs,
+              degree: nbrs.length,
+            };
+          }
+          nextStructures[graphId] = {
+            id: graphId,
+            name: `Graph (${arrId})`,
+            type: 'graph',
+            dataType: 'Graph (Adjacency List)',
+            size: rawVals.length,
+            graphData: {
+              directed: false,
+              weighted: false,
+              nodes,
+              nodeList: Object.values(nodes),
+              edges,
+              edgeList: Object.values(edges),
+            },
+            lastOperation: `Adjacency Graph (${rawVals.length} vertices)`,
+          };
+        }
+        nextVariables[arrId] = {
+          name: arrId,
+          type: ev.dataType || 'List<List<Integer>>',
+          value: `size = ${rawVals.length}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
+          isReference: true,
+          refTargetId: ev.objectId || arrId,
+          estimatedBytes: 32 + rawVals.length * 8,
+        };
+        explanation = `Updated nested collection ${arrId} (size ${rawVals.length})`;
+        break;
+      }
+
+      case 'CUSTOM_OBJECT_UPDATE': {
+        const objId = ev.objectId || ev.structureId || ev.variable || 'obj';
+        const varName = ev.variable || ev.structureId || 'obj';
+        const fields = ev.fields || {};
+        const className = ev.className || 'Object';
+        nextVariables[varName] = {
+          name: varName,
+          type: className,
+          value: `@${objId} ${JSON.stringify(fields)}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
+          isReference: true,
+          refTargetId: objId,
+          estimatedBytes: 24 + Object.keys(fields).length * 8,
+        };
+        explanation = `Updated object ${varName} (${className} @${objId})`;
+        break;
+      }
+
+      case 'LINKED_LIST_UPDATE': {
+        const stId = ev.structureId || ev.variable || 'list';
+        const headId = ev.headId || null;
+        const nodes: Record<string, LinkedListNode> = (ev.nodes as any) || {};
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'linkedlist',
+          dataType: 'LinkedList (Custom)',
+          size: Object.keys(nodes).length,
+          linkedListData: {
+            headId,
+            nodes,
+          },
+          lastOperation: `Updated custom linked list ${stId}`,
+        };
+        explanation = `Custom LinkedList ${stId}: ${Object.keys(nodes).length} nodes`;
+        break;
+      }
+
+      case 'TREE_UPDATE': {
+        const stId = ev.structureId || ev.variable || 'tree';
+        const rootId = ev.rootId || null;
+        const nodes: Record<string, TreeNodeData> = (ev.nodes as any) || {};
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'tree',
+          dataType: 'BinaryTree (Custom)',
+          size: Object.keys(nodes).length,
+          treeData: {
+            rootId,
+            nodes,
+          },
+          lastOperation: `Updated custom binary tree ${stId}`,
+        };
+        explanation = `Custom Binary Tree ${stId}: ${Object.keys(nodes).length} nodes`;
         break;
       }
 
@@ -515,25 +683,26 @@ export function reconstructExecutionSteps(
 
       // === STACK ===
       case 'STACK_CREATE': {
+        const sVals = Array.isArray(ev.values) ? [...ev.values] : [];
         nextStructures[stId] = {
           id: stId,
           name: ev.variable || stId,
           type: 'stack',
           dataType: ev.dataType || 'Stack<Integer>',
-          stackData: [],
-          size: 0,
-          lastOperation: 'new Stack<>()',
+          stackData: sVals,
+          size: ev.size ?? sVals.length,
+          lastOperation: sVals.length > 0 ? `Stack (${sVals.length} items)` : 'new Stack<>()',
         };
         nextVariables[stId] = {
           name: stId,
           type: ev.dataType || 'Stack<Integer>',
-          value: 'size = 0',
-          scope: 'main',
+          value: `size = ${sVals.length}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
           isReference: true,
           refTargetId: stId,
-          estimatedBytes: 32,
+          estimatedBytes: 32 + sVals.length * 8,
         };
-        explanation = `Created new Stack: ${stId}`;
+        explanation = `Stack ${stId}: size = ${sVals.length}`;
         break;
       }
 
@@ -589,25 +758,26 @@ export function reconstructExecutionSteps(
 
       // === QUEUE ===
       case 'QUEUE_CREATE': {
+        const qVals = Array.isArray(ev.values) ? [...ev.values] : [];
         nextStructures[stId] = {
           id: stId,
           name: ev.variable || stId,
           type: 'queue',
           dataType: ev.dataType || 'Queue<Integer>',
-          queueData: [],
-          size: 0,
-          lastOperation: 'new LinkedList<>()',
+          queueData: qVals,
+          size: ev.size ?? qVals.length,
+          lastOperation: qVals.length > 0 ? `Queue (${qVals.length} items)` : 'new LinkedList<>()',
         };
         nextVariables[stId] = {
           name: stId,
           type: ev.dataType || 'Queue<Integer>',
-          value: 'size = 0',
-          scope: 'main',
+          value: `size = ${qVals.length}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
           isReference: true,
           refTargetId: stId,
-          estimatedBytes: 32,
+          estimatedBytes: 32 + qVals.length * 8,
         };
-        explanation = `Created new Queue: ${stId}`;
+        explanation = `Queue ${stId}: size = ${qVals.length}`;
         break;
       }
 
@@ -961,25 +1131,26 @@ export function reconstructExecutionSteps(
 
       // === HASHSET ===
       case 'SET_CREATE': {
+        const setVals = Array.isArray(ev.values) ? [...ev.values] : [];
         nextStructures[stId] = {
           id: stId,
           name: ev.variable || stId,
           type: 'set',
           dataType: ev.dataType || 'HashSet<Integer>',
-          setData: [],
-          size: 0,
-          lastOperation: 'new HashSet<>()',
+          setData: setVals,
+          size: ev.size ?? setVals.length,
+          lastOperation: setVals.length > 0 ? `HashSet (${setVals.length} items)` : 'new HashSet<>()',
         };
         nextVariables[stId] = {
           name: stId,
           type: ev.dataType || 'HashSet<Integer>',
-          value: 'size = 0',
-          scope: 'main',
+          value: `size = ${setVals.length}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
           isReference: true,
           refTargetId: stId,
-          estimatedBytes: 32,
+          estimatedBytes: 32 + setVals.length * 8,
         };
-        explanation = `Created new HashSet: ${stId}`;
+        explanation = `HashSet ${stId}: size = ${setVals.length}`;
         break;
       }
 
@@ -5682,13 +5853,22 @@ export function reconstructExecutionSteps(
       }
 
       case 'EXCEPTION': {
+        const exName = ev.detail ? ev.detail.split('.').pop() || 'RuntimeError' : 'RuntimeError';
+        const knownTypes: ExecutionError['type'][] = [
+          'NullPointerException',
+          'ArrayIndexOutOfBoundsException',
+          'ArithmeticException',
+          'SyntaxError',
+          'RuntimeError',
+        ];
+        const matchedType = knownTypes.find((t) => exName.includes(t)) || 'RuntimeError';
         nextError = {
-          type: 'RuntimeError',
-          message: ev.message || 'Execution Exception',
+          type: matchedType,
+          message: ev.message || exName,
           line: ev.line || currentLine,
           detail: ev.detail || 'Exception caught by runtime',
         };
-        explanation = `Exception thrown on line ${ev.line}: ${ev.message}`;
+        explanation = `Exception (${exName}) thrown on line ${ev.line}: ${ev.message}`;
         break;
       }
 

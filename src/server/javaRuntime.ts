@@ -2,18 +2,21 @@ export const CODE_FLOW_TRACER_JAVA = `package com.codeflow;
 
 import java.io.*;
 import java.util.*;
+import java.lang.reflect.*;
 
 public class CodeFlowTracer {
     private static final List<String> events = new ArrayList<>();
     private static int stepCounter = 0;
-    private static final int MAX_STEPS = 1500;
+    private static final int MAX_STEPS = 2500;
     private static PrintStream originalOut = System.out;
     private static final List<String> consoleLines = new ArrayList<>();
+    private static final Map<String, Object> trackedVars = new HashMap<>();
 
     public static void start() {
         stepCounter = 0;
         events.clear();
         consoleLines.clear();
+        trackedVars.clear();
         installConsole();
         recordEvent("{\\"type\\":\\"PROGRAM_START\\",\\"step\\":0,\\"line\\":1,\\"message\\":\\"Program execution started\\"}");
     }
@@ -35,6 +38,17 @@ public class CodeFlowTracer {
                     buffer.write(b);
                 }
             }
+
+            @Override
+            public void flush() throws IOException {
+                if (buffer.size() > 0) {
+                    String line = buffer.toString("UTF-8");
+                    buffer.reset();
+                    consoleLines.add(line);
+                    line = line.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"").replace("\\r", "");
+                    recordEvent("{\\"type\\":\\"CONSOLE_OUTPUT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":0,\\"message\\":\\"" + line + "\\"}");
+                }
+            }
         };
         try {
             System.setOut(new PrintStream(customOut, true, "UTF-8"));
@@ -46,6 +60,402 @@ public class CodeFlowTracer {
             throw new RuntimeException("CodeFlow Safety Limit: Exceeded " + MAX_STEPS + " execution steps. Possible infinite loop.");
         }
         events.add(json);
+    }
+
+    // ==========================================
+    // UNIVERSAL RUNTIME OBSERVATION METHODS
+    // ==========================================
+
+    public static boolean isPrimitiveOrString(Object val) {
+        if (val == null) return false;
+        return val instanceof Number || val instanceof Boolean || val instanceof Character || val instanceof String;
+    }
+
+    public static void trackVar(String name, String declaredType, Object val, int line) {
+        boolean isUpdate = trackedVars.containsKey(name);
+        Object oldVal = trackedVars.get(name);
+        trackedVars.put(name, val);
+        String eventType = isUpdate ? "VARIABLE_UPDATE" : "VARIABLE_CREATE";
+        String valField = isUpdate ? "newValue" : "value";
+        String oldValField = isUpdate ? (",\\\"oldValue\\\":" + (oldVal == null ? "\\\"null\\\"" : (isPrimitiveOrString(oldVal) ? formatValue(oldVal) : ("\\\"@obj-" + System.identityHashCode(oldVal) + "\\\"")))) : "";
+
+        if (val == null) {
+            recordEvent("{\\\"type\\\":\\\"" + eventType + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"" + valField + "\\\":\\\"null\\\",\\\"isReference\\\":false" + oldValField + "}");
+            return;
+        }
+
+        String objId = "obj-" + System.identityHashCode(val);
+        Class<?> clazz = val.getClass();
+
+        if (isPrimitiveOrString(val)) {
+            String valStr = formatValue(val);
+            recordEvent("{\\\"type\\\":\\\"" + eventType + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"" + valField + "\\\":" + valStr + ",\\\"isReference\\\":false" + oldValField + "}");
+            return;
+        }
+
+        recordEvent("{\\\"type\\\":\\\"" + eventType + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"" + valField + "\\\":\\\"@" + objId + "\\\",\\\"isReference\\\":true,\\\"refTargetId\\\":\\\"" + objId + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"" + oldValField + "}");
+
+        if (clazz.isArray()) {
+            inspectAndEmitArray(name, val, declaredType, objId, line);
+            return;
+        }
+
+        if (val instanceof Collection) {
+            inspectAndEmitCollection(name, (Collection<?>) val, declaredType, objId, line);
+            return;
+        }
+
+        if (val instanceof Map) {
+            inspectAndEmitMap(name, (Map<?, ?>) val, declaredType, objId, line);
+            return;
+        }
+
+        inspectAndEmitCustomObject(name, val, declaredType, objId, line);
+    }
+
+    public static void trackVar(String name, Object val, int line) {
+        String dt = val != null ? val.getClass().getSimpleName() : "Object";
+        trackVar(name, dt, val, line);
+    }
+
+    public static void trackArrayMutation(String arrName, Object arr, int index, int line) {
+        if (arr == null) return;
+        try {
+            Object newVal = Array.get(arr, index);
+            String valStr = formatValue(newVal);
+            recordEvent("{\\"type\\":\\"ARRAY_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"arrayId\\":\\"" + arrName + "\\",\\"structureId\\":\\"" + arrName + "\\",\\"structureType\\":\\"array\\",\\"index\\":" + index + ",\\"newValue\\":" + valStr + "}");
+        } catch (Exception ignored) {}
+    }
+
+    public static void trackMutation(Object target, String varName, int line) {
+        if (target == null) return;
+        trackVar(varName, target.getClass().getSimpleName(), target, line);
+    }
+
+    public static void trackObjectMutation(Object target, String rootVar, int line) {
+        if (target == null) return;
+        trackVar(rootVar, target.getClass().getSimpleName(), target, line);
+    }
+
+    public static void funcEnter(String name, String[] paramNames, Object[] paramValues, int line) {
+        StringBuilder argsJson = new StringBuilder("{");
+        if (paramNames != null && paramValues != null) {
+            for (int i = 0; i < paramNames.length; i++) {
+                if (i > 0) argsJson.append(",");
+                argsJson.append("\\\"").append(paramNames[i]).append("\\\":");
+                if (i < paramValues.length) {
+                    argsJson.append(formatValue(paramValues[i]));
+                } else {
+                    argsJson.append("\\\"null\\\"");
+                }
+            }
+        }
+        argsJson.append("}");
+        recordEvent("{\\"type\\":\\"FUNCTION_CALL\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"functionName\\":\\"" + name + "\\",\\"arguments\\":" + argsJson.toString() + "}");
+        if (paramNames != null && paramValues != null) {
+            for (int i = 0; i < paramNames.length && i < paramValues.length; i++) {
+                trackVar(paramNames[i], paramValues[i] != null ? paramValues[i].getClass().getSimpleName() : "Object", paramValues[i], line);
+            }
+        }
+    }
+
+    public static void funcExit(String name, Object retVal, int line) {
+        recordEvent("{\\"type\\":\\"FUNCTION_RETURN\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"functionName\\":\\"" + name + "\\",\\"returnValue\\":" + formatValue(retVal) + "}");
+    }
+
+    private static void inspectAndEmitArray(String name, Object arr, String declaredType, String objId, int line) {
+        int len = Array.getLength(arr);
+        Class<?> compType = arr.getClass().getComponentType();
+
+        if (compType.isArray()) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int r = 0; r < len; r++) {
+                if (r > 0) sb.append(",");
+                Object row = Array.get(arr, r);
+                if (row == null) {
+                    sb.append("[]");
+                } else {
+                    int cLen = Array.getLength(row);
+                    sb.append("[");
+                    for (int c = 0; c < cLen; c++) {
+                        if (c > 0) sb.append(",");
+                        sb.append(formatValue(Array.get(row, c)));
+                    }
+                    sb.append("]");
+                }
+            }
+            sb.append("]");
+            recordEvent("{\\"type\\":\\"MATRIX_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"matrix\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < len; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(formatValue(Array.get(arr, i)));
+        }
+        sb.append("]");
+        recordEvent("{\\"type\\":\\"ARRAY_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"arrayId\\":\\"" + name + "\\",\\"structureType\\":\\"array\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+    }
+
+    private static void inspectAndEmitCollection(String name, Collection<?> col, String declaredType, String objId, int line) {
+        if (col instanceof Queue) {
+            StringBuilder sb = new StringBuilder("[");
+            int idx = 0;
+            for (Object item : col) {
+                if (idx > 0) sb.append(",");
+                sb.append(formatValue(item));
+                idx++;
+            }
+            sb.append("]");
+            recordEvent("{\\"type\\":\\"QUEUE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"queue\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"size\\":" + col.size() + "}");
+            return;
+        }
+
+        if (col instanceof Stack) {
+            StringBuilder sb = new StringBuilder("[");
+            int idx = 0;
+            for (Object item : col) {
+                if (idx > 0) sb.append(",");
+                sb.append(formatValue(item));
+                idx++;
+            }
+            sb.append("]");
+            recordEvent("{\\"type\\":\\"STACK_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"stack\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"size\\":" + col.size() + "}");
+            return;
+        }
+
+        if (col instanceof Set) {
+            StringBuilder sb = new StringBuilder("[");
+            int idx = 0;
+            for (Object item : col) {
+                if (idx > 0) sb.append(",");
+                sb.append(formatValue(item));
+                idx++;
+            }
+            sb.append("]");
+            recordEvent("{\\"type\\":\\"SET_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"set\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"size\\":" + col.size() + "}");
+            return;
+        }
+
+        if (col instanceof List) {
+            List<?> list = (List<?>) col;
+            boolean isNested = false;
+            for (Object elem : list) {
+                if (elem instanceof Collection) {
+                    isNested = true;
+                    break;
+                }
+            }
+            if (isNested || declaredType.contains("List<List") || declaredType.contains("List<java.util.List")) {
+                StringBuilder sb = new StringBuilder("[");
+                for (int i = 0; i < list.size(); i++) {
+                    if (i > 0) sb.append(",");
+                    Object elem = list.get(i);
+                    if (elem instanceof Collection) {
+                        Collection<?> sub = (Collection<?>) elem;
+                        sb.append("[");
+                        int si = 0;
+                        for (Object sItem : sub) {
+                            if (si > 0) sb.append(",");
+                            sb.append(formatValue(sItem));
+                            si++;
+                        }
+                        sb.append("]");
+                    } else {
+                        sb.append(formatValue(elem));
+                    }
+                }
+                sb.append("]");
+                recordEvent("{\\"type\\":\\"NESTED_COLLECTION_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"isGraph\\":true}");
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < list.size(); i++) {
+                if (i > 0) sb.append(",");
+                sb.append(formatValue(list.get(i)));
+            }
+            sb.append("]");
+            recordEvent("{\\"type\\":\\"ARRAY_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"arrayId\\":\\"" + name + "\\",\\"structureType\\":\\"array\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("[");
+        int idx = 0;
+        for (Object item : col) {
+            if (idx > 0) sb.append(",");
+            sb.append(formatValue(item));
+            idx++;
+        }
+        sb.append("]");
+        recordEvent("{\\"type\\":\\"ARRAY_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"arrayId\\":\\"" + name + "\\",\\"structureType\\":\\"array\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+    }
+
+    private static void inspectAndEmitMap(String name, Map<?, ?> map, String declaredType, String objId, int line) {
+        StringBuilder sb = new StringBuilder("[");
+        int idx = 0;
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (idx > 0) sb.append(",");
+            sb.append("{\\"key\\":").append(formatValue(entry.getKey()))
+              .append(",\\"value\\":").append(formatValue(entry.getValue())).append("}");
+            idx++;
+        }
+        sb.append("]");
+        recordEvent("{\\"type\\":\\"MAP_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"map\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"entries\\":" + sb.toString() + ",\\"size\\":" + map.size() + "}");
+    }
+
+    private static void inspectAndEmitCustomObject(String name, Object obj, String declaredType, String objId, int line) {
+        if (obj == null) return;
+        Class<?> clazz = obj.getClass();
+        StringBuilder fieldsJson = new StringBuilder("{");
+
+        if (clazz.getName().startsWith("java.") || clazz.getName().startsWith("javax.") || clazz.getName().startsWith("jdk.")) {
+            fieldsJson.append("\\\"value\\\":").append(formatValue(String.valueOf(obj)));
+            fieldsJson.append("}");
+            recordEvent("{\\\"type\\\":\\\"CUSTOM_OBJECT_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"className\\\":\\\"" + clazz.getSimpleName() + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"fields\\\":" + fieldsJson.toString() + "}");
+            return;
+        }
+
+        Field[] fields = clazz.getDeclaredFields();
+        boolean hasNext = false;
+        boolean hasLeftRight = false;
+        int emittedFieldCount = 0;
+
+        for (int i = 0; i < fields.length; i++) {
+            Field f = fields[i];
+            try {
+                f.setAccessible(true);
+            } catch (Throwable ignored) {
+                continue;
+            }
+            String fName = f.getName();
+            if (fName.equals("next")) hasNext = true;
+            if (fName.equals("left") || fName.equals("right")) hasLeftRight = true;
+            if (emittedFieldCount > 0) fieldsJson.append(",");
+            fieldsJson.append("\\\"").append(fName).append("\\\":");
+            try {
+                Object fVal = f.get(obj);
+                if (fVal == null) {
+                    fieldsJson.append("\\\"null\\\"");
+                } else if (isPrimitiveOrString(fVal)) {
+                    fieldsJson.append(formatValue(fVal));
+                } else {
+                    fieldsJson.append("\\\"@obj-").append(System.identityHashCode(fVal)).append("\\\"");
+                }
+            } catch (Throwable e) {
+                fieldsJson.append("\\\"?\\\"");
+            }
+            emittedFieldCount++;
+        }
+        fieldsJson.append("}");
+
+        recordEvent("{\\\"type\\\":\\\"CUSTOM_OBJECT_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"className\\\":\\\"" + clazz.getSimpleName() + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"fields\\\":" + fieldsJson.toString() + "}");
+
+        if (hasNext) {
+            emitLinkedListChain(name, obj, line);
+        }
+        if (hasLeftRight) {
+            emitBinaryTree(name, obj, line);
+        }
+    }
+
+    private static void emitLinkedListChain(String name, Object head, int line) {
+        if (head == null) return;
+        StringBuilder nodesJson = new StringBuilder("{");
+        Object curr = head;
+        int count = 0;
+        Set<Integer> seen = new HashSet<>();
+        String headId = "Node#" + System.identityHashCode(head);
+
+        while (curr != null && count < 100) {
+            int h = System.identityHashCode(curr);
+            if (seen.contains(h)) break;
+            seen.add(h);
+
+            String nid = "Node#" + h;
+            Object val = null;
+            Object nextObj = null;
+            try {
+                Field vf = getFieldAny(curr.getClass(), "val", "value", "data");
+                if (vf != null) { vf.setAccessible(true); val = vf.get(curr); }
+                Field nf = getFieldAny(curr.getClass(), "next");
+                if (nf != null) { nf.setAccessible(true); nextObj = nf.get(curr); }
+            } catch (Exception ignored) {}
+
+            String nextId = nextObj != null ? ("\\\"Node#" + System.identityHashCode(nextObj) + "\\\"") : "null";
+            if (count > 0) nodesJson.append(",");
+            nodesJson.append("\\\"").append(nid).append("\\\":{")
+                     .append("\\\"id\\\":\\\"").append(nid).append("\\\",")
+                     .append("\\\"value\\\":").append(formatValue(val)).append(",")
+                     .append("\\\"next\\\":").append(nextId).append("}");
+
+            curr = nextObj;
+            count++;
+        }
+        nodesJson.append("}");
+
+        recordEvent("{\\"type\\":\\"LINKED_LIST_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"headId\\":\\"" + headId + "\\",\\"nodes\\":" + nodesJson.toString() + "}");
+    }
+
+    private static void emitBinaryTree(String name, Object root, int line) {
+        if (root == null) return;
+        StringBuilder nodesJson = new StringBuilder("{");
+        Set<Integer> seen = new HashSet<>();
+        Queue<Object> q = new LinkedList<>();
+        q.offer(root);
+        int count = 0;
+        String rootId = "Node#" + System.identityHashCode(root);
+
+        while (!q.isEmpty() && count < 100) {
+            Object curr = q.poll();
+            if (curr == null) continue;
+            int h = System.identityHashCode(curr);
+            if (seen.contains(h)) continue;
+            seen.add(h);
+
+            String nid = "Node#" + h;
+            Object val = null;
+            Object leftObj = null;
+            Object rightObj = null;
+            try {
+                Field vf = getFieldAny(curr.getClass(), "val", "value", "data");
+                if (vf != null) { vf.setAccessible(true); val = vf.get(curr); }
+                Field lf = getFieldAny(curr.getClass(), "left");
+                if (lf != null) { lf.setAccessible(true); leftObj = lf.get(curr); }
+                Field rf = getFieldAny(curr.getClass(), "right");
+                if (rf != null) { rf.setAccessible(true); rightObj = rf.get(curr); }
+            } catch (Exception ignored) {}
+
+            String leftId = leftObj != null ? ("\\\"Node#" + System.identityHashCode(leftObj) + "\\\"") : "null";
+            String rightId = rightObj != null ? ("\\\"Node#" + System.identityHashCode(rightObj) + "\\\"") : "null";
+
+            if (count > 0) nodesJson.append(",");
+            nodesJson.append("\\\"").append(nid).append("\\\":{")
+                     .append("\\\"id\\\":\\\"").append(nid).append("\\\",")
+                     .append("\\\"value\\\":").append(formatValue(val)).append(",")
+                     .append("\\\"left\\\":").append(leftId).append(",")
+                     .append("\\\"right\\\":").append(rightId).append("}");
+
+            if (leftObj != null) q.offer(leftObj);
+            if (rightObj != null) q.offer(rightObj);
+            count++;
+        }
+        nodesJson.append("}");
+
+        recordEvent("{\\"type\\":\\"TREE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"rootId\\":\\"" + rootId + "\\",\\"nodes\\":" + nodesJson.toString() + "}");
+    }
+
+    private static Field getFieldAny(Class<?> clazz, String... names) {
+        for (String n : names) {
+            try {
+                return clazz.getDeclaredField(n);
+            } catch (NoSuchFieldException ignored) {}
+        }
+        if (clazz.getSuperclass() != null && clazz.getSuperclass() != Object.class) {
+            return getFieldAny(clazz.getSuperclass(), names);
+        }
+        return null;
     }
 
     public static void line(int line) {
@@ -2040,6 +2450,9 @@ public class CodeFlowTracer {
     }
 
     public static void finish() {
+        if (System.out != null) {
+            System.out.flush();
+        }
         recordEvent("{\\"type\\":\\"PROGRAM_END\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":0,\\"message\\":\\"Program execution completed\\"}");
         System.setOut(originalOut);
         originalOut.println("__CODEFLOW_EVENTS_BEGIN__");
