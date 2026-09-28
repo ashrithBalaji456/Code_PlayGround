@@ -110,6 +110,16 @@ public class CodeFlowTracer {
             return;
         }
 
+        if (val instanceof Map.Entry) {
+            Map.Entry<?, ?> me = (Map.Entry<?, ?>) val;
+            StringBuilder fieldsJson = new StringBuilder("{");
+            fieldsJson.append("\\\"key\\\":").append(formatValue(me.getKey())).append(",");
+            fieldsJson.append("\\\"value\\\":").append(formatValue(me.getValue()));
+            fieldsJson.append("}");
+            recordEvent("{\\\"type\\\":\\\"CUSTOM_OBJECT_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"className\\\":\\\"Entry\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"fields\\\":" + fieldsJson.toString() + "}");
+            return;
+        }
+
         inspectAndEmitCustomObject(name, val, declaredType, objId, line);
     }
 
@@ -2618,7 +2628,31 @@ public class CodeFlowTracer {
         if (val instanceof Character) {
             return "\\"" + val + "\\"";
         }
-        return String.valueOf(val);
+        if (val instanceof Collection) {
+            StringBuilder sb = new StringBuilder("[");
+            int i = 0;
+            for (Object item : (Collection<?>) val) {
+                if (i > 0) sb.append(",");
+                sb.append(formatValue(item));
+                i++;
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+        if (val.getClass().isArray()) {
+            int len = Array.getLength(val);
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < len; i++) {
+                if (i > 0) sb.append(",");
+                sb.append(formatValue(Array.get(val, i)));
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+        if (val instanceof Number || val instanceof Boolean) {
+            return String.valueOf(val);
+        }
+        return "\\"@obj-" + System.identityHashCode(val) + "\\"";
     }
 }
 `;

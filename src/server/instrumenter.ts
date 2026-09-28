@@ -3,6 +3,25 @@ export interface InstrumentationResult {
   className: string;
 }
 
+function splitTopLevelComma(str: string): string[] {
+  const result: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (c === '<' || c === '(' || c === '[') depth++;
+    else if (c === '>' || c === ')' || c === ']') depth--;
+    else if (c === ',' && depth === 0) {
+      result.push(str.substring(start, i).trim());
+      start = i + 1;
+    }
+  }
+  if (start < str.length) {
+    result.push(str.substring(start).trim());
+  }
+  return result.filter(Boolean);
+}
+
 export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
   const classMatch = sourceCode.match(/public\s+class\s+([A-Za-z0-9_]+)/);
   const className = classMatch ? classMatch[1] : 'Main';
@@ -257,9 +276,9 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const arg = pushMatch[2].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    {`);
-      outputLines.push(`      var _val = (${arg});`);
-      outputLines.push(`      ${varName}.push(_val);`);
-      outputLines.push(`      CodeFlowTracer.stackPush("${varName}", _val, ${varName}.size(), ${lineNum});`);
+      outputLines.push(`      ${varName}.push((${arg}));`);
+      outputLines.push(`      CodeFlowTracer.stackPush("${varName}", ${varName}.peek(), ${varName}.size(), ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
       outputLines.push(`    }`);
       continue;
     }
@@ -326,13 +345,13 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const stType = varTypes.get(varName);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    {`);
-      outputLines.push(`      var _val = (${arg});`);
-      outputLines.push(`      ${varName}.addFirst(_val);`);
+      outputLines.push(`      ${varName}.addFirst((${arg}));`);
       if (stType === 'LinkedList') {
-        outputLines.push(`      CodeFlowTracer.linkedListAddFirst("${varName}", _val, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.linkedListAddFirst("${varName}", ${varName}.peekFirst(), ${varName}.size(), ${lineNum});`);
       } else {
-        outputLines.push(`      CodeFlowTracer.dequeAddFirst("${varName}", _val, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.dequeAddFirst("${varName}", ${varName}.peekFirst(), ${varName}.size(), ${lineNum});`);
       }
+      outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
       outputLines.push(`    }`);
       continue;
     }
@@ -344,13 +363,13 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const stType = varTypes.get(varName);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    {`);
-      outputLines.push(`      var _val = (${arg});`);
-      outputLines.push(`      ${varName}.addLast(_val);`);
+      outputLines.push(`      ${varName}.addLast((${arg}));`);
       if (stType === 'LinkedList') {
-        outputLines.push(`      CodeFlowTracer.linkedListAddLast("${varName}", _val, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.linkedListAddLast("${varName}", ${varName}.peekLast(), ${varName}.size(), ${lineNum});`);
       } else {
-        outputLines.push(`      CodeFlowTracer.dequeAddLast("${varName}", _val, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.dequeAddLast("${varName}", ${varName}.peekLast(), ${varName}.size(), ${lineNum});`);
       }
+      outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
       outputLines.push(`    }`);
       continue;
     }
@@ -396,12 +415,9 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const valArg = putMatch[3].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    {`);
-      outputLines.push(`      var _k = (${keyArg});`);
-      outputLines.push(`      var _v = (${valArg});`);
-      outputLines.push(`      var _old = ${varName}.put(_k, _v);`);
-      outputLines.push(`      int _h = Objects.hashCode(_k);`);
-      outputLines.push(`      int _b = Math.abs(_h % 8);`);
-      outputLines.push(`      CodeFlowTracer.mapPut("${varName}", _k, _v, _old, _h, _b, ${varName}.size(), ${lineNum});`);
+      outputLines.push(`      var _old = ${varName}.put((${keyArg}), (${valArg}));`);
+      outputLines.push(`      CodeFlowTracer.mapPut("${varName}", (${keyArg}), ${varName}.get(${keyArg}), _old, Objects.hashCode(${keyArg}), Math.abs(Objects.hashCode(${keyArg}) % 8), ${varName}.size(), ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
       outputLines.push(`    }`);
       continue;
     }
@@ -1050,7 +1066,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     }
 
     // Enhanced For-Loop: for (Type item : collection)
-    const enhancedForMatch = trimmed.match(/^for\s*\(\s*(?:final\s+)?([A-Za-z0-9_<>[\]]+)\s+([a-zA-Z_0-9]+)\s*:\s*([^)]+)\)\s*(\{)?$/);
+    const enhancedForMatch = trimmed.match(/^for\s*\(\s*(?:final\s+)?([A-Za-z0-9_<>\[\],\.\s]+?)\s+([a-zA-Z_0-9]+)\s*:\s*(.+)\)\s*(\{)?$/);
     if (enhancedForMatch) {
       const itemType = enhancedForMatch[1].trim();
       const itemName = enhancedForMatch[2];
@@ -1138,7 +1154,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(rawLine);
       const paramNames: string[] = [];
       if (paramsStr.length > 0) {
-        const parts = paramsStr.split(',');
+        const parts = splitTopLevelComma(paramsStr);
         for (const p of parts) {
           const tokens = p.trim().split(/\s+/);
           if (tokens.length >= 2) {

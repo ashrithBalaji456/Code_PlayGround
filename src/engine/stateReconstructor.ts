@@ -1638,6 +1638,43 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      case 'MAP_UPDATE': {
+        const rawEntries = Array.isArray(ev.entries) ? ev.entries : [];
+        const entries = rawEntries.map((e: any) => {
+          const hash = Math.abs(String(e.key).split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0));
+          const bucket = Math.abs(hash % 8);
+          return {
+            key: e.key,
+            value: e.value,
+            hash,
+            bucket,
+          };
+        });
+        nextStructures[stId] = {
+          id: stId,
+          name: ev.variable || stId,
+          type: 'map',
+          dataType: ev.dataType || 'HashMap',
+          size: ev.size ?? entries.length,
+          mapData: {
+            entries,
+            bucketCount: 8,
+          },
+          lastOperation: `Updated map (size ${entries.length})`,
+        };
+        nextVariables[stId] = {
+          name: stId,
+          type: ev.dataType || 'HashMap',
+          value: `size = ${entries.length}`,
+          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
+          isReference: true,
+          refTargetId: ev.objectId || stId,
+          estimatedBytes: 48 + entries.length * 32,
+        };
+        explanation = `Updated HashMap ${stId} (${entries.length} entries)`;
+        break;
+      }
+
       // === HASHSET ===
       case 'SET_CREATE': {
         const setVals = Array.isArray(ev.values) ? [...ev.values] : [];
@@ -6371,11 +6408,19 @@ export function reconstructExecutionSteps(
           'RuntimeError',
         ];
         const matchedType = knownTypes.find((t) => exName.includes(t)) || 'RuntimeError';
+        let detail = ev.detail || 'Exception caught by runtime';
+        if (matchedType === 'NullPointerException') {
+          detail = 'NullPointerException: Attempted to access a member, method, or index through a null reference.';
+        } else if (matchedType === 'ArrayIndexOutOfBoundsException') {
+          detail = `ArrayIndexOutOfBoundsException: Attempted to access an array element outside valid bounds. Message: ${ev.message || ''}`;
+        } else if (matchedType === 'ArithmeticException') {
+          detail = `ArithmeticException: Arithmetic failure (e.g., division by zero). Message: ${ev.message || ''}`;
+        }
         nextError = {
           type: matchedType,
           message: ev.message || exName,
           line: ev.line || currentLine,
-          detail: ev.detail || 'Exception caught by runtime',
+          detail,
         };
         explanation = `Exception (${exName}) thrown on line ${ev.line}: ${ev.message}`;
         break;
