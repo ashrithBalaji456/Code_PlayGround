@@ -12,6 +12,12 @@ import { HashMapVisualizer } from './visualizers/HashMapVisualizer';
 import { HashSetVisualizer } from './visualizers/HashSetVisualizer';
 import { PriorityQueueVisualizer } from './visualizers/PriorityQueueVisualizer';
 import { GraphVisualizer } from './visualizers/GraphVisualizer';
+import { DSUVisualizer } from './visualizers/DSUVisualizer';
+import { BitVisualizer } from './visualizers/BitVisualizer';
+import { StringVisualizer } from './visualizers/StringVisualizer';
+import { NumberVisualizer } from './visualizers/NumberVisualizer';
+import { SegmentTreeVisualizer } from './visualizers/SegmentTreeVisualizer';
+import { FenwickVisualizer } from './visualizers/FenwickVisualizer';
 import { Sparkles, AlertCircle, ArrowRightLeft } from 'lucide-react';
 
 interface VisualizationCanvasProps {
@@ -193,6 +199,24 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   break;
                 case 'graph':
                   visualizer = <GraphVisualizer structure={st} />;
+                  break;
+                case 'dsu':
+                  visualizer = <DSUVisualizer structure={st} />;
+                  break;
+                case 'bits':
+                  visualizer = <BitVisualizer structure={st} />;
+                  break;
+                case 'string':
+                  visualizer = <StringVisualizer structure={st} />;
+                  break;
+                case 'number':
+                  visualizer = <NumberVisualizer structure={st} />;
+                  break;
+                case 'segmenttree':
+                  visualizer = <SegmentTreeVisualizer structure={st} />;
+                  break;
+                case 'fenwick':
+                  visualizer = <FenwickVisualizer structure={st} />;
                   break;
                 default:
                   visualizer = null;

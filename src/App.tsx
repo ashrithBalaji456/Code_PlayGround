@@ -9,13 +9,15 @@ import { CallStackPanel } from './components/panels/CallStackPanel';
 import { ConsolePanel } from './components/panels/ConsolePanel';
 import { DataStructuresPanel } from './components/panels/DataStructuresPanel';
 import { AlgorithmsPanel } from './components/panels/AlgorithmsPanel';
+import { EducationalInspectorPanel } from './components/panels/EducationalInspectorPanel';
+import { TimelineInspectorPanel } from './components/panels/TimelineInspectorPanel';
 import { LearningModePanel } from './components/panels/LearningModePanel';
 import { HelpModal } from './components/HelpModal';
 import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
 import { reconstructExecutionSteps } from './engine/stateReconstructor';
-import { Variable, Cpu, Layers, Terminal, Database, Compass } from 'lucide-react';
+import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -34,7 +36,7 @@ export function App() {
   const [speed, setSpeed] = useState<number>(1);
   const [breakpoints, setBreakpoints] = useState<number[]>([]);
 
-  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console'>('structures');
+  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline'>('structures');
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
@@ -482,6 +484,35 @@ export function App() {
                         </span>
                       )}
                     </button>
+
+                    <button
+                      onClick={() => setActiveBottomTab('inspector')}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
+                        activeBottomTab === 'inspector'
+                          ? 'border-[#58a6ff] text-[#58a6ff] bg-[#161b22]'
+                          : 'border-transparent text-[#8b949e] hover:text-[#f0f6fc]'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Inspector</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveBottomTab('timeline')}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
+                        activeBottomTab === 'timeline'
+                          ? 'border-[#3fb950] text-[#3fb950] bg-[#161b22]'
+                          : 'border-transparent text-[#8b949e] hover:text-[#f0f6fc]'
+                      }`}
+                    >
+                      <ListOrdered className="w-3.5 h-3.5" />
+                      <span>Timeline</span>
+                      {steps.length > 0 && (
+                        <span className="text-[10px] bg-[#3fb950]/20 text-[#3fb950] px-1.5 rounded-full">
+                          {steps.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -521,6 +552,16 @@ export function App() {
                     <ConsolePanel
                       output={consoleOutput}
                       onClear={() => setConsoleOutput([])}
+                    />
+                  )}
+                  {activeBottomTab === 'inspector' && (
+                    <EducationalInspectorPanel currentStep={currentStep} />
+                  )}
+                  {activeBottomTab === 'timeline' && (
+                    <TimelineInspectorPanel
+                      steps={steps}
+                      currentStepIndex={currentStepIndex}
+                      onScrub={(idx) => setCurrentStepIndex(idx)}
                     />
                   )}
                 </div>

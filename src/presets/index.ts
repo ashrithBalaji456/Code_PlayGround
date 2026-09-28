@@ -3453,6 +3453,277 @@ public class Main {
 }
 `,
   },
+  // ==========================================
+  // PHASE 8 PRESETS: ADVANCED DSA & ARBITRARY RUNTIME
+  // ==========================================
+  {
+    id: 'p8-bfs-arbitrary',
+    title: 'BFS — Arbitrary Adjacency List & Queue',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(V + E)',
+    spaceComplexity: 'O(V)',
+    description: 'Universal observation of arbitrary Java BFS using List<List<Integer>> graph and Queue<Integer> queue.',
+    explanation: 'Executes standard Java collection BFS without visualizer annotations, discovering the graph, frontier queue, and visited status.',
+    code: `import java.util.*;
+
+public class Main {
+    static void bfs(List<List<Integer>> graph, int start) {
+        boolean[] visited = new boolean[graph.size()];
+        Queue<Integer> queue = new LinkedList<>();
+
+        queue.offer(start);
+        visited[start] = true;
+
+        while (!queue.isEmpty()) {
+            int node = queue.poll();
+            System.out.println("Visited node: " + node);
+
+            for (int neighbor : graph.get(node)) {
+                if (!visited[neighbor]) {
+                    visited[neighbor] = true;
+                    queue.offer(neighbor);
+                }
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        int n = 6;
+        List<List<Integer>> graph = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            graph.add(new ArrayList<>());
+        }
+
+        graph.get(0).add(1);
+        graph.get(0).add(2);
+        graph.get(1).add(0);
+        graph.get(1).add(3);
+        graph.get(1).add(4);
+        graph.get(2).add(0);
+        graph.get(2).add(4);
+        graph.get(3).add(1);
+        graph.get(3).add(5);
+        graph.get(4).add(1);
+        graph.get(4).add(2);
+        graph.get(4).add(5);
+        graph.get(5).add(3);
+        graph.get(5).add(4);
+
+        bfs(graph, 0);
+    }
+}
+`,
+  },
+  {
+    id: 'p8-dsu-union-find',
+    title: 'Disjoint Set Union (DSU) — Path Compression',
+    category: 'Graphs & Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(α(N))',
+    spaceComplexity: 'O(N)',
+    description: 'Union-Find data structure with parent pointers, ranks, and path compression.',
+    explanation: 'Tracks dynamic disjoint sets across find and union operations with visual partition trees.',
+    code: `public class Main {
+    static int find(int[] parent, int i) {
+        if (parent[i] == i)
+            return i;
+        return parent[i] = find(parent, parent[i]); // Path compression
+    }
+
+    static void union(int[] parent, int[] rank, int u, int v) {
+        int rootU = find(parent, u);
+        int rootV = find(parent, v);
+        if (rootU != rootV) {
+            if (rank[rootU] < rank[rootV]) {
+                parent[rootU] = rootV;
+            } else if (rank[rootU] > rank[rootV]) {
+                parent[rootV] = rootU;
+            } else {
+                parent[rootV] = rootU;
+                rank[rootU]++;
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        int n = 5;
+        int[] parent = new int[n];
+        int[] rank = new int[n];
+
+        for (int i = 0; i < n; i++) {
+            parent[i] = i;
+            rank[i] = 0;
+        }
+
+        union(parent, rank, 0, 1);
+        union(parent, rank, 2, 3);
+        union(parent, rank, 1, 2);
+
+        System.out.println("Root of 3: " + find(parent, 3));
+    }
+}
+`,
+  },
+  {
+    id: 'p8-bit-manipulation',
+    title: 'Bit Manipulation — Operations & Powers of 2',
+    category: 'Bitwise',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(1)',
+    description: 'Visual 32-bit binary registers, bitwise AND, OR, XOR, shifts, and bit checking.',
+    explanation: 'Demonstrates bitwise operations and checks whether numbers are powers of two.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int a = 10; // 00001010
+        int b = 6;  // 00000110
+
+        int andResult = a & b;
+        int orResult = a | b;
+        int xorResult = a ^ b;
+        int leftShift = a << 1;
+        int rightShift = a >> 1;
+
+        boolean isPowerOfTwo = (a > 0) && ((a & (a - 1)) == 0);
+
+        System.out.println("AND: " + andResult);
+        System.out.println("OR: " + orResult);
+        System.out.println("XOR: " + xorResult);
+        System.out.println("Left Shift: " + leftShift);
+        System.out.println("Is Power of 2: " + isPowerOfTwo);
+    }
+}
+`,
+  },
+  {
+    id: 'p8-kmp-string',
+    title: 'KMP Algorithm — String Pattern Matching',
+    category: 'Algorithms',
+    difficulty: 'Hard',
+    language: 'java',
+    timeComplexity: 'O(N + M)',
+    spaceComplexity: 'O(M)',
+    description: 'Knuth-Morris-Pratt pattern search with Longest Prefix Suffix (LPS) array and fallback jumps.',
+    explanation: 'Builds the LPS table and performs linear-time string search skipping redundant comparisons.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        String text = "ABABDABACDABABCABAB";
+        String pattern = "ABABCABAB";
+
+        int m = pattern.length();
+        int[] lps = new int[m];
+        int len = 0;
+        int i = 1;
+
+        // Build LPS
+        while (i < m) {
+            if (pattern.charAt(i) == pattern.charAt(len)) {
+                len++;
+                lps[i] = len;
+                i++;
+            } else {
+                if (len != 0) {
+                    len = lps[len - 1];
+                } else {
+                    lps[i] = 0;
+                    i++;
+                }
+            }
+        }
+
+        System.out.println("LPS array constructed for pattern: " + pattern);
+    }
+}
+`,
+  },
+  {
+    id: 'p8-sieve-primes',
+    title: 'Sieve of Eratosthenes — Prime Generation',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(N log log N)',
+    spaceComplexity: 'O(N)',
+    description: 'Generates primes up to N by crossing out composite numbers.',
+    explanation: 'Visualizes the prime elimination table, crossing out multiples of each discovered prime.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int n = 30;
+        boolean[] isPrime = new boolean[n + 1];
+        for (int i = 2; i <= n; i++) {
+            isPrime[i] = true;
+        }
+
+        for (int p = 2; p * p <= n; p++) {
+            if (isPrime[p]) {
+                for (int i = p * p; i <= n; i += p) {
+                    isPrime[i] = false;
+                }
+            }
+        }
+
+        System.out.println("Sieve execution completed up to " + n);
+    }
+}
+`,
+  },
+  {
+    id: 'p8-fast-power',
+    title: 'Fast Power — Binary Exponentiation',
+    category: 'Algorithms',
+    difficulty: 'Medium',
+    language: 'java',
+    timeComplexity: 'O(log B)',
+    spaceComplexity: 'O(1)',
+    description: 'Computes A^B in logarithmic time using binary exponentiation.',
+    explanation: 'Decomposes the exponent into binary bits, repeatedly squaring the base and accumulating the result.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        long base = 3;
+        long exp = 13; // 1101 in binary
+        long result = 1;
+
+        while (exp > 0) {
+            if ((exp & 1) == 1) {
+                result *= base;
+            }
+            base *= base;
+            exp >>= 1;
+        }
+
+        System.out.println("Fast Power Result: " + result);
+    }
+}
+`,
+  },
+  {
+    id: 'p8-aliasing-references',
+    title: 'Object References & Array Aliasing',
+    category: 'Arrays & Sorting',
+    difficulty: 'Easy',
+    language: 'java',
+    timeComplexity: 'O(1)',
+    spaceComplexity: 'O(N)',
+    description: 'Demonstrates object reference aliasing: b = a; modifying b[0] directly updates a[0].',
+    explanation: 'Both references point to the identical heap array; mutating through one alias updates both.',
+    code: `public class Main {
+    public static void main(String[] args) {
+        int[] a = {1, 2, 3};
+        int[] b = a; // Aliasing: both point to the same array object
+
+        b[0] = 99;
+
+        System.out.println("a[0] is: " + a[0]);
+        System.out.println("b[0] is: " + b[0]);
+    }
+}
+`,
+  },
 ];
+
 
 

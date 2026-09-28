@@ -507,14 +507,63 @@ export type EventType =
   | 'NESTED_COLLECTION_UPDATE'
   | 'CUSTOM_OBJECT_UPDATE'
   | 'LINKED_LIST_UPDATE'
-  | 'TREE_UPDATE';
+  | 'TREE_UPDATE'
+  // Phase 8 Advanced DSA & Intelligence Events
+  // Strings
+  | 'STRING_TRAVERSE'
+  | 'STRING_COMPARE'
+  | 'STRING_MATCH'
+  | 'KMP_START'
+  | 'KMP_LPS_UPDATE'
+  | 'KMP_STEP'
+  | 'KMP_FALLBACK'
+  | 'KMP_MATCH'
+  | 'KMP_END'
+  | 'RABIN_KARP_START'
+  | 'RABIN_KARP_HASH'
+  | 'RABIN_KARP_MATCH'
+  | 'RABIN_KARP_END'
+  | 'CHAR_FREQUENCY_UPDATE'
+  | 'ANAGRAM_CHECK'
+  // Bits
+  | 'BIT_OP_START'
+  | 'BIT_OP_EXECUTE'
+  | 'BIT_SHIFT'
+  | 'BIT_CHECK'
+  | 'BIT_SET'
+  | 'BIT_CLEAR'
+  | 'BIT_TOGGLE'
+  | 'BIT_COUNT'
+  | 'BIT_POWER_OF_TWO'
+  // Numbers
+  | 'GCD_STEP'
+  | 'LCM_CALCULATE'
+  | 'PRIME_CHECK_STEP'
+  | 'SIEVE_START'
+  | 'SIEVE_PRIME_SELECT'
+  | 'SIEVE_COMPOSITE_CROSS'
+  | 'SIEVE_END'
+  | 'FAST_POWER_STEP'
+  // Advanced Data Structures (DSU, Segment Tree, Fenwick, LCA)
+  | 'DSU_INIT'
+  | 'DSU_FIND'
+  | 'DSU_UNION'
+  | 'DSU_COMPRESS'
+  | 'SEG_TREE_BUILD'
+  | 'SEG_TREE_UPDATE'
+  | 'SEG_TREE_QUERY'
+  | 'FENWICK_UPDATE'
+  | 'FENWICK_QUERY'
+  | 'LCA_START'
+  | 'LCA_TRAVERSE'
+  | 'LCA_FOUND';
 
 export interface ExecutionEvent {
   type: EventType;
   line: number;
   variable?: string;
   structureId?: string;
-  structureType?: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'bst' | 'heap' | 'trie' | 'map' | 'set' | 'graph' | 'priorityqueue';
+  structureType?: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'bst' | 'heap' | 'trie' | 'map' | 'set' | 'graph' | 'priorityqueue' | 'dsu' | 'segmenttree' | 'fenwick' | 'string' | 'bits' | 'number';
   dataType?: string;
   values?: any;
   value?: any;
@@ -667,6 +716,7 @@ export interface VariableInfo {
   scope: string; // e.g., 'main' or function name
   isReference: boolean;
   refTargetId?: string;
+  objectId?: string;
   estimatedBytes: number;
 }
 
@@ -754,7 +804,7 @@ export interface GraphEdgeData {
 export interface DataStructureState {
   id: string;
   name: string;
-  type: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'bst' | 'heap' | 'trie' | 'map' | 'set' | 'graph' | 'priorityqueue';
+  type: 'array' | 'matrix' | 'stack' | 'queue' | 'deque' | 'linkedlist' | 'tree' | 'bst' | 'heap' | 'trie' | 'map' | 'set' | 'graph' | 'priorityqueue' | 'dsu' | 'segmenttree' | 'fenwick' | 'string' | 'bits' | 'number';
   dataType: string;
   size?: number;
   elements?: any[];
@@ -820,6 +870,67 @@ export interface DataStructureState {
     shortestPath?: string[];
     cycleDetected?: boolean;
     cycleEdges?: string[];
+  };
+  // Phase 8 Dedicated Data Structures
+  dsuData?: {
+    parents: Record<string, string>;
+    ranks?: Record<string, number>;
+    sizes?: Record<string, number>;
+    activeSet1?: string;
+    activeSet2?: string;
+    pathCompressed?: string[];
+    lastAction?: string;
+  };
+  segmentTreeData?: {
+    array: any[];
+    intervals: Array<{ id: string; left: number; right: number; value: any; leftChildId?: string; rightChildId?: string }>;
+    activeRange?: [number, number];
+    queryRange?: [number, number];
+    lastAction?: string;
+  };
+  fenwickData?: {
+    treeArray: number[];
+    size: number;
+    activeIndex?: number;
+    operation?: 'UPDATE' | 'QUERY';
+    sum?: number;
+    lastAction?: string;
+  };
+  stringData?: {
+    text: string;
+    pattern?: string;
+    activeIndex?: number;
+    patternIndex?: number;
+    lps?: number[];
+    comparingIndices?: [number, number];
+    matchedIndices?: number[];
+    frequencies?: Record<string, number>;
+    windowStart?: number;
+    hashPattern?: number;
+    hashWindow?: number;
+  };
+  bitData?: {
+    operandA: number;
+    operandB?: number;
+    operator?: string;
+    result?: number;
+    operationType?: string;
+    targetBit?: number;
+    bitSize?: 8 | 16 | 32;
+    explanation?: string;
+  };
+  numberData?: {
+    type: 'GCD' | 'LCM' | 'PRIME' | 'SIEVE' | 'FAST_POWER';
+    a?: number;
+    b?: number;
+    gcdSteps?: Array<{ a: number; b: number; remainder: number }>;
+    sieveGrid?: boolean[];
+    currentP?: number;
+    crossedIndex?: number;
+    powerBase?: number;
+    powerExp?: number;
+    powerResult?: number;
+    powerBinaryExp?: string;
   };
   metadata?: Record<string, any>;
   createdAtStep?: number;
@@ -909,7 +1020,11 @@ export type AlgorithmCategory =
   | 'Dynamic Programming'
   | 'Advanced Graph'
   | 'Advanced Tree'
-  | 'Advanced Search / Optimization';
+  | 'Advanced Search / Optimization'
+  | 'String Algorithm'
+  | 'Bit Manipulation'
+  | 'Number Algorithm'
+  | 'Advanced Data Structure';
 
 export interface AlgorithmState {
   algorithmName?: string;
@@ -1078,6 +1193,74 @@ export interface AlgorithmState {
   coordMapping?: Record<string | number, number>;
   monoStackType?: 'INCREASING' | 'DECREASING';
   monoStackElements?: any[];
+  // Phase 8 Advanced Strings
+  stringText?: string;
+  stringPattern?: string;
+  stringI?: number;
+  stringJ?: number;
+  kmpLps?: number[];
+  kmpFallback?: { from: number; to: number };
+  rabinPatternHash?: number;
+  rabinWindowHash?: number;
+  rabinWindowStart?: number;
+  rabinMatched?: boolean;
+  charFrequencies?: Record<string, number>;
+  anagramTargetFrequencies?: Record<string, number>;
+  // Phase 8 Bit Manipulation
+  bitOperandA?: number;
+  bitOperandB?: number;
+  bitOperator?: string;
+  bitResult?: number;
+  bitMask?: number;
+  bitOperationType?: 'AND' | 'OR' | 'XOR' | 'NOT' | 'LEFT_SHIFT' | 'RIGHT_SHIFT' | 'UNSIGNED_RIGHT_SHIFT' | 'CHECK' | 'SET' | 'CLEAR' | 'TOGGLE' | 'COUNT' | 'POWER_OF_TWO';
+  bitIndexTarget?: number;
+  // Phase 8 Number Algorithms
+  numberA?: number;
+  numberB?: number;
+  gcdSteps?: { a: number; b: number; remainder: number }[];
+  gcdRemainder?: number;
+  lcmResult?: number;
+  isPrimeResult?: boolean;
+  primeChecked?: number;
+  sievePrimes?: boolean[];
+  sieveCurrentP?: number;
+  sieveCrossedIndices?: number[];
+  fastPowerBase?: number;
+  fastPowerExponent?: number;
+  fastPowerResult?: number;
+  fastPowerSteps?: { expBinary: string; bit: number; base: number; currentResult: number }[];
+  // Phase 8 DSU / Union-Find
+  dsuParents?: Record<string | number, string | number>;
+  dsuRanks?: Record<string | number, number>;
+  dsuSizes?: Record<string | number, number>;
+  dsuOperation?: 'FIND' | 'UNION' | 'CONNECTED';
+  dsuCompressedNodes?: (string | number)[];
+  // Phase 8 Segment Tree & Fenwick
+  segTreeArray?: any[];
+  segTreeIntervals?: { id: string; left: number; right: number; value: any; leftChildId?: string; rightChildId?: string }[];
+  segActiveInterval?: [number, number];
+  segQueryRange?: [number, number];
+  fenwickArray?: number[];
+  fenwickSize?: number;
+  fenwickActiveIndex?: number;
+  fenwickOperation?: 'UPDATE' | 'QUERY';
+  fenwickPrefixSum?: number;
+  // Phase 8 LCA
+  lcaNodeA?: string;
+  lcaNodeB?: string;
+  lcaResult?: string;
+  // Educational & Inspector
+  detectionConfidence?: 'RUNTIME_STATE' | 'DERIVED_STRUCTURE' | 'CONCEPTUAL_VIEW' | 'UNKNOWN';
+  confidencePercent?: number;
+  derivationLabel?: string;
+  whyChanged?: {
+    target: string;
+    previousValue: any;
+    newValue: any;
+    reason: string;
+    sourceLine: number;
+    sourceCode?: string;
+  };
   // Metrics & Complexity
   metrics: AlgorithmMetrics;
   theoreticalComplexity?: {

@@ -428,7 +428,7 @@ public class Graph {
       .join(' ');
 
     const compileError = await new Promise<{ line: number; message: string; detail: string } | null>((resolve) => {
-      exec(`javac -cp "${sandboxDir}" ${sandboxJavaFiles}`, { timeout: 4000, cwd: sandboxDir }, (error, _stdout, stderr) => {
+      exec(`javac -cp "${sandboxDir}" ${sandboxJavaFiles}`, { timeout: 10000, cwd: sandboxDir }, (error, _stdout, stderr) => {
         if (error) {
           const errText = stderr || error.message;
           // Parse javac format: e.g. Main.java:5: error: ';' expected
@@ -472,7 +472,7 @@ public class Graph {
     await new Promise<void>((resolve, reject) => {
       exec(
         `javac -d "${sandboxDir}" -cp "${sandboxDir}" ${pkgFiles}`,
-        { timeout: 4000, cwd: sandboxDir },
+        { timeout: 10000, cwd: sandboxDir },
         (error, _stdout, stderr) => {
           if (error) {
             reject(new Error(`Failed to compile instrumented code: ${stderr || error.message}`));
@@ -488,7 +488,7 @@ public class Graph {
       const child = spawn(
         'java',
         ['-Xmx64m', '-XX:+UseSerialGC', '-cp', sandboxDir, `com.codeflow.${className}`],
-        { timeout: 3500 }
+        { timeout: 8000 }
       );
 
       let stdout = '';

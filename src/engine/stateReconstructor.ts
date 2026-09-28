@@ -531,6 +531,473 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      // === PHASE 8: DSU / DISJOINT SET UNION ===
+      case 'DSU_INIT': {
+        const dsuId = ev.structureId || ev.variable || 'dsu';
+        const parents = ev.meta?.parents || {};
+        const ranks = ev.meta?.ranks || {};
+        nextStructures[dsuId] = {
+          id: dsuId,
+          name: ev.variable || dsuId,
+          type: 'dsu',
+          dataType: 'DisjointSet (Union-Find)',
+          size: Object.keys(parents).length,
+          dsuData: {
+            parents,
+            ranks,
+            lastAction: `Initialized DSU with ${Object.keys(parents).length} elements`,
+          },
+          lastOperation: `DSU initialized`,
+        };
+        nextAlgorithmState.category = 'Advanced Data Structure';
+        nextAlgorithmState.algorithmName = 'Disjoint Set Union (DSU)';
+        nextAlgorithmState.dsuParents = parents;
+        nextAlgorithmState.dsuRanks = ranks;
+        explanation = `Initialized Disjoint Set Union (${Object.keys(parents).length} elements)`;
+        break;
+      }
+
+      case 'DSU_FIND': {
+        const dsuId = ev.structureId || ev.variable || 'dsu';
+        const st = nextStructures[dsuId];
+        const u = ev.meta?.node;
+        const root = ev.meta?.root;
+        const path = ev.meta?.path || [];
+        if (st && st.dsuData) {
+          nextStructures[dsuId] = {
+            ...st,
+            dsuData: {
+              ...st.dsuData,
+              parents: { ...st.dsuData.parents },
+              ranks: st.dsuData.ranks ? { ...st.dsuData.ranks } : undefined,
+              activeSet1: String(u),
+              pathCompressed: path.map(String),
+              lastAction: `Find(${u}) ➔ Root ${root} (Path compressed: [${path.join(' ➔ ')}])`,
+            },
+          };
+        }
+        nextAlgorithmState.dsuOperation = 'FIND';
+        nextAlgorithmState.dsuCompressedNodes = path;
+        explanation = `DSU Find(${u}) traversed to root ${root} with path compression`;
+        break;
+      }
+
+      case 'DSU_UNION': {
+        const dsuId = ev.structureId || ev.variable || 'dsu';
+        const st = nextStructures[dsuId];
+        const u = ev.meta?.u;
+        const v = ev.meta?.v;
+        const rootU = ev.meta?.rootU;
+        const rootV = ev.meta?.rootV;
+        if (st && st.dsuData) {
+          const nextParents = { ...st.dsuData.parents };
+          if (rootU !== undefined && rootV !== undefined) {
+            nextParents[String(rootV)] = String(rootU);
+          }
+          nextStructures[dsuId] = {
+            ...st,
+            dsuData: {
+              ...st.dsuData,
+              parents: nextParents,
+              ranks: st.dsuData.ranks ? { ...st.dsuData.ranks } : undefined,
+              activeSet1: String(u),
+              activeSet2: String(v),
+              lastAction: `Union(${u}, ${v}) ➔ Attached root ${rootV} to root ${rootU}`,
+            },
+          };
+        }
+        nextAlgorithmState.dsuOperation = 'UNION';
+        explanation = `DSU Union: merged set of ${u} (root ${rootU}) with set of ${v} (root ${rootV})`;
+        break;
+      }
+
+      // === PHASE 8: STRINGS & PATTERN MATCHING ===
+      case 'STRING_TRAVERSE': {
+        const strId = ev.structureId || ev.variable || 'str';
+        const text = ev.meta?.text || '';
+        const idx = typeof ev.index === 'number' ? ev.index : (Array.isArray(ev.index) ? ev.index[0] : 0);
+        nextStructures[strId] = {
+          id: strId,
+          name: ev.variable || strId,
+          type: 'string',
+          dataType: 'String',
+          size: text.length,
+          stringData: {
+            text,
+            activeIndex: idx,
+            frequencies: nextAlgorithmState.charFrequencies,
+          },
+          lastOperation: `Char at index ${idx}: '${text[idx] || ''}'`,
+        };
+        nextAlgorithmState.category = 'String Algorithm';
+        nextAlgorithmState.stringText = text;
+        nextAlgorithmState.stringI = idx;
+        explanation = `Inspected character '${text[idx] || ''}' at index ${idx} of "${text}"`;
+        break;
+      }
+
+      case 'STRING_COMPARE': {
+        nextMetrics.comparisons++;
+        const iIdx = Number(ev.indices?.[0] ?? 0);
+        const jIdx = Number(ev.indices?.[1] ?? 0);
+        const match = !!ev.conditionResult;
+        const tChar = ev.meta?.textChar || '';
+        const pChar = ev.meta?.patternChar || '';
+        nextComparison = {
+          left: `'${tChar}' (idx ${iIdx})`,
+          right: `'${pChar}' (idx ${jIdx})`,
+          operator: '==',
+          result: match,
+          explanation: match ? `Characters match ('${tChar}' == '${pChar}')` : `Mismatch ('${tChar}' != '${pChar}')`,
+        };
+        explanation = `Compared text[${iIdx}] '${tChar}' with pattern[${jIdx}] '${pChar}': ${match ? 'MATCH' : 'MISMATCH'}`;
+        break;
+      }
+
+      case 'KMP_LPS_UPDATE': {
+        const lpsVals = Array.isArray(ev.values) ? ev.values : [];
+        nextAlgorithmState.category = 'String Algorithm';
+        nextAlgorithmState.algorithmName = 'KMP Pattern Matching';
+        nextAlgorithmState.kmpLps = lpsVals;
+        explanation = `Constructed KMP LPS Array: [${lpsVals.join(', ')}]`;
+        break;
+      }
+
+      case 'KMP_STEP': {
+        nextMetrics.comparisons++;
+        const iIdx = Number(ev.indices?.[0] ?? 0);
+        const jIdx = Number(ev.indices?.[1] ?? 0);
+        const match = !!ev.conditionResult;
+        nextAlgorithmState.category = 'String Algorithm';
+        nextAlgorithmState.algorithmName = 'KMP Pattern Matching';
+        nextAlgorithmState.stringI = iIdx;
+        nextAlgorithmState.stringJ = jIdx;
+        explanation = `KMP comparing text[${iIdx}] with pattern[${jIdx}]: ${match ? 'MATCH (advance both pointers)' : 'MISMATCH'}`;
+        break;
+      }
+
+      case 'KMP_FALLBACK': {
+        const oldJ = Number(ev.fromIndex ?? 0);
+        const newJ = Number(ev.toIndex ?? 0);
+        nextAlgorithmState.kmpFallback = { from: oldJ, to: newJ };
+        nextAlgorithmState.stringJ = newJ;
+        explanation = `KMP Mismatch fallback: reset pattern pointer j from ${oldJ} ➔ LPS[${oldJ - 1}] = ${newJ}`;
+        break;
+      }
+
+      case 'KMP_MATCH': {
+        nextAlgorithmState.status = 'PATTERN_FOUND';
+        explanation = `KMP Pattern match found at index ${ev.index}!`;
+        break;
+      }
+
+      case 'RABIN_KARP_HASH': {
+        nextMetrics.comparisons++;
+        const start = typeof ev.index === 'number' ? ev.index : (Array.isArray(ev.index) ? ev.index[0] : 0);
+        const pHash = ev.meta?.patternHash;
+        const wHash = ev.meta?.windowHash;
+        const match = !!ev.conditionResult;
+        nextAlgorithmState.category = 'String Algorithm';
+        nextAlgorithmState.algorithmName = 'Rabin-Karp String Match';
+        nextAlgorithmState.rabinPatternHash = pHash;
+        nextAlgorithmState.rabinWindowHash = wHash;
+        nextAlgorithmState.rabinWindowStart = start;
+        nextAlgorithmState.rabinMatched = match;
+        explanation = `Rabin-Karp window [${start}..] hash (${wHash}) vs pattern hash (${pHash}): ${match ? 'HASH MATCH ➔ verifying characters' : 'NO MATCH'}`;
+        break;
+      }
+
+      case 'CHAR_FREQUENCY_UPDATE': {
+        const freqs = ev.meta?.frequencies || {};
+        nextAlgorithmState.charFrequencies = freqs;
+        explanation = `Updated character frequency map: ${JSON.stringify(freqs)}`;
+        break;
+      }
+
+      case 'ANAGRAM_CHECK': {
+        nextAlgorithmState.category = 'String Algorithm';
+        nextAlgorithmState.algorithmName = 'Anagram Verification';
+        explanation = `Checked character balance for anagram: ${ev.message || 'comparing frequency maps'}`;
+        break;
+      }
+
+      // === PHASE 8: BIT MANIPULATION ===
+      case 'BIT_OP_EXECUTE': {
+        nextMetrics.accesses += 2;
+        const varName = ev.variable || 'bits';
+        const a = ev.meta?.operandA ?? 0;
+        const b = ev.meta?.operandB ?? 0;
+        const op = ev.meta?.operator || '&';
+        const res = ev.meta?.result ?? 0;
+        nextStructures[varName] = {
+          id: varName,
+          name: varName,
+          type: 'bits',
+          dataType: 'int (Binary Register)',
+          size: 32,
+          bitData: {
+            operandA: a,
+            operandB: b,
+            operator: op,
+            result: res,
+            bitSize: 32,
+            explanation: `${a} ${op} ${b} = ${res} (0b${(res >>> 0).toString(2).padStart(8, '0')})`,
+          },
+          lastOperation: `${a} ${op} ${b} = ${res}`,
+        };
+        nextAlgorithmState.category = 'Bit Manipulation';
+        nextAlgorithmState.algorithmName = 'Bitwise Operations';
+        nextAlgorithmState.bitOperandA = a;
+        nextAlgorithmState.bitOperandB = b;
+        nextAlgorithmState.bitOperator = op;
+        nextAlgorithmState.bitResult = res;
+        explanation = `Bitwise Operation: ${a} (${(a >>> 0).toString(2).padStart(8, '0')}) ${op} ${b} (${(b >>> 0).toString(2).padStart(8, '0')}) = ${res} (${(res >>> 0).toString(2).padStart(8, '0')})`;
+        break;
+      }
+
+      case 'BIT_SHIFT': {
+        const varName = ev.variable || 'bits';
+        const a = ev.meta?.operandA ?? 0;
+        const shift = ev.meta?.shift ?? 1;
+        const op = ev.meta?.operator || '<<';
+        const res = ev.meta?.result ?? 0;
+        nextStructures[varName] = {
+          id: varName,
+          name: varName,
+          type: 'bits',
+          dataType: 'int (Binary Register)',
+          size: 32,
+          bitData: {
+            operandA: a,
+            operandB: shift,
+            operator: op,
+            result: res,
+            bitSize: 32,
+            explanation: `${a} ${op} ${shift} = ${res}`,
+          },
+          lastOperation: `${a} ${op} ${shift} = ${res}`,
+        };
+        nextAlgorithmState.category = 'Bit Manipulation';
+        nextAlgorithmState.bitOperandA = a;
+        nextAlgorithmState.bitOperator = op;
+        nextAlgorithmState.bitResult = res;
+        explanation = `Bit Shift: ${a} ${op} ${shift} = ${res} (0b${(res >>> 0).toString(2).padStart(8, '0')})`;
+        break;
+      }
+
+      case 'BIT_CHECK':
+      case 'BIT_SET':
+      case 'BIT_CLEAR':
+      case 'BIT_TOGGLE':
+      case 'BIT_COUNT':
+      case 'BIT_POWER_OF_TWO': {
+        const opName = ev.type.replace('BIT_', '');
+        const val = ev.meta?.val ?? 0;
+        const k = ev.meta?.k ?? 0;
+        const res = ev.meta?.result;
+        nextAlgorithmState.category = 'Bit Manipulation';
+        nextAlgorithmState.algorithmName = `Bit ${opName}`;
+        nextAlgorithmState.bitIndexTarget = k;
+        nextAlgorithmState.bitResult = res;
+        explanation = `Bit ${opName}: on value ${val} at bit index ${k} ➔ Result: ${res}`;
+        break;
+      }
+
+      // === PHASE 8: NUMBER ALGORITHMS ===
+      case 'GCD_STEP': {
+        nextMetrics.accesses += 2;
+        const a = ev.meta?.a ?? 0;
+        const b = ev.meta?.b ?? 0;
+        const rem = ev.meta?.remainder ?? 0;
+        const stepEntry = { a, b, remainder: rem };
+        const existingSteps = nextAlgorithmState.gcdSteps ? [...nextAlgorithmState.gcdSteps, stepEntry] : [stepEntry];
+        nextAlgorithmState.category = 'Number Algorithm';
+        nextAlgorithmState.algorithmName = "Euclidean GCD";
+        nextAlgorithmState.numberA = a;
+        nextAlgorithmState.numberB = b;
+        nextAlgorithmState.gcdRemainder = rem;
+        nextAlgorithmState.gcdSteps = existingSteps;
+        nextStructures['gcd'] = {
+          id: 'gcd',
+          name: 'GCD (Euclid)',
+          type: 'number',
+          dataType: 'Number Theory',
+          size: existingSteps.length,
+          numberData: {
+            type: 'GCD',
+            a,
+            b,
+            gcdSteps: existingSteps,
+          },
+          lastOperation: `${a} % ${b} = ${rem}`,
+        };
+        explanation = `Euclid's GCD: ${a} % ${b} = ${rem}${rem === 0 ? ` ➔ GCD is ${b}!` : ` ➔ next gcd(${b}, ${rem})`}`;
+        break;
+      }
+
+      case 'SIEVE_START': {
+        const maxN = ev.meta?.maxN ?? 10;
+        let grid = Array.isArray(ev.values) ? [...ev.values] : [];
+        if (grid.length === 0) {
+          grid = new Array(maxN + 1).fill(true);
+          if (grid.length > 0) grid[0] = false;
+          if (grid.length > 1) grid[1] = false;
+        }
+        nextAlgorithmState.category = 'Number Algorithm';
+        nextAlgorithmState.algorithmName = 'Sieve of Eratosthenes';
+        nextAlgorithmState.sievePrimes = grid;
+        nextStructures['sieve'] = {
+          id: 'sieve',
+          name: 'Sieve of Eratosthenes',
+          type: 'number',
+          dataType: 'Prime Sieve',
+          size: grid.length,
+          numberData: {
+            type: 'SIEVE',
+            sieveGrid: grid,
+          },
+          lastOperation: `Initialized Sieve up to ${grid.length - 1}`,
+        };
+        explanation = `Initialized Sieve of Eratosthenes up to N = ${grid.length - 1}`;
+        break;
+      }
+
+      case 'SIEVE_COMPOSITE_CROSS': {
+        const p = ev.meta?.prime ?? 2;
+        const comp = ev.meta?.composite ?? (ev.index ?? 0);
+        const existingCrossed = nextAlgorithmState.sieveCrossedIndices ? [...nextAlgorithmState.sieveCrossedIndices, comp] : [comp];
+        nextAlgorithmState.sieveCurrentP = p;
+        nextAlgorithmState.sieveCrossedIndices = existingCrossed;
+        if (nextStructures['sieve'] && nextStructures['sieve'].numberData) {
+          const nextGrid = nextStructures['sieve'].numberData.sieveGrid ? [...nextStructures['sieve'].numberData.sieveGrid] : [];
+          if (comp < nextGrid.length) {
+            nextGrid[comp] = false;
+          }
+          nextStructures['sieve'] = {
+            ...nextStructures['sieve'],
+            numberData: {
+              ...nextStructures['sieve'].numberData,
+              currentP: p,
+              crossedIndex: comp,
+              sieveGrid: nextGrid,
+            },
+          };
+        }
+        explanation = `Sieve: crossed out composite ${comp} (multiple of prime ${p})`;
+        break;
+      }
+
+      case 'FAST_POWER_STEP': {
+        const base = ev.meta?.base ?? 1;
+        const exp = ev.meta?.exp ?? 0;
+        const res = ev.meta?.result ?? 1;
+        const binStr = (exp).toString(2);
+        const stepItem = { expBinary: binStr, bit: exp & 1, base, currentResult: res };
+        const steps = nextAlgorithmState.fastPowerSteps ? [...nextAlgorithmState.fastPowerSteps, stepItem] : [stepItem];
+        nextAlgorithmState.category = 'Number Algorithm';
+        nextAlgorithmState.algorithmName = 'Binary Exponentiation (Fast Power)';
+        nextAlgorithmState.fastPowerBase = base;
+        nextAlgorithmState.fastPowerExponent = exp;
+        nextAlgorithmState.fastPowerResult = res;
+        nextAlgorithmState.fastPowerSteps = steps;
+        nextStructures['fast_power'] = {
+          id: 'fast_power',
+          name: 'Fast Exponentiation',
+          type: 'number',
+          dataType: 'Binary Power',
+          size: steps.length,
+          numberData: {
+            type: 'FAST_POWER',
+            powerBase: base,
+            powerExp: exp,
+            powerResult: res,
+            powerBinaryExp: binStr,
+          },
+          lastOperation: `exp=${exp} (bit ${exp & 1}) ➔ result=${res}`,
+        };
+        explanation = `Binary Exponentiation: exp=${exp} (bit=${exp & 1}), base squared ➔ result accumulator = ${res}`;
+        break;
+      }
+
+      // === PHASE 8: SEGMENT TREE & FENWICK TREE ===
+      case 'SEG_TREE_UPDATE': {
+        const stName = ev.structureId || 'segTree';
+        const idx = ev.index ?? 0;
+        const val = ev.newValue;
+        const l = ev.rangeStart ?? 0;
+        const r = ev.rangeEnd ?? 0;
+        nextStructures[stName] = {
+          id: stName,
+          name: stName,
+          type: 'segmenttree',
+          dataType: 'SegmentTree (Interval)',
+          segmentTreeData: {
+            array: [],
+            intervals: [
+              { id: 'root', left: l, right: r, value: val }
+            ],
+            activeRange: [l, r],
+            lastAction: `Updated segment [${l}..${r}] index ${idx} = ${val}`,
+          },
+          lastOperation: `SegmentTree update [${l}..${r}] = ${val}`,
+        };
+        nextAlgorithmState.category = 'Advanced Data Structure';
+        nextAlgorithmState.algorithmName = 'Segment Tree';
+        nextAlgorithmState.segActiveInterval = [l, r];
+        explanation = `Segment Tree updated interval [${l}..${r}] for point ${idx} to value ${val}`;
+        break;
+      }
+
+      case 'FENWICK_UPDATE': {
+        const stName = ev.structureId || 'fenwick';
+        const idx = typeof ev.index === 'number' ? ev.index : (Array.isArray(ev.index) ? ev.index[0] : 0);
+        const delta = ev.newValue ?? 0;
+        const existingArr = nextAlgorithmState.fenwickArray ? [...nextAlgorithmState.fenwickArray] : [];
+        if (idx >= existingArr.length) {
+          while (existingArr.length <= idx) existingArr.push(0);
+        }
+        existingArr[idx] = (existingArr[idx] || 0) + delta;
+        nextStructures[stName] = {
+          id: stName,
+          name: stName,
+          type: 'fenwick',
+          dataType: 'Binary Indexed Tree (Fenwick)',
+          fenwickData: {
+            treeArray: existingArr,
+            size: existingArr.length,
+            activeIndex: idx,
+            operation: 'UPDATE',
+            lastAction: `Add delta ${delta} to index ${idx} (next: ${idx + (idx & -idx)})`,
+          },
+          lastOperation: `Fenwick update idx ${idx} += ${delta}`,
+        };
+        nextAlgorithmState.category = 'Advanced Data Structure';
+        nextAlgorithmState.algorithmName = 'Fenwick Tree (BIT)';
+        nextAlgorithmState.fenwickArray = existingArr;
+        nextAlgorithmState.fenwickActiveIndex = idx;
+        explanation = `Fenwick Tree update: added ${delta} at index ${idx} (navigating i += i & -i)`;
+        break;
+      }
+
+      case 'FENWICK_QUERY': {
+        const idx = typeof ev.index === 'number' ? ev.index : (Array.isArray(ev.index) ? ev.index[0] : 0);
+        const sum = ev.value ?? 0;
+        nextAlgorithmState.category = 'Advanced Data Structure';
+        nextAlgorithmState.algorithmName = 'Fenwick Tree (BIT)';
+        nextAlgorithmState.fenwickActiveIndex = idx;
+        nextAlgorithmState.fenwickPrefixSum = sum;
+        explanation = `Fenwick Tree prefix query: index ${idx} running prefix sum = ${sum}`;
+        break;
+      }
+
+      case 'LCA_FOUND': {
+        nextAlgorithmState.category = 'Advanced Tree';
+        nextAlgorithmState.algorithmName = 'Lowest Common Ancestor (LCA)';
+        nextAlgorithmState.lcaResult = String(ev.value);
+        explanation = `Lowest Common Ancestor (LCA) identified: Node ${ev.value}`;
+        break;
+      }
+
       // === ARRAY ===
       case 'ARRAY_CREATE': {
         const arrId = ev.structureId || ev.arrayId || 'arr';
@@ -546,16 +1013,27 @@ export function reconstructExecutionSteps(
           pointers: {},
           lastOperation: `Allocated int[${arrVals.length}]`,
         };
+        if (ev.objectId) {
+          (nextStructures[arrId] as any).objectId = ev.objectId;
+        }
 
-        nextVariables[arrId] = {
-          name: arrId,
+        const varName = ev.variable || arrId;
+        nextVariables[varName] = {
+          name: varName,
           type: 'int[]',
           value: `[${arrVals.join(', ')}]`,
           scope: 'main',
           isReference: true,
-          refTargetId: arrId,
+          refTargetId: ev.objectId || arrId,
+          objectId: ev.objectId,
           estimatedBytes: 16 + arrVals.length * 4,
         };
+        if (ev.variable && ev.variable !== arrId) {
+          nextVariables[arrId] = {
+            ...nextVariables[varName],
+            name: arrId,
+          };
+        }
 
         explanation = `Initialized array ${arrId} with elements [${arrVals.join(', ')}]`;
         break;
@@ -566,12 +1044,43 @@ export function reconstructExecutionSteps(
         nextMetrics.accesses += 2;
         const arrId = ev.structureId || ev.arrayId || 'arr';
         const st = nextStructures[arrId];
+        const targetObjId = ev.objectId || (st as any)?.objectId || nextVariables[arrId]?.refTargetId;
         if (st && st.arrayData && typeof ev.index === 'number') {
-          st.arrayData[ev.index] = ev.newValue;
+          const nextArr = [...st.arrayData];
+          nextArr[ev.index] = ev.newValue;
+          st.arrayData = nextArr;
           st.activeIndices = [ev.index];
           st.lastOperation = `${arrId}[${ev.index}] = ${ev.newValue}`;
-          if (nextVariables[arrId]) {
-            nextVariables[arrId].value = `[${st.arrayData.join(', ')}]`;
+
+          // Propagate mutation to all other array structures aliasing the same heap object
+          for (const sKey of Object.keys(nextStructures)) {
+            const otherSt = nextStructures[sKey];
+            if (otherSt !== st && otherSt.type === 'array') {
+              const otherObjId = (otherSt as any)?.objectId || nextVariables[otherSt.id]?.refTargetId;
+              if (targetObjId && otherObjId && otherObjId === targetObjId) {
+                otherSt.arrayData = nextArr;
+                otherSt.activeIndices = [ev.index];
+                otherSt.lastOperation = `${arrId}[${ev.index}] = ${ev.newValue}`;
+              }
+            }
+          }
+
+          const updatedArrStr = `[${nextArr.join(', ')}]`;
+          for (const vKey of Object.keys(nextVariables)) {
+            const v = nextVariables[vKey];
+            if (
+              v.name === arrId ||
+              v.refTargetId === arrId ||
+              v.refTargetId === st.id ||
+              (st.id && v.refTargetId === `@${st.id}`) ||
+              (targetObjId && v.refTargetId === targetObjId) ||
+              (targetObjId && (v as any).objectId === targetObjId)
+            ) {
+              nextVariables[vKey] = {
+                ...v,
+                value: updatedArrStr,
+              };
+            }
           }
         }
         explanation = `Mutated ${arrId}[${ev.index}] from ${ev.oldValue} to ${ev.newValue}`;
@@ -5999,6 +6508,66 @@ export function reconstructExecutionSteps(
         estimatedBytes: estBytes,
         referencesTo: [],
       });
+    }
+
+    // Calculate educational delta: "Why did this change?" (Section 41)
+    let changeTarget = '';
+    let changeOldVal: any = undefined;
+    let changeNewVal: any = undefined;
+    let changeReason = explanation;
+
+    if (ev.type === 'ARRAY_UPDATE') {
+      const arrId = ev.structureId || ev.arrayId || 'arr';
+      changeTarget = `${arrId}[${ev.index}]`;
+      changeOldVal = ev.oldValue;
+      changeNewVal = ev.newValue;
+      changeReason = `Assignment at line ${ev.line}`;
+    } else if (ev.type === 'VARIABLE_UPDATE') {
+      changeTarget = ev.variable || 'var';
+      changeOldVal = ev.oldValue;
+      changeNewVal = ev.newValue;
+      changeReason = `Assignment at line ${ev.line}`;
+    } else if (ev.type.startsWith('QUEUE_') || ev.type.startsWith('STACK_') || ev.type.startsWith('DEQUE_')) {
+      changeTarget = ev.structureId || ev.variable || 'collection';
+      changeReason = `Collection operation (${ev.type.toLowerCase().replace('_', ' ')}) on line ${ev.line}`;
+    } else if (ev.type === 'BIT_OP_EXECUTE' || ev.type === 'BIT_SHIFT') {
+      changeTarget = ev.variable || 'bits';
+      changeNewVal = ev.meta?.result;
+      changeReason = `Bitwise ${ev.meta?.operator || 'operation'} on line ${ev.line}`;
+    } else if (ev.type.startsWith('DSU_')) {
+      changeTarget = 'DSU Partition';
+      changeReason = `Disjoint set operation (${ev.type}) on line ${ev.line}`;
+    } else if (ev.type === 'MATRIX_UPDATE') {
+      changeTarget = `${ev.structureId || ev.variable || 'matrix'}[${ev.row}][${ev.col}]`;
+      changeOldVal = ev.oldValue;
+      changeNewVal = ev.newValue;
+      changeReason = `Matrix update at line ${ev.line}`;
+    }
+
+    if (changeTarget) {
+      nextAlgorithmState.whyChanged = {
+        target: changeTarget,
+        previousValue: changeOldVal !== undefined ? changeOldVal : 'initial',
+        newValue: changeNewVal !== undefined ? changeNewVal : 'updated',
+        reason: changeReason,
+        sourceLine: currentLine,
+      };
+    }
+
+    // Visualization Layers & Detection Confidence (Section 44, 50, 51)
+    if (nextAlgorithmState.category) {
+      nextAlgorithmState.detectionConfidence = 'CONCEPTUAL_VIEW';
+      nextAlgorithmState.confidencePercent = 95;
+    } else if (Object.keys(nextStructures).some(k => nextStructures[k].type === 'graph' && nextStructures[k].id.startsWith('graph_'))) {
+      nextAlgorithmState.detectionConfidence = 'DERIVED_STRUCTURE';
+      nextAlgorithmState.confidencePercent = 85;
+      nextAlgorithmState.derivationLabel = 'Derived Graph View';
+    } else if (Object.keys(nextStructures).length > 0 || Object.keys(nextVariables).length > 0) {
+      nextAlgorithmState.detectionConfidence = 'RUNTIME_STATE';
+      nextAlgorithmState.confidencePercent = 100;
+    } else {
+      nextAlgorithmState.detectionConfidence = 'UNKNOWN';
+      nextAlgorithmState.confidencePercent = 60;
     }
 
     currentVariables = nextVariables;

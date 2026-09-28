@@ -792,7 +792,7 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
                 {(algoState.monoStackElements || []).length === 0 ? (
                   <span className="text-xs text-[#8b949e] italic font-mono">[Empty]</span>
                 ) : (
-                  algoState.monoStackElements!.map((el, idx) => (
+                  algoState.monoStackElements!.map((el: any, idx: number) => (
                     <span key={idx} className="bg-[#bc8cff]/20 text-[#bc8cff] border border-[#bc8cff]/40 px-2 py-0.5 rounded font-mono font-bold text-xs">
                       {String(el)}
                     </span>
@@ -1349,6 +1349,152 @@ export const AlgorithmsPanel: React.FC<AlgorithmsPanelProps> = ({ currentStep })
                 Standard mathematical bounds for recognized algorithm patterns.
               </p>
             </div>
+
+            {/* PHASE 8: STRING ALGORITHM CARD */}
+            {algoState.category === 'String Algorithm' && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                  <span className="font-semibold text-xs text-[#f0883e] flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5" /> String Pattern & Search Metrics
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8b949e]">
+                    {algoState.algorithmName}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs">
+                  {algoState.stringI !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Text Index i</span>
+                      <p className="text-sm font-bold text-[#58a6ff] mt-0.5">{algoState.stringI}</p>
+                    </div>
+                  )}
+                  {algoState.stringJ !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Pattern Index j</span>
+                      <p className="text-sm font-bold text-[#bc8cff] mt-0.5">{algoState.stringJ}</p>
+                    </div>
+                  )}
+                  {algoState.rabinPatternHash !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Pattern Hash</span>
+                      <p className="text-sm font-bold text-[#f0883e] mt-0.5">{algoState.rabinPatternHash}</p>
+                    </div>
+                  )}
+                  {algoState.rabinWindowHash !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Window Hash</span>
+                      <p className="text-sm font-bold text-[#39c5cf] mt-0.5">{algoState.rabinWindowHash}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* PHASE 8: BIT MANIPULATION CARD */}
+            {algoState.category === 'Bit Manipulation' && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                  <span className="font-semibold text-xs text-[#39c5cf] flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5" /> Bitwise Operation & Register
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8b949e]">
+                    {algoState.algorithmName}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs">
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                    <span className="text-[10px] text-[#8b949e] uppercase font-bold">Operand A</span>
+                    <p className="text-sm font-bold text-[#58a6ff] mt-0.5">{algoState.bitOperandA ?? '-'}</p>
+                  </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                    <span className="text-[10px] text-[#8b949e] uppercase font-bold">Operator</span>
+                    <p className="text-sm font-bold text-[#f0883e] mt-0.5">{algoState.bitOperator ?? '&'}</p>
+                  </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                    <span className="text-[10px] text-[#8b949e] uppercase font-bold">Operand B</span>
+                    <p className="text-sm font-bold text-[#bc8cff] mt-0.5">{algoState.bitOperandB ?? '-'}</p>
+                  </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                    <span className="text-[10px] text-[#8b949e] uppercase font-bold">Result</span>
+                    <p className="text-sm font-bold text-[#3fb950] mt-0.5">{algoState.bitResult ?? '-'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* PHASE 8: NUMBER ALGORITHM CARD */}
+            {algoState.category === 'Number Algorithm' && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                  <span className="font-semibold text-xs text-[#d29922] flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5" /> Number Theory Execution State
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8b949e]">
+                    {algoState.algorithmName}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs">
+                  {algoState.numberA !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Input A</span>
+                      <p className="text-sm font-bold text-[#58a6ff] mt-0.5">{algoState.numberA}</p>
+                    </div>
+                  )}
+                  {algoState.numberB !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Input B</span>
+                      <p className="text-sm font-bold text-[#bc8cff] mt-0.5">{algoState.numberB}</p>
+                    </div>
+                  )}
+                  {algoState.sieveCurrentP !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Sieve Prime p</span>
+                      <p className="text-sm font-bold text-[#3fb950] mt-0.5">{algoState.sieveCurrentP}</p>
+                    </div>
+                  )}
+                  {algoState.fastPowerResult !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Accumulator Result</span>
+                      <p className="text-sm font-bold text-[#3fb950] mt-0.5">{algoState.fastPowerResult}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* PHASE 8: ADVANCED DATA STRUCTURE CARD */}
+            {algoState.category === 'Advanced Data Structure' && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-3">
+                <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
+                  <span className="font-semibold text-xs text-[#bc8cff] flex items-center gap-1.5">
+                    <GitMerge className="w-3.5 h-3.5" /> Data Structure Operation
+                  </span>
+                  <span className="text-[11px] font-mono text-[#8b949e]">
+                    {algoState.algorithmName}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center font-mono text-xs">
+                  {algoState.dsuOperation && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Operation</span>
+                      <p className="text-sm font-bold text-[#bc8cff] mt-0.5">{algoState.dsuOperation}</p>
+                    </div>
+                  )}
+                  {algoState.fenwickActiveIndex !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">BIT Index</span>
+                      <p className="text-sm font-bold text-[#39c5cf] mt-0.5">#{algoState.fenwickActiveIndex}</p>
+                    </div>
+                  )}
+                  {algoState.fenwickPrefixSum !== undefined && (
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#30363d]/50">
+                      <span className="text-[10px] text-[#8b949e] uppercase font-bold">Prefix Sum</span>
+                      <p className="text-sm font-bold text-[#3fb950] mt-0.5">{algoState.fenwickPrefixSum}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Observed Runtime Operations */}
             <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-3.5 shadow-md flex flex-col gap-2.5">

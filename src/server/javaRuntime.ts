@@ -196,6 +196,22 @@ public class CodeFlowTracer {
         }
         sb.append("]");
         recordEvent("{\\"type\\":\\"ARRAY_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"arrayId\\":\\"" + name + "\\",\\"structureType\\":\\"array\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+
+        // Auto-detect DSU from int[] parent / parents
+        if ((name.equalsIgnoreCase("parent") || name.equalsIgnoreCase("parents")) && compType == int.class) {
+            StringBuilder pSb = new StringBuilder("{");
+            for (int i = 0; i < len; i++) {
+                if (i > 0) pSb.append(",");
+                pSb.append("\\\"").append(i).append("\\\":\\\"").append(Array.get(arr, i)).append("\\\"");
+            }
+            pSb.append("}");
+            recordEvent("{\\"type\\":\\"DSU_INIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"dsu\\",\\"meta\\":{\\"parents\\":" + pSb.toString() + "}}");
+        }
+
+        // Auto-detect Sieve from boolean[] isPrime / primes
+        if ((name.equalsIgnoreCase("isPrime") || name.equalsIgnoreCase("primes") || name.equalsIgnoreCase("prime")) && compType == boolean.class) {
+            recordEvent("{\\"type\\":\\"SIEVE_START\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"structureType\\":\\"number\\",\\"values\\":" + sb.toString() + "}");
+        }
     }
 
     private static void inspectAndEmitCollection(String name, Collection<?> col, String declaredType, String objId, int line) {
@@ -456,6 +472,110 @@ public class CodeFlowTracer {
             return getFieldAny(clazz.getSuperclass(), names);
         }
         return null;
+    }
+
+    // ==========================================
+    // PHASE 8: ADVANCED DSA HELPER METHODS
+    // ==========================================
+
+    public static void dsuInit(String name, int[] parent, int[] rank, int line) {
+        StringBuilder pSb = new StringBuilder("{");
+        StringBuilder rSb = new StringBuilder("{");
+        if (parent != null) {
+            for (int i = 0; i < parent.length; i++) {
+                if (i > 0) { pSb.append(","); rSb.append(","); }
+                pSb.append("\\\"").append(i).append("\\\":\\\"").append(parent[i]).append("\\\"");
+                rSb.append("\\\"").append(i).append("\\\":").append(rank != null && i < rank.length ? rank[i] : 0);
+            }
+        }
+        pSb.append("}");
+        rSb.append("}");
+        recordEvent("{\\"type\\":\\"DSU_INIT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"dsu\\",\\"meta\\":{\\"parents\\":" + pSb.toString() + ",\\"ranks\\":" + rSb.toString() + "}}");
+    }
+
+    public static void dsuFind(String name, int u, int root, int[] path, int line) {
+        StringBuilder pathSb = new StringBuilder("[");
+        if (path != null) {
+            for (int i = 0; i < path.length; i++) {
+                if (i > 0) pathSb.append(",");
+                pathSb.append(path[i]);
+            }
+        }
+        pathSb.append("]");
+        recordEvent("{\\"type\\":\\"DSU_FIND\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"meta\\":{\\"node\\":" + u + ",\\"root\\":" + root + ",\\"path\\":" + pathSb.toString() + "}}");
+    }
+
+    public static void dsuUnion(String name, int u, int v, int rootU, int rootV, int line) {
+        recordEvent("{\\"type\\":\\"DSU_UNION\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"meta\\":{\\"u\\":" + u + ",\\"v\\":" + v + ",\\"rootU\\":" + rootU + ",\\"rootV\\":" + rootV + "}}");
+    }
+
+    public static void stringTraverse(String name, String text, int i, int line) {
+        char ch = (text != null && i >= 0 && i < text.length()) ? text.charAt(i) : ' ';
+        recordEvent("{\\"type\\":\\"STRING_TRAVERSE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + name + "\\",\\"structureId\\":\\"" + name + "\\",\\"structureType\\":\\"string\\",\\"index\\":" + i + ",\\"char\\":\\"" + ch + "\\"}");
+    }
+
+    public static void stringCompare(String text, int i, String pattern, int j, boolean match, int line) {
+        recordEvent("{\\"type\\":\\"STRING_COMPARE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"indices\\":[" + i + "," + j + "],\\"conditionResult\\":" + match + ",\\"meta\\":{\\"textChar\\":\\"" + (i >= 0 && i < text.length() ? text.charAt(i) : "") + "\\",\\"patternChar\\":\\"" + (j >= 0 && j < pattern.length() ? pattern.charAt(j) : "") + "\\"}}");
+    }
+
+    public static void kmpLpsUpdate(String name, int[] lps, int line) {
+        StringBuilder sb = new StringBuilder("[");
+        if (lps != null) {
+            for (int i = 0; i < lps.length; i++) {
+                if (i > 0) sb.append(",");
+                sb.append(lps[i]);
+            }
+        }
+        sb.append("]");
+        recordEvent("{\\"type\\":\\"KMP_LPS_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"values\\":" + sb.toString() + "}");
+    }
+
+    public static void kmpStep(String text, String pattern, int i, int j, boolean match, int line) {
+        recordEvent("{\\"type\\":\\"KMP_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"indices\\":[" + i + "," + j + "],\\"conditionResult\\":" + match + ",\\"meta\\":{\\"text\\":\\"" + text + "\\",\\"pattern\\":\\"" + pattern + "\\"}}");
+    }
+
+    public static void kmpFallback(int oldJ, int newJ, int line) {
+        recordEvent("{\\"type\\":\\"KMP_FALLBACK\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"fromIndex\\":" + oldJ + ",\\"toIndex\\":" + newJ + "}");
+    }
+
+    public static void rabinKarpHash(String text, String pattern, int start, int pHash, int wHash, boolean match, int line) {
+        recordEvent("{\\"type\\":\\"RABIN_KARP_HASH\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"index\\":" + start + ",\\"conditionResult\\":" + match + ",\\"meta\\":{\\"text\\":\\"" + text + "\\",\\"pattern\\":\\"" + pattern + "\\",\\"patternHash\\":" + pHash + ",\\"windowHash\\":" + wHash + "}}");
+    }
+
+    public static void bitOp(String varName, int a, String op, int b, int result, int line) {
+        recordEvent("{\\"type\\":\\"BIT_OP_EXECUTE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"bits\\",\\"meta\\":{\\"operandA\\":" + a + ",\\"operandB\\":" + b + ",\\"operator\\":\\"" + op + "\\",\\"result\\":" + result + "}}");
+    }
+
+    public static void bitShift(String varName, int a, String op, int shift, int result, int line) {
+        recordEvent("{\\"type\\":\\"BIT_SHIFT\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"variable\\":\\"" + varName + "\\",\\"structureType\\":\\"bits\\",\\"meta\\":{\\"operandA\\":" + a + ",\\"shift\\":" + shift + ",\\"operator\\":\\"" + op + "\\",\\"result\\":" + result + "}}");
+    }
+
+    public static void bitHelper(String opType, int val, int k, int result, int line) {
+        recordEvent("{\\"type\\":\\"" + opType + "\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureType\\":\\"bits\\",\\"meta\\":{\\"val\\":" + val + ",\\"k\\":" + k + ",\\"result\\":" + result + "}}");
+    }
+
+    public static void gcdStep(int a, int b, int rem, int line) {
+        recordEvent("{\\"type\\":\\"GCD_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureType\\":\\"number\\",\\"meta\\":{\\"a\\":" + a + ",\\"b\\":" + b + ",\\"remainder\\":" + rem + "}}");
+    }
+
+    public static void sieveComposite(int p, int comp, boolean[] isPrime, int line) {
+        recordEvent("{\\"type\\":\\"SIEVE_COMPOSITE_CROSS\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureType\\":\\"number\\",\\"index\\":" + comp + ",\\"meta\\":{\\"prime\\":" + p + ",\\"composite\\":" + comp + "}}");
+    }
+
+    public static void fastPowerStep(long base, long exp, long result, int line) {
+        recordEvent("{\\"type\\":\\"FAST_POWER_STEP\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureType\\":\\"number\\",\\"meta\\":{\\"base\\":" + base + ",\\"exp\\":" + exp + ",\\"result\\":" + result + "}}");
+    }
+
+    public static void segTreeUpdate(String name, int idx, int val, int l, int r, int treeIdx, int line) {
+        recordEvent("{\\"type\\":\\"SEG_TREE_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"structureType\\":\\"segmenttree\\",\\"index\\":" + idx + ",\\"newValue\\":" + val + ",\\"rangeStart\\":" + l + ",\\"rangeEnd\\":" + r + ",\\"meta\\":{\\"treeIdx\\":" + treeIdx + "}}");
+    }
+
+    public static void fenwickUpdate(String name, int idx, int delta, int line) {
+        recordEvent("{\\"type\\":\\"FENWICK_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"structureType\\":\\"fenwick\\",\\"index\\":" + idx + ",\\"newValue\\":" + delta + "}");
+    }
+
+    public static void fenwickQuery(String name, int idx, int sum, int line) {
+        recordEvent("{\\"type\\":\\"FENWICK_QUERY\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"structureType\\":\\"fenwick\\",\\"index\\":" + idx + ",\\"value\\":" + sum + "}");
     }
 
     public static void line(int line) {
