@@ -1082,6 +1082,12 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     // 5. LOOPS (Phase 1)
     const forLoopMatch = trimmed.match(/^for\s*\(\s*(?:([a-zA-Z0-9_<>\[\]]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*([^;]+);\s*([^;]+);\s*([^)]+)\)\s*(\{)?$/);
     if (forLoopMatch) {
+      const hasBrace = !!forLoopMatch[6] || rawLine.includes('{');
+      if (!hasBrace) {
+        outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+        outputLines.push(rawLine);
+        continue;
+      }
       const typeDecl = forLoopMatch[1] ? `${forLoopMatch[1]} ` : '';
       const iterVar = forLoopMatch[2];
       const initVal = forLoopMatch[3].trim();
@@ -1100,8 +1106,14 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    const whileLoopMatch = trimmed.match(/^while\s*\((.+)\)\s*\{?$/);
+    const whileLoopMatch = trimmed.match(/^while\s*\((.+)\)\s*(\{)?$/);
     if (whileLoopMatch) {
+      const hasBrace = !!whileLoopMatch[2] || rawLine.includes('{');
+      if (!hasBrace) {
+        outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+        outputLines.push(rawLine);
+        continue;
+      }
       const condExpr = whileLoopMatch[1].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    CodeFlowTracer.loopStart(${lineNum});`);
@@ -1137,8 +1149,14 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    const ifMatch = trimmed.match(/^if\s*\((.+)\)\s*\{?$/);
+    const ifMatch = trimmed.match(/^if\s*\((.+)\)\s*(\{)?$/);
     if (ifMatch && !trimmed.startsWith('else')) {
+      const hasBrace = !!ifMatch[2] || rawLine.includes('{');
+      if (!hasBrace) {
+        outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+        outputLines.push(rawLine);
+        continue;
+      }
       const condExpr = ifMatch[1].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    boolean _cond_${lineNum} = (${condExpr});`);
@@ -1201,3 +1219,25 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     className,
   };
 }
+
+/**
+ * Safe fallback instrumentation that guarantees compilation when raw user code compiles.
+ * It packages the user's code under `package com.codeflow;`, imports all standard Java utilities,
+ * and initializes CodeFlowTracer at the start of main() and finishes at the end.
+ */
+export function createSafeFallbackCode(userCode: string, _className: string): string {
+  // Strip existing package declaration if any
+  let cleaned = userCode.replace(/^\s*package\s+[^;]+;\s*/m, '');
+  
+  // Wrap main method with CodeFlowTracer.start() and CodeFlowTracer.finish()
+  const mainRegex = /(public\s+static\s+void\s+main\s*\(\s*String\s*(?:\[\s*\]|\.\.\.)\s*([a-zA-Z_0-9]+)\s*\)\s*(?:throws\s+[\w\s,]+)?\s*\{)/;
+  if (mainRegex.test(cleaned)) {
+    cleaned = cleaned.replace(
+      mainRegex,
+      `$1\n    com.codeflow.CodeFlowTracer.start();\n    Runtime.getRuntime().addShutdownHook(new Thread(() -> { try { com.codeflow.CodeFlowTracer.finish(); } catch(Exception e){} }));\n`
+    );
+  }
+
+  return `package com.codeflow;\n\nimport java.util.*;\nimport java.io.*;\n\n${cleaned}`;
+}
+

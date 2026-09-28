@@ -4,7 +4,7 @@ import path from 'path';
 import { exec, spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { CODE_FLOW_TRACER_JAVA } from './javaRuntime.ts';
-import { instrumentJavaCode } from './instrumenter.ts';
+import { instrumentJavaCode, createSafeFallbackCode } from './instrumenter.ts';
 
 export interface JavaExecutionResult {
   success: boolean;
@@ -467,27 +467,49 @@ public class Graph {
     const instrumentedJavaFile = path.join(pkgDir, `${className}.java`);
     fs.writeFileSync(instrumentedJavaFile, instrumentedCode, 'utf8');
 
-    // 5. Compile instrumented package
+    // 5. Compile instrumented package with resilient fallback
     const pkgFiles = fs.readdirSync(pkgDir).filter((f) => f.endsWith('.java')).map((f) => `"${path.join(pkgDir, f)}"`).join(' ');
-    await new Promise<void>((resolve, reject) => {
-      exec(
-        `javac -d "${sandboxDir}" -cp "${sandboxDir}" ${pkgFiles}`,
-        { timeout: 10000, cwd: sandboxDir },
-        (error, _stdout, stderr) => {
-          if (error) {
-            reject(new Error(`Failed to compile instrumented code: ${stderr || error.message}`));
-          } else {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        exec(
+          `javac -d "${sandboxDir}" -cp "${sandboxDir}" ${pkgFiles}`,
+          { timeout: 10000, cwd: sandboxDir },
+          (error, _stdout, stderr) => {
+            if (error) {
+              reject(new Error(`Failed to compile instrumented code: ${stderr || error.message}`));
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+    } catch (instrumentErr) {
+      console.warn('Advanced instrumentation compilation failed, applying safe fallback wrapper...', instrumentErr);
+      const fallbackSrc = createSafeFallbackCode(userCode, className);
+      fs.writeFileSync(instrumentedJavaFile, fallbackSrc, 'utf8');
+
+      await new Promise<void>((resolve) => {
+        exec(
+          `javac -d "${sandboxDir}" -cp "${sandboxDir}" ${pkgFiles}`,
+          { timeout: 10000, cwd: sandboxDir },
+          (fallbackErr) => {
+            if (fallbackErr) {
+              console.warn('Fallback package compilation also had an issue, will execute Step 3 compiled class directly.');
+            }
             resolve();
           }
-        }
-      );
-    });
+        );
+      });
+    }
 
     // 6. Execute instrumented class with timeout and memory limits
+    const hasInstrumentedClass = fs.existsSync(path.join(sandboxDir, 'com', 'codeflow', `${className}.class`));
+    const classToRun = hasInstrumentedClass ? `com.codeflow.${className}` : className;
+
     const executionOutput = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       const child = spawn(
         'java',
-        ['-Xmx64m', '-XX:+UseSerialGC', '-cp', sandboxDir, `com.codeflow.${className}`],
+        ['-Xmx64m', '-XX:+UseSerialGC', '-cp', sandboxDir, classToRun],
         { timeout: 8000 }
       );
 

@@ -8,12 +8,31 @@ interface ArrayVisualizerProps {
   comparisonIndices?: number[];
   activeIndices?: number[];
   lastEvent?: ExecutionEvent;
+  comparisonInfo?: {
+    left?: string | number;
+    right?: string | number;
+    operator?: string;
+    result?: boolean | number;
+    explanation?: string;
+  };
+  whyChanged?: {
+    target: string;
+    previousValue: any;
+    newValue: any;
+    reason: string;
+    sourceLine: number;
+    sourceCode?: string;
+  };
 }
 
 export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   structure,
   pointers,
+  comparisonIndices,
+  activeIndices,
   lastEvent,
+  comparisonInfo,
+  whyChanged,
 }) => {
   const [viewMode, setViewMode] = useState<'boxes' | 'bars' | 'nested'>('boxes');
 
@@ -258,6 +277,21 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   const isNestedList = arr.some((v) => Array.isArray(v));
   const maxVal = Math.max(...arr.map((v) => (typeof v === 'number' ? Math.abs(v) : Array.isArray(v) ? v.length : 1)), 10);
 
+  // Effective visual indicators
+  const effectiveComparingIndices = (comparisonIndices && comparisonIndices.length > 0)
+    ? comparisonIndices
+    : (structure.comparingIndices || []);
+
+  const effectiveSwappingIndices = structure.swappingIndices
+    ? structure.swappingIndices
+    : (lastEvent && (lastEvent.type === 'ARRAY_SWAP' || lastEvent.type === 'SWAP') && lastEvent.indices && lastEvent.indices.length >= 2)
+    ? [lastEvent.indices[0], lastEvent.indices[1]] as [number, number]
+    : undefined;
+
+  const effectiveActiveIndices = (activeIndices && activeIndices.length > 0)
+    ? activeIndices
+    : (structure.activeIndices || []);
+
   // Group pointers by index
   const pointersByIndex: Record<number, string[]> = {};
   for (const [pName, pIdx] of Object.entries(pointers)) {
@@ -346,6 +380,100 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
         </div>
       )}
 
+      {/* Live Data Movement & Swap Motion Banner */}
+      {effectiveSwappingIndices && effectiveSwappingIndices.length === 2 && (
+        <div className="bg-[#bc8cff]/15 border-2 border-[#bc8cff]/60 rounded-xl p-3 flex flex-col gap-2 shadow-lg shadow-[#bc8cff]/20 animate-pulse">
+          <div className="flex items-center justify-between text-xs font-mono font-bold text-[#d2a8ff]">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#bc8cff] animate-ping" />
+              <span className="text-sm font-semibold">🔄 Live Memory Motion: Exchanging Values</span>
+            </div>
+            <span className="bg-[#bc8cff]/30 text-[#f0f6fc] px-2 py-0.5 rounded border border-[#bc8cff]/50">
+              Indices [{effectiveSwappingIndices[0]}] ⇄ [{effectiveSwappingIndices[1]}]
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 py-1 font-mono text-xs">
+            <div className="flex items-center gap-2 bg-[#0d1117] border border-[#bc8cff]/60 px-3 py-1.5 rounded-lg shadow">
+              <span className="text-[#8b949e]">Index {effectiveSwappingIndices[0]}:</span>
+              <span className="font-bold text-[#f0f6fc] text-sm">{String(arr[effectiveSwappingIndices[0]])}</span>
+              <span className="text-[#bc8cff] font-bold">➔ Moving to Index {effectiveSwappingIndices[1]}</span>
+            </div>
+
+            <div className="text-[#bc8cff] font-bold text-xl px-1">
+              ⇄
+            </div>
+
+            <div className="flex items-center gap-2 bg-[#0d1117] border border-[#bc8cff]/60 px-3 py-1.5 rounded-lg shadow">
+              <span className="text-[#8b949e]">Index {effectiveSwappingIndices[1]}:</span>
+              <span className="font-bold text-[#f0f6fc] text-sm">{String(arr[effectiveSwappingIndices[1]])}</span>
+              <span className="text-[#bc8cff] font-bold">➔ Moving to Index {effectiveSwappingIndices[0]}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Data Selection & Comparison Arc */}
+      {effectiveComparingIndices.length >= 2 && !effectiveSwappingIndices && (
+        <div className="bg-[#d29922]/15 border border-[#d29922]/60 rounded-xl p-3 flex flex-col gap-2 shadow-lg shadow-[#d29922]/10">
+          <div className="flex items-center justify-between text-xs font-mono font-bold text-[#e3b341]">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#d29922] animate-pulse" />
+              <span className="text-sm font-semibold">🔍 Data Selection & Comparison Bridge</span>
+            </div>
+            <span className="bg-[#d29922]/30 text-[#f0f6fc] px-2 py-0.5 rounded border border-[#d29922]/50">
+              Comparing arr[{effectiveComparingIndices[0]}] vs arr[{effectiveComparingIndices[1]}]
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 py-1 font-mono text-xs">
+            <div className="flex items-center gap-2 bg-[#0d1117] border border-[#d29922]/60 px-3 py-1.5 rounded-lg shadow">
+              <span className="text-[#8b949e]">Selected [#{effectiveComparingIndices[0]}]:</span>
+              <span className="font-bold text-[#f0f6fc] text-sm">{String(arr[effectiveComparingIndices[0]])}</span>
+            </div>
+
+            <div className="px-2.5 py-1 rounded bg-[#d29922]/25 text-[#e3b341] font-bold border border-[#d29922]/50 text-xs">
+              {comparisonInfo?.operator ? `${arr[effectiveComparingIndices[0]]} ${comparisonInfo.operator} ${arr[effectiveComparingIndices[1]]}` : `arr[${effectiveComparingIndices[0]}] ? arr[${effectiveComparingIndices[1]}]`}
+            </div>
+
+            <div className="flex items-center gap-2 bg-[#0d1117] border border-[#d29922]/60 px-3 py-1.5 rounded-lg shadow">
+              <span className="text-[#8b949e]">Selected [#{effectiveComparingIndices[1]}]:</span>
+              <span className="font-bold text-[#f0f6fc] text-sm">{String(arr[effectiveComparingIndices[1]])}</span>
+            </div>
+
+            {comparisonInfo && comparisonInfo.result !== undefined && (
+              <div className={`px-2.5 py-1 rounded text-xs font-bold border ${
+                comparisonInfo.result
+                  ? 'bg-[#3fb950]/20 text-[#3fb950] border-[#3fb950]/50'
+                  : 'bg-[#f85149]/20 text-[#f85149] border-[#f85149]/50'
+              }`}>
+                {comparisonInfo.result ? 'TRUE (Condition Met)' : 'FALSE (Keep Position)'}
+              </div>
+            )}
+          </div>
+          {comparisonInfo?.explanation && (
+            <p className="text-[11px] text-[#8b949e] font-sans text-center">
+              {comparisonInfo.explanation}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Assignment / Mutation Explanation if active */}
+      {whyChanged && whyChanged.target && whyChanged.target.includes(structure.name) && (
+        <div className="bg-[#1f6feb]/15 border border-[#388bfd]/50 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs font-mono shadow">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#58a6ff] animate-pulse" />
+            <span className="text-[#8b949e]">Value Mutated:</span>
+            <span className="text-[#f0f6fc] font-bold">{whyChanged.reason}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-[#8b949e] line-through">{String(whyChanged.previousValue)}</span>
+            <span className="text-[#3fb950] font-bold">➔ {String(whyChanged.newValue)}</span>
+          </div>
+        </div>
+      )}
+
       {viewMode === 'nested' ? (
         /* Hierarchical Nested Tree Representation (Section 10) */
         <div className="overflow-x-auto py-2">
@@ -402,9 +530,10 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               const algoBadges = structure.pointerBadges?.[idx] || [];
               const allBadges = [...new Set([...activePtrs, ...algoBadges])];
 
-              const isActive = structure.activeIndices?.includes(idx);
-              const isComparing = structure.comparingIndices?.includes(idx);
-              const isSwapping = structure.swappingIndices?.includes(idx);
+              const isActive = structure.activeIndices?.includes(idx) || effectiveActiveIndices.includes(idx);
+              const isComparing = effectiveComparingIndices.includes(idx);
+              const isSwapping = !!effectiveSwappingIndices?.includes(idx);
+              const otherSwapIdx = effectiveSwappingIndices ? (effectiveSwappingIndices[0] === idx ? effectiveSwappingIndices[1] : effectiveSwappingIndices[0]) : null;
               const isPivot = structure.pivotIndex === idx;
               const isSorted = structure.sortedIndices?.includes(idx);
 
@@ -434,21 +563,21 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                 bgColor = 'bg-[#3fb950]/20';
                 textColor = 'text-[#3fb950]';
                 ringClass = 'ring-2 ring-[#3fb950] ring-offset-2 ring-offset-[#0d1117] animate-pulse';
+              } else if (isSwapping) {
+                borderColor = 'border-[#bc8cff]';
+                bgColor = 'bg-[#bc8cff]/25';
+                textColor = 'text-[#bc8cff]';
+                ringClass = 'ring-2 ring-[#bc8cff] shadow-lg shadow-[#bc8cff]/40 animate-pulse';
+              } else if (isComparing) {
+                borderColor = 'border-[#d29922]';
+                bgColor = 'bg-[#d29922]/25';
+                textColor = 'text-[#d29922]';
+                ringClass = 'ring-2 ring-[#d29922] shadow-lg shadow-[#d29922]/30';
               } else if (isActive) {
                 borderColor = 'border-[#58a6ff]';
                 bgColor = 'bg-[#58a6ff]/20';
                 textColor = 'text-[#58a6ff]';
                 ringClass = 'ring-2 ring-[#58a6ff] ring-offset-2 ring-offset-[#0d1117]';
-              } else if (isComparing) {
-                borderColor = 'border-[#d29922]';
-                bgColor = 'bg-[#d29922]/20';
-                textColor = 'text-[#d29922]';
-                ringClass = 'ring-2 ring-[#d29922]';
-              } else if (isSwapping) {
-                borderColor = 'border-[#bc8cff]';
-                bgColor = 'bg-[#bc8cff]/20';
-                textColor = 'text-[#bc8cff]';
-                ringClass = 'ring-2 ring-[#bc8cff]';
               } else if (isSorted) {
                 borderColor = 'border-[#3fb950]/60';
                 textColor = 'text-[#3fb950]';
@@ -465,7 +594,15 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                 <div key={idx} className={`flex flex-col items-center gap-1.5 transition-all duration-200 ${dimClass}`}>
                   {/* Pointers & Algorithm Badges above cell */}
                   <div className="h-6 flex items-center justify-center">
-                    {allBadges.length > 0 ? (
+                    {isSwapping && otherSwapIdx !== null ? (
+                      <span className="bg-[#bc8cff] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg animate-bounce flex items-center gap-0.5 whitespace-nowrap z-10">
+                        {idx < otherSwapIdx ? '➔' : '←'} To #{otherSwapIdx}
+                      </span>
+                    ) : isComparing ? (
+                      <span className="bg-[#d29922] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5 whitespace-nowrap z-10 animate-pulse">
+                        Selected {idx === effectiveComparingIndices[0] ? 'A' : 'B'}
+                      </span>
+                    ) : allBadges.length > 0 ? (
                       <div className="flex gap-1 animate-pointer">
                         {allBadges.map((badge) => {
                           let badgeBg = 'bg-[#58a6ff] text-[#0d1117]';
@@ -499,6 +636,16 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                         ✓
                       </span>
                     )}
+                    {isSwapping && (
+                      <span className="absolute bottom-0.5 text-[8px] font-mono text-[#bc8cff] font-bold tracking-tight">
+                        ⇄ move
+                      </span>
+                    )}
+                    {isComparing && !isSwapping && (
+                      <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
+                        inspect
+                      </span>
+                    )}
                     {isUpdated && lastEvent.oldValue !== undefined ? (
                       <div className="flex flex-col items-center justify-center leading-none">
                         <span className="text-[10px] text-[#8b949e] line-through font-mono">
@@ -508,7 +655,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                             ? `[${lastEvent.oldValue.join(', ')}]`
                             : String(lastEvent.oldValue)}
                         </span>
-                        <div className="flex items-center gap-0.5 text-xs text-[#3fb950] font-mono font-bold mt-0.5">
+                        <div className="flex items-center gap-0.5 text-xs text-[#3fb950] font-mono font-bold mt-0.5 animate-bounce">
                           <span>↓</span>
                           <span>{renderCellContent(val)}</span>
                         </div>

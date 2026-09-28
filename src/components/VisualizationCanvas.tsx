@@ -67,6 +67,69 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
         </div>
       </div>
 
+      {/* Beginner Action Story HUD */}
+      {(() => {
+        const isSwapAction = currentStep.event?.type === 'ARRAY_SWAP' || currentStep.event?.type === 'SWAP' || structures.some(s => s.swappingIndices && s.swappingIndices.length >= 2);
+        const isCompareAction = !!comparison || structures.some(s => s.comparingIndices && s.comparingIndices.length >= 2);
+        const isArrayUpdate = currentStep.event?.type === 'ARRAY_UPDATE';
+
+        return (
+          <div className="bg-gradient-to-r from-[#161b22] via-[#1c2128] to-[#161b22] border border-[#30363d] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+            <div className="flex items-center gap-3">
+              {isSwapAction ? (
+                <span className="flex items-center gap-1.5 bg-[#bc8cff]/20 text-[#d2a8ff] border border-[#bc8cff]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md animate-pulse">
+                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                  SWAPPING DATA
+                </span>
+              ) : isCompareAction ? (
+                <span className="flex items-center gap-1.5 bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  COMPARING ELEMENTS
+                </span>
+              ) : isArrayUpdate ? (
+                <span className="flex items-center gap-1.5 bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md">
+                  <span>↓</span>
+                  WRITING TO MEMORY
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md">
+                  <span>▶</span>
+                  EXECUTING
+                </span>
+              )}
+
+              <div className="flex flex-col">
+                <span className="text-xs text-[#8b949e] font-medium">What the computer is doing right now:</span>
+                <span className="text-sm font-semibold text-[#f0f6fc]">
+                  {isSwapAction
+                    ? 'Two elements are exchanging positions in memory to move toward their sorted places.'
+                    : isCompareAction
+                    ? (comparison?.explanation || 'Selecting and comparing elements to decide which one is larger/smaller.')
+                    : isArrayUpdate
+                    ? `Placing new value into memory array (arr[${currentStep.event?.index ?? ''}] = ${currentStep.event?.value ?? ''}).`
+                    : currentStep.explanation}
+                </span>
+              </div>
+            </div>
+
+            {/* Current Active Pointers Badges */}
+            {Object.keys(currentStep.activePointers).length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-[#8b949e] font-mono">Pointers:</span>
+                {Object.entries(currentStep.activePointers).map(([ptr, idx]) => (
+                  <span
+                    key={ptr}
+                    className="bg-[#0d1117] text-[#58a6ff] border border-[#58a6ff]/40 text-xs font-mono font-bold px-2 py-0.5 rounded shadow-sm"
+                  >
+                    {ptr} ➔ index {String(idx)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Condition Evaluation Banner if active */}
       {comparison && (
         <div
@@ -153,7 +216,11 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                     <ArrayVisualizer
                       structure={st}
                       pointers={currentStep.activePointers}
+                      comparisonIndices={st.comparingIndices}
+                      activeIndices={st.activeIndices}
                       lastEvent={currentStep.event}
+                      comparisonInfo={currentStep.comparison || undefined}
+                      whyChanged={currentStep.algorithmState?.whyChanged}
                     />
                   );
                   break;
