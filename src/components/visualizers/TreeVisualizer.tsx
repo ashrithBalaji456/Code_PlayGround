@@ -125,29 +125,36 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
         </div>
       )}
 
-      {/* Traversal Order Ribbon if active */}
+      {/* Traversal Order Ribbon if active (Reference Video #12 & Section 19) */}
       {traversalOrder.length > 0 && (
-        <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5 flex flex-col gap-1.5 shadow-inner">
-          <div className="flex items-center justify-between text-[11px] font-mono text-[#8b949e]">
+        <div className="bg-[#0d1117] border border-[#30363d] rounded-xl p-3 flex flex-col gap-2 shadow-inner">
+          <div className="flex items-center justify-between text-xs font-mono text-[#8b949e]">
             <span className="flex items-center gap-1.5 font-semibold text-[#f0f6fc]">
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#3fb950]" />
+              <CheckCircle2 className="w-4 h-4 text-[#3fb950]" />
               {traversalType} Traversal Sequence:
             </span>
-            <span className="text-[10px] text-[#3fb950] font-bold">
-              {traversalOrder.length} visited
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] bg-[#3fb950]/15 text-[#3fb950] px-2 py-0.5 rounded-full border border-[#3fb950]/30 font-bold">
+                {traversalOrder.length} visited
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+          <div className="flex items-center gap-2 overflow-x-auto py-1">
+            <span className="bg-[#1f6feb]/20 text-[#58a6ff] border border-[#388bfd]/40 text-xs font-mono font-bold px-2 py-0.5 rounded">
+              out:
+            </span>
+            <span className="text-[#8b949e] font-mono font-bold">[</span>
             {traversalOrder.map((val, idx) => (
               <React.Fragment key={idx}>
-                <span className="bg-[#161b22] border border-[#30363d] text-[#f0f6fc] px-2 py-0.5 rounded text-xs font-mono font-bold shadow-sm">
+                <span className="bg-[#161b22] border border-[#3fb950]/40 text-[#3fb950] px-2.5 py-0.5 rounded-lg text-xs font-mono font-bold shadow-sm">
                   {String(val)}
                 </span>
                 {idx < traversalOrder.length - 1 && (
-                  <ChevronRight className="w-3.5 h-3.5 text-[#8b949e]/60 flex-shrink-0" />
+                  <span className="text-[#8b949e] text-xs font-mono">,</span>
                 )}
               </React.Fragment>
             ))}
+            <span className="text-[#8b949e] font-mono font-bold">]</span>
           </div>
         </div>
       )}

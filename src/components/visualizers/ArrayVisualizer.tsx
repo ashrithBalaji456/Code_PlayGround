@@ -474,6 +474,109 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
         </div>
       )}
 
+      {/* Live Two Pointers Formula Card (Reference Video #1 & Section 33) */}
+      {(() => {
+        const leftPtrEntry = Object.entries(pointers).find(([k, v]) => ['left', 'l', 'start', 'low', 'i'].includes(k.toLowerCase()) && typeof v === 'number' && v >= 0 && v < arr.length);
+        const rightPtrEntry = Object.entries(pointers).find(([k, v]) => ['right', 'r', 'end', 'high', 'j'].includes(k.toLowerCase()) && typeof v === 'number' && v >= 0 && v < arr.length && k.toLowerCase() !== leftPtrEntry?.[0].toLowerCase());
+        if (!leftPtrEntry || !rightPtrEntry || leftPtrEntry[1] === rightPtrEntry[1]) return null;
+
+        const leftVal = arr[leftPtrEntry[1]];
+        const rightVal = arr[rightPtrEntry[1]];
+        const isNumeric = typeof leftVal === 'number' && typeof rightVal === 'number';
+        const sum = isNumeric ? leftVal + rightVal : null;
+
+        return (
+          <div className="bg-[#1f6feb]/10 border border-[#388bfd]/50 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm font-mono text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#58a6ff] animate-pulse" />
+              <span className="text-[#8b949e]">Two Pointers:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="bg-[#58a6ff]/20 text-[#58a6ff] px-2 py-0.5 rounded font-bold">
+                  {leftPtrEntry[0]} [#{leftPtrEntry[1]}] = {String(leftVal)}
+                </span>
+                <span className="text-[#8b949e] font-bold">+</span>
+                <span className="bg-[#bc8cff]/20 text-[#bc8cff] px-2 py-0.5 rounded font-bold">
+                  {rightPtrEntry[0]} [#{rightPtrEntry[1]}] = {String(rightVal)}
+                </span>
+                {sum !== null && (
+                  <>
+                    <span className="text-[#8b949e] font-bold">=</span>
+                    <span className="text-[#3fb950] font-bold text-sm bg-[#3fb950]/15 px-2 py-0.5 rounded border border-[#3fb950]/30">
+                      {sum}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-[#8b949e]">
+              <span className="bg-[#0d1117] px-2 py-1 rounded border border-[#30363d] text-[#58a6ff] font-semibold">
+                L ➔ right
+              </span>
+              <span className="bg-[#0d1117] px-2 py-1 rounded border border-[#30363d] text-[#bc8cff] font-semibold">
+                left ⬅ R
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Live Binary Search Decision Card (Reference Video #3 & Section 26) */}
+      {(() => {
+        const midPtr = Object.entries(pointers).find(([k, v]) => ['mid', 'm', 'middle'].includes(k.toLowerCase()) && typeof v === 'number');
+        if (!midPtr || typeof midPtr[1] !== 'number' || midPtr[1] < 0 || midPtr[1] >= arr.length) return null;
+        const midVal = arr[midPtr[1]];
+
+        return (
+          <div className="bg-[#d29922]/10 border border-[#d29922]/50 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm font-mono text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#d29922] animate-pulse" />
+              <span className="text-[#8b949e]">Binary Search Pivot:</span>
+              <span className="bg-[#d29922]/20 text-[#e3b341] px-2.5 py-0.5 rounded font-bold text-sm">
+                arr[mid={midPtr[1]}] = {String(midVal)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="bg-[#0d1117] text-[#8b949e] px-2 py-0.5 rounded border border-[#30363d]">
+                MID ↓
+              </span>
+              <span className="text-[#f0f6fc] font-semibold">
+                Halves search space to O(log N)
+              </span>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Live Array Read / Access Animation Banner (Section 6) */}
+      {lastEvent && lastEvent.type === 'ARRAY_ACCESS' && typeof lastEvent.index === 'number' && lastEvent.index >= 0 && lastEvent.index < arr.length && (
+        <div className="bg-[#3fb950]/10 border border-[#3fb950]/40 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs font-mono shadow animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#3fb950]" />
+            <span className="text-[#8b949e]">Array Element Read:</span>
+            <span className="text-[#3fb950] font-bold">
+              {structure.name}[{lastEvent.index}] = {String(arr[lastEvent.index])}
+            </span>
+          </div>
+          <span className="text-[10px] bg-[#3fb950]/20 text-[#3fb950] px-2 py-0.5 rounded font-bold border border-[#3fb950]/30">
+            ACCESS ➔ LOAD
+          </span>
+        </div>
+      )}
+
+      {/* Cumulative Prefix Sum Build Card (Reference Video #7 & Section 35) */}
+      {(structure.name.toLowerCase().includes('pref') || structure.cellExplanation?.toLowerCase().includes('prefix')) && (
+        <div className="bg-[#3fb950]/10 border border-[#3fb950]/40 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs font-mono shadow">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#3fb950] animate-pulse" />
+            <span className="text-[#8b949e]">Prefix Cumulative Build:</span>
+            <span className="text-[#f0f6fc] font-bold">prefix[i] = prefix[i - 1] + nums[i]</span>
+          </div>
+          <span className="text-[10px] bg-[#3fb950]/20 text-[#3fb950] px-2 py-0.5 rounded font-bold border border-[#3fb950]/30">
+            + build
+          </span>
+        </div>
+      )}
+
       {viewMode === 'nested' ? (
         /* Hierarchical Nested Tree Representation (Section 10) */
         <div className="overflow-x-auto py-2">
@@ -671,6 +774,27 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               );
             })}
           </div>
+
+          {/* Physical Sliding Window Bracket Handle (Reference Video #2 & Section 34) */}
+          {structure.windowRange && structure.windowRange.length === 2 && (
+            <div className="flex flex-col items-center mt-3 font-mono text-xs select-none">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#39c5cf]/15 border border-[#39c5cf]/50 text-[#39c5cf] shadow-md shadow-[#39c5cf]/10">
+                <span className="font-bold">CURRENT WINDOW</span>
+                <span className="text-white font-semibold">[{structure.windowRange[0]} ... {structure.windowRange[1]}]</span>
+                {(() => {
+                  const sub = arr.slice(structure.windowRange[0], structure.windowRange[1] + 1);
+                  if (sub.length > 0 && sub.every((x) => typeof x === 'number')) {
+                    const sum = sub.reduce((a, b) => a + b, 0);
+                    return <span className="bg-[#39c5cf]/30 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">sum = {sum}</span>;
+                  }
+                  return null;
+                })()}
+                <span className="text-[10px] bg-[#0d1117] px-2 py-0.5 rounded border border-[#39c5cf]/40 font-bold animate-pulse text-[#39c5cf]">
+                  slide ➔
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* Bar Chart Tracer View */

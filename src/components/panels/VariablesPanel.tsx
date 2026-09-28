@@ -86,19 +86,24 @@ export const VariablesPanel: React.FC<VariablesPanelProps> = ({
                           {String(v.value)}
                         </span>
                       </div>
+                    ) : v.value === null || v.value === 'null' ? (
+                      <span className="text-[#f85149] bg-[#f85149]/15 border border-[#f85149]/30 px-2 py-0.5 rounded text-xs font-mono font-bold flex items-center gap-1">
+                        <span>∅</span>
+                        <span>null (unassigned)</span>
+                      </span>
+                    ) : isStructure ? (
+                      <span className="text-[#3fb950] font-semibold text-sm truncate flex items-center gap-1">
+                        <span className="text-[#8b949e] text-xs">ref ➔</span>
+                        <span>{String(v.value)}</span>
+                      </span>
+                    ) : v.isReference ? (
+                      <span className="text-[#bc8cff] text-sm truncate flex items-center gap-1" title={String(v.value)}>
+                        <span className="text-[#8b949e] text-xs">ref ➔</span>
+                        <span>{v.refTargetId || String(v.value)}</span>
+                      </span>
                     ) : (
-                      <span className="text-[#f0f6fc] text-sm truncate">
-                        {isStructure ? (
-                          <span className="text-[#3fb950] font-semibold">
-                            {String(v.value)}
-                          </span>
-                        ) : v.isReference ? (
-                          <span className="text-[#bc8cff]" title={String(v.value)}>
-                            {v.refTargetId || String(v.value)}
-                          </span>
-                        ) : (
-                          String(v.value)
-                        )}
+                      <span className="text-[#f0f6fc] text-sm truncate font-bold">
+                        {String(v.value)}
                       </span>
                     )}
                   </div>

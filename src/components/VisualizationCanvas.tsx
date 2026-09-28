@@ -73,59 +73,143 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
         const isCompareAction = !!comparison || structures.some(s => s.comparingIndices && s.comparingIndices.length >= 2);
         const isArrayUpdate = currentStep.event?.type === 'ARRAY_UPDATE';
 
-        return (
-          <div className="bg-gradient-to-r from-[#161b22] via-[#1c2128] to-[#161b22] border border-[#30363d] rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-            <div className="flex items-center gap-3">
-              {isSwapAction ? (
-                <span className="flex items-center gap-1.5 bg-[#bc8cff]/20 text-[#d2a8ff] border border-[#bc8cff]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md animate-pulse">
-                  <ArrowRightLeft className="w-3.5 h-3.5" />
-                  SWAPPING DATA
-                </span>
-              ) : isCompareAction ? (
-                <span className="flex items-center gap-1.5 bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  COMPARING ELEMENTS
-                </span>
-              ) : isArrayUpdate ? (
-                <span className="flex items-center gap-1.5 bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md">
-                  <span>↓</span>
-                  WRITING TO MEMORY
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/50 text-xs font-mono font-bold px-2.5 py-1 rounded-md">
-                  <span>▶</span>
-                  EXECUTING
-                </span>
-              )}
+        // What happened, Why, and What's next synthesis
+        let whatHappened = currentStep.explanation;
+        let whyItHappened = 'Advancing program control flow to the next instruction.';
+        let whatNext = 'Evaluating subsequent line or loop iteration.';
 
-              <div className="flex flex-col">
-                <span className="text-xs text-[#8b949e] font-medium">What the computer is doing right now:</span>
-                <span className="text-sm font-semibold text-[#f0f6fc]">
-                  {isSwapAction
-                    ? 'Two elements are exchanging positions in memory to move toward their sorted places.'
-                    : isCompareAction
-                    ? (comparison?.explanation || 'Selecting and comparing elements to decide which one is larger/smaller.')
-                    : isArrayUpdate
-                    ? `Placing new value into memory array (arr[${currentStep.event?.index ?? ''}] = ${currentStep.event?.value ?? ''}).`
-                    : currentStep.explanation}
+        if (isSwapAction) {
+          whatHappened = 'Two elements exchanged positions in memory.';
+          whyItHappened = 'The earlier comparison determined they were in inverted order.';
+          whatNext = 'The loop will advance to examine the next adjacent pair or partition.';
+        } else if (isCompareAction) {
+          whatHappened = comparison?.explanation || 'Selected two elements to compare their values.';
+          whyItHappened = 'Algorithms must inspect elements to determine ordering or search direction.';
+          whatNext = comparison?.result
+            ? 'Condition met: an action (such as a swap or branch) will execute.'
+            : 'Condition not met: elements retain their positions and the search continues.';
+        } else if (isArrayUpdate) {
+          whatHappened = `Assigned new value into array at index ${currentStep.event?.index ?? ''}.`;
+          whyItHappened = 'Updating element storage with newly computed result.';
+          whatNext = 'Proceeding to next statement.';
+        }
+
+        return (
+          <div className="flex flex-col gap-2.5">
+            <div className="bg-gradient-to-r from-[#161b22] via-[#1c2128] to-[#161b22] border border-[#30363d] rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                {isSwapAction ? (
+                  <span className="flex items-center gap-1.5 bg-[#bc8cff]/20 text-[#d2a8ff] border border-[#bc8cff]/50 text-xs font-mono font-bold px-3 py-1 rounded-xl animate-pulse">
+                    <ArrowRightLeft className="w-3.5 h-3.5" />
+                    SWAPPING DATA
+                  </span>
+                ) : isCompareAction ? (
+                  <span className="flex items-center gap-1.5 bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/50 text-xs font-mono font-bold px-3 py-1 rounded-xl">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    COMPARING ELEMENTS
+                  </span>
+                ) : isArrayUpdate ? (
+                  <span className="flex items-center gap-1.5 bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/50 text-xs font-mono font-bold px-3 py-1 rounded-xl">
+                    <span>↓</span>
+                    WRITING TO MEMORY
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/50 text-xs font-mono font-bold px-3 py-1 rounded-xl">
+                    <span>▶</span>
+                    EXECUTING
+                  </span>
+                )}
+
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-[#8b949e] font-semibold uppercase tracking-wider">What the computer is doing right now:</span>
+                  <span className="text-sm font-semibold text-[#f0f6fc]">
+                    {isSwapAction
+                      ? 'Two elements are exchanging positions in memory to move toward their sorted places.'
+                      : isCompareAction
+                      ? (comparison?.explanation || 'Selecting and comparing elements to decide which one is larger/smaller.')
+                      : isArrayUpdate
+                      ? `Placing new value into memory array (arr[${currentStep.event?.index ?? ''}] = ${currentStep.event?.value ?? ''}).`
+                      : currentStep.explanation}
+                  </span>
+                </div>
+              </div>
+
+              {/* Current Active Pointers Badges */}
+              {Object.keys(currentStep.activePointers).length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-[#8b949e] font-mono">Pointers:</span>
+                  {Object.entries(currentStep.activePointers).map(([ptr, idx]) => (
+                    <span
+                      key={ptr}
+                      className="bg-[#0d1117] text-[#58a6ff] border border-[#58a6ff]/40 text-xs font-mono font-bold px-2 py-0.5 rounded-lg shadow-sm"
+                    >
+                      {ptr} ➔ index {String(idx)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Beginner 3-Question Pedagogical Journey (Section 56) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
+              <div className="bg-[#161b22] border border-[#30363d]/70 rounded-xl p-2.5 flex flex-col gap-1 shadow-sm">
+                <span className="text-[10px] text-[#58a6ff] font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#58a6ff]" />
+                  What Changed?
                 </span>
+                <span className="text-[#f0f6fc] text-[11px] line-clamp-2">{whatHappened}</span>
+              </div>
+
+              <div className="bg-[#161b22] border border-[#30363d]/70 rounded-xl p-2.5 flex flex-col gap-1 shadow-sm">
+                <span className="text-[10px] text-[#eab308] font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#eab308]" />
+                  Why?
+                </span>
+                <span className="text-[#8b949e] text-[11px] line-clamp-2">{whyItHappened}</span>
+              </div>
+
+              <div className="bg-[#161b22] border border-[#30363d]/70 rounded-xl p-2.5 flex flex-col gap-1 shadow-sm">
+                <span className="text-[10px] text-[#3fb950] font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950]" />
+                  What's Next?
+                </span>
+                <span className="text-[#8b949e] text-[11px] line-clamp-2">{whatNext}</span>
               </div>
             </div>
 
-            {/* Current Active Pointers Badges */}
-            {Object.keys(currentStep.activePointers).length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[11px] text-[#8b949e] font-mono">Pointers:</span>
-                {Object.entries(currentStep.activePointers).map(([ptr, idx]) => (
-                  <span
-                    key={ptr}
-                    className="bg-[#0d1117] text-[#58a6ff] border border-[#58a6ff]/40 text-xs font-mono font-bold px-2 py-0.5 rounded shadow-sm"
-                  >
-                    {ptr} ➔ index {String(idx)}
-                  </span>
-                ))}
+            {/* Visual Legend Bar (Section 54) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#0d1117]/80 border border-[#30363d]/60 rounded-xl text-[11px] font-mono shadow-sm">
+              <span className="text-[#8b949e] font-semibold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#58a6ff] animate-pulse" />
+                Visual Legend:
+              </span>
+              <div className="flex items-center gap-3.5 flex-wrap">
+                <span className="flex items-center gap-1 text-[#58a6ff]">
+                  <span className="w-2 h-2 rounded-full bg-[#58a6ff]" />
+                  Active
+                </span>
+                <span className="flex items-center gap-1 text-[#eab308]">
+                  <span className="w-2 h-2 rounded-full bg-[#eab308]" />
+                  Compared
+                </span>
+                <span className="flex items-center gap-1 text-[#bc8cff]">
+                  <span className="w-2 h-2 rounded-full bg-[#bc8cff]" />
+                  Swapping
+                </span>
+                <span className="flex items-center gap-1 text-[#3fb950]">
+                  <span className="w-2 h-2 rounded-full bg-[#3fb950]" />
+                  Sorted / Match
+                </span>
+                <span className="flex items-center gap-1 text-[#f85149]">
+                  <span className="w-2 h-2 rounded-full bg-[#f85149]" />
+                  Removed / Pop
+                </span>
+                <span className="flex items-center gap-1 text-[#39c5cf]">
+                  <span className="font-bold">➔</span>
+                  Pointer Pin
+                </span>
               </div>
-            )}
+            </div>
           </div>
         );
       })()}

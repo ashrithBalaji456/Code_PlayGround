@@ -297,39 +297,62 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
       )}
 
       {/* Algorithm Banner if algorithm active */}
+      {/* Algorithm Banner if algorithm active (Reference Video #13 & #14) */}
       {algorithm && (
-        <div className="bg-[#1f242c] border border-[#388bfd]/30 rounded-lg p-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="bg-[#1f242c] border border-[#388bfd]/30 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-md">
           <div className="flex items-center gap-2">
-            <span className="font-mono font-bold text-[#58a6ff] bg-[#388bfd]/15 px-2 py-0.5 rounded border border-[#388bfd]/30">
+            <span className="font-mono font-bold text-[#58a6ff] bg-[#388bfd]/15 px-2.5 py-0.5 rounded-lg border border-[#388bfd]/30">
               {algorithm}
             </span>
             <span className="text-[#8b949e]">Phase:</span>
             <span className="font-mono text-[#f0f6fc] font-semibold">{algorithmPhase || 'IN_PROGRESS'}</span>
+            {algorithm === 'BFS' && (
+              <span className="bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold">
+                queue: by level
+              </span>
+            )}
+            {algorithm === 'DFS' && (
+              <span className="bg-[#bc8cff]/20 text-[#bc8cff] border border-[#bc8cff]/40 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold">
+                stack: go deep
+              </span>
+            )}
           </div>
 
           {/* Cross Structure Status Displays */}
           {algorithm === 'BFS' && queueState.length > 0 && (
-            <div className="flex items-center gap-2 bg-[#0d1117] px-2.5 py-1 rounded border border-[#30363d]">
-              <span className="text-[#8b949e] font-mono text-[11px]">BFS Queue:</span>
-              <div className="flex items-center gap-1 font-mono text-[11px] text-[#79c0ff]">
-                [{queueState.join(', ')}]
+            <div className="flex items-center gap-2 bg-[#0d1117] px-3 py-1 rounded-lg border border-[#58a6ff]/40 shadow-sm">
+              <span className="text-[#8b949e] font-mono text-[11px] font-semibold">Queue (FIFO):</span>
+              <div className="flex items-center gap-1.5 font-mono text-xs text-[#79c0ff] font-bold">
+                <span className="text-[10px] bg-[#58a6ff]/20 px-1.5 py-0.2 rounded text-[#58a6ff]">FRONT</span>
+                <span>[{queueState.join(', ')}]</span>
+                <span className="text-[10px] bg-[#58a6ff]/20 px-1.5 py-0.2 rounded text-[#58a6ff]">REAR</span>
+              </div>
+            </div>
+          )}
+
+          {algorithm === 'DFS' && (
+            <div className="flex items-center gap-2 bg-[#0d1117] px-3 py-1 rounded-lg border border-[#bc8cff]/40 shadow-sm">
+              <span className="text-[#8b949e] font-mono text-[11px] font-semibold">Stack / Call Path:</span>
+              <div className="flex items-center gap-1.5 font-mono text-xs text-[#d2a8ff] font-bold">
+                <span>[{visitedOrder.slice(-4).join(' ➔ ') || 'root'}]</span>
+                <span className="text-[10px] bg-[#bc8cff]/20 px-1.5 py-0.2 rounded text-[#bc8cff]">TOP</span>
               </div>
             </div>
           )}
 
           {algorithm === 'DIJKSTRA' && Object.keys(distances).length > 0 && (
-            <div className="flex items-center gap-2 bg-[#0d1117] px-2.5 py-1 rounded border border-[#30363d]">
-              <span className="text-[#8b949e] font-mono text-[11px]">PQ:</span>
-              <div className="flex items-center gap-1 font-mono text-[11px] text-[#e3b341]">
+            <div className="flex items-center gap-2 bg-[#0d1117] px-3 py-1 rounded-lg border border-[#d29922]/40 shadow-sm">
+              <span className="text-[#8b949e] font-mono text-[11px] font-semibold">Min-PQ:</span>
+              <div className="flex items-center gap-1 font-mono text-xs text-[#e3b341] font-bold">
                 [{queueState.join(', ')}]
               </div>
             </div>
           )}
 
           {visitedOrder.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px] text-[#8b949e]">
-              <span>Visited ({visitedOrder.length}/{nodes.length}):</span>
-              <span className="font-mono text-[#3fb950] font-medium">
+            <div className="flex items-center gap-1.5 text-xs text-[#8b949e] font-mono">
+              <span className="text-[#f0f6fc] font-semibold">Visited ({visitedOrder.length}/{nodes.length}):</span>
+              <span className="text-[#3fb950] font-bold bg-[#3fb950]/10 px-2 py-0.5 rounded border border-[#3fb950]/30">
                 {visitedOrder.join(' ➔ ')}
               </span>
             </div>
