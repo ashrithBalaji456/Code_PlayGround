@@ -1080,15 +1080,16 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     }
 
     // 5. LOOPS (Phase 1)
-    const forLoopMatch = trimmed.match(/^for\s*\(\s*(?:int\s+)?([a-zA-Z_0-9]+)\s*=\s*([^;]+);\s*([^;]+);\s*([^)]+)\)\s*\{?$/);
+    const forLoopMatch = trimmed.match(/^for\s*\(\s*(?:([a-zA-Z0-9_<>\[\]]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*([^;]+);\s*([^;]+);\s*([^)]+)\)\s*(\{)?$/);
     if (forLoopMatch) {
-      const iterVar = forLoopMatch[1];
-      const initVal = forLoopMatch[2].trim();
-      const condExpr = forLoopMatch[3].trim();
-      const stepExpr = forLoopMatch[4].trim();
+      const typeDecl = forLoopMatch[1] ? `${forLoopMatch[1]} ` : '';
+      const iterVar = forLoopMatch[2];
+      const initVal = forLoopMatch[3].trim();
+      const condExpr = forLoopMatch[4].trim();
+      const stepExpr = forLoopMatch[5].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    CodeFlowTracer.loopStart(${lineNum});`);
-      outputLines.push(`    for (int ${iterVar} = ${initVal}; ; ${stepExpr}) {`);
+      outputLines.push(`    for (${typeDecl}${iterVar} = ${initVal}; ; ${stepExpr}) {`);
       outputLines.push(`      boolean _cond_${lineNum} = (${condExpr});`);
       outputLines.push(`      CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond_${lineNum}, ${lineNum});`);
       outputLines.push(`      if (!_cond_${lineNum}) {`);
