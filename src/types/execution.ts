@@ -556,7 +556,35 @@ export type EventType =
   | 'FENWICK_QUERY'
   | 'LCA_START'
   | 'LCA_TRAVERSE'
-  | 'LCA_FOUND';
+  | 'LCA_FOUND'
+  // Phase 10 Advanced Java & JVM Execution Events
+  | 'OBJECT_CREATE'
+  | 'OBJECT_FIELD_UPDATE'
+  | 'OBJECT_FIELD_READ'
+  | 'CONSTRUCTOR_CALL'
+  | 'CONSTRUCTOR_RETURN'
+  | 'STATIC_FIELD_UPDATE'
+  | 'POLYMORPHIC_CALL'
+  | 'METHOD_OVERRIDE_CALL'
+  | 'INSTANCEOF_CHECK'
+  | 'CAST_CHECK'
+  | 'TRY_ENTER'
+  | 'CATCH_ENTER'
+  | 'FINALLY_ENTER'
+  | 'EXCEPTION_THROW'
+  | 'EXCEPTION_UNWIND'
+  | 'BOXING_OP'
+  | 'UNBOXING_OP'
+  | 'STRING_POOL_INTERN'
+  | 'STREAM_PIPELINE_STEP'
+  | 'THREAD_CREATE'
+  | 'THREAD_START'
+  | 'THREAD_STATE_CHANGE'
+  | 'LOCK_ACQUIRE'
+  | 'LOCK_RELEASE'
+  | 'LOCK_WAIT'
+  | 'DEADLOCK_DETECTED'
+  | 'ERROR';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -707,6 +735,22 @@ export interface ExecutionEvent {
   status?: string;
   rowLabels?: string[];
   colLabels?: string[];
+  // Phase 10 Java OOP & JVM Fields
+  refType?: string;
+  actualType?: string;
+  methodName?: string;
+  resolvedMethod?: string;
+  fieldName?: string;
+  castSuccess?: boolean;
+  instanceOfResult?: boolean;
+  threadId?: string;
+  threadName?: string;
+  threadState?: string;
+  lockName?: string;
+  ownerThread?: string;
+  waitingThreads?: string[];
+  streamOp?: string;
+  boxingType?: string;
 }
 
 export interface VariableInfo {
@@ -965,6 +1009,36 @@ export interface HeapObject {
   fields: Record<string, any>;
   estimatedBytes: number;
   referencesTo: string[];
+  // Phase 10
+  className?: string;
+  referencesFrom?: string[];
+  gcEligible?: boolean;
+  creationStep?: number;
+  lifecycle?: 'NOT_CREATED' | 'CREATED' | 'REFERENCED' | 'MUTATED' | 'GC_ELIGIBLE';
+  isStringLiteral?: boolean;
+  stringLiteralValue?: string;
+}
+
+export interface ThreadState {
+  id: string;
+  name: string;
+  state: 'NEW' | 'RUNNABLE' | 'RUNNING' | 'WAITING' | 'TIMED_WAITING' | 'BLOCKED' | 'TERMINATED';
+  callStack: CallFrame[];
+}
+
+export interface LockState {
+  id: string;
+  name: string;
+  ownerThreadId: string | null;
+  waitingThreadIds: string[];
+}
+
+export interface JavaConceptInfo {
+  name: string;
+  category: 'OOP' | 'MEMORY' | 'CONTROL_FLOW' | 'EXCEPTIONS' | 'COLLECTIONS' | 'CONCURRENCY' | 'MODERN_JAVA';
+  explanation: string;
+  details?: Record<string, any>;
+  badge?: string;
 }
 
 export interface ComparisonInfo {
@@ -976,7 +1050,7 @@ export interface ComparisonInfo {
 }
 
 export interface ExecutionError {
-  type: 'NullPointerException' | 'ArrayIndexOutOfBoundsException' | 'ArithmeticException' | 'SyntaxError' | 'RuntimeError';
+  type: 'NullPointerException' | 'ArrayIndexOutOfBoundsException' | 'ArithmeticException' | 'SyntaxError' | 'RuntimeError' | string;
   message: string;
   line: number;
   variableName?: string;
@@ -984,7 +1058,7 @@ export interface ExecutionError {
   brokenReference?: {
     source: string;
     target: string | null;
-  };
+  } | boolean;
 }
 
 export interface RecursionTreeNode {
@@ -1292,6 +1366,13 @@ export interface ExecutionStep {
     totalBytes: number;
   };
   algorithmState?: AlgorithmState;
+  // Phase 10 Java OOP & JVM State
+  staticFields?: Record<string, Record<string, any>>;
+  threads?: Record<string, ThreadState>;
+  locks?: Record<string, LockState>;
+  deadlockDetected?: boolean;
+  activeJavaConcept?: JavaConceptInfo | null;
+  stringPool?: Array<{ value: string; references: string[] }>;
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1299,7 +1380,7 @@ export type SupportedLanguage = 'java' | 'python';
 export interface CodePreset {
   id: string;
   title: string;
-  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms';
+  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms' | 'Java OOP & JVM Internals';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;

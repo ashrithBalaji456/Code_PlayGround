@@ -147,6 +147,104 @@ public class CodeFlowTracer {
         trackVar(rootVar, target.getClass().getSimpleName(), target, line);
     }
 
+    // ==========================================
+    // PHASE 10: ADVANCED JVM & OOP METHODS
+    // ==========================================
+
+    public static void objectCreate(String varName, String className, Object instance, int line) {
+        if (instance == null) return;
+        String objId = "obj-" + System.identityHashCode(instance);
+        trackVar(varName, className, instance, line);
+        recordEvent("{\\\"type\\\":\\\"OBJECT_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"className\\\":\\\"" + className + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"}");
+    }
+
+    public static void fieldUpdate(Object target, String fieldName, Object newVal, int line) {
+        if (target == null) return;
+        String objId = "obj-" + System.identityHashCode(target);
+        String valStr = formatValue(newVal);
+        recordEvent("{\\\"type\\\":\\\"OBJECT_FIELD_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"className\\\":\\\"" + target.getClass().getSimpleName() + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"newValue\\\":" + valStr + "}");
+    }
+
+    public static void staticFieldUpdate(String className, String fieldName, Object newVal, int line) {
+        String valStr = formatValue(newVal);
+        recordEvent("{\\\"type\\\":\\\"STATIC_FIELD_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + className + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"newValue\\\":" + valStr + "}");
+    }
+
+    public static void polymorphicCall(Object target, String refType, String methodName, int line) {
+        if (target == null) return;
+        String actualType = target.getClass().getSimpleName();
+        String resolved = actualType + "." + methodName;
+        recordEvent("{\\\"type\\\":\\\"POLYMORPHIC_CALL\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"refType\\\":\\\"" + refType + "\\\",\\\"actualType\\\":\\\"" + actualType + "\\\",\\\"methodName\\\":\\\"" + methodName + "\\\",\\\"resolvedMethod\\\":\\\"" + resolved + "\\\"}");
+    }
+
+    public static boolean instanceOfCheck(Object target, String targetType, boolean result, int line) {
+        String actualType = target != null ? target.getClass().getSimpleName() : "null";
+        recordEvent("{\\\"type\\\":\\\"INSTANCEOF_CHECK\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"actualType\\\":\\\"" + actualType + "\\\",\\\"refType\\\":\\\"" + targetType + "\\\",\\\"instanceOfResult\\\":" + result + "}");
+        return result;
+    }
+
+    public static Object castCheck(Object target, String fromType, String toType, int line) {
+        recordEvent("{\\\"type\\\":\\\"CAST_CHECK\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"refType\\\":\\\"" + fromType + "\\\",\\\"actualType\\\":\\\"" + toType + "\\\",\\\"castSuccess\\\":true}");
+        return target;
+    }
+
+    public static void tryEnter(int line) {
+        recordEvent("{\\\"type\\\":\\\"TRY_ENTER\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"message\\\":\\\"Entering try block\\\"}");
+    }
+
+    public static void catchEnter(String excType, Throwable t, int line) {
+        String msg = t != null ? t.getMessage() : "";
+        if (msg == null) msg = "";
+        msg = msg.replace((char)34, (char)39);
+        recordEvent("{\\\"type\\\":\\\"CATCH_ENTER\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"dataType\\\":\\\"" + excType + "\\\",\\\"message\\\":\\\"" + msg + "\\\"}");
+    }
+
+    public static void finallyEnter(int line) {
+        recordEvent("{\\\"type\\\":\\\"FINALLY_ENTER\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"message\\\":\\\"Entering finally block (guaranteed execution)\\\"}");
+    }
+
+    public static void throwException(Throwable t, int line) {
+        String type = t != null ? t.getClass().getSimpleName() : "Exception";
+        String msg = t != null ? t.getMessage() : "";
+        if (msg == null) msg = "";
+        msg = msg.replace((char)34, (char)39);
+        recordEvent("{\\\"type\\\":\\\"EXCEPTION_THROW\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"dataType\\\":\\\"" + type + "\\\",\\\"message\\\":\\\"" + msg + "\\\"}");
+    }
+
+    public static void threadStart(Thread t, int line) {
+        if (t == null) return;
+        recordEvent("{\\\"type\\\":\\\"THREAD_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadId\\\":\\\"" + t.getId() + "\\\",\\\"threadName\\\":\\\"" + t.getName() + "\\\",\\\"threadState\\\":\\\"RUNNABLE\\\"}");
+    }
+
+    public static void threadState(String threadName, String state, int line) {
+        recordEvent("{\\\"type\\\":\\\"THREAD_STATE_CHANGE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadName\\\":\\\"" + threadName + "\\\",\\\"threadState\\\":\\\"" + state + "\\\"}");
+    }
+
+    public static void lockAcquire(String lockName, String threadName, int line) {
+        recordEvent("{\\\"type\\\":\\\"LOCK_ACQUIRE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"lockName\\\":\\\"" + lockName + "\\\",\\\"ownerThread\\\":\\\"" + threadName + "\\\"}");
+    }
+
+    public static void lockRelease(String lockName, String threadName, int line) {
+        recordEvent("{\\\"type\\\":\\\"LOCK_RELEASE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"lockName\\\":\\\"" + lockName + "\\\",\\\"ownerThread\\\":\\\"" + threadName + "\\\"}");
+    }
+
+    public static void lockWait(String lockName, String threadName, int line) {
+        recordEvent("{\\\"type\\\":\\\"LOCK_WAIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"lockName\\\":\\\"" + lockName + "\\\",\\\"threadName\\\":\\\"" + threadName + "\\\"}");
+    }
+
+    public static void deadlockDetected(String threadA, String lock1, String lock2, String threadB, int line) {
+        String detail = threadA + " holds " + lock1 + " waiting for " + lock2 + " | " + threadB + " holds " + lock2 + " waiting for " + lock1;
+        recordEvent("{\\\"type\\\":\\\"DEADLOCK_DETECTED\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"detail\\\":\\\"" + detail + "\\\"}");
+    }
+
+    public static void boxing(String fromType, String toType, Object val, int line) {
+        recordEvent("{\\\"type\\\":\\\"BOXING_OP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"dataType\\\":\\\"" + fromType + "\\\",\\\"refType\\\":\\\"" + toType + "\\\",\\\"value\\\":" + formatValue(val) + "}");
+    }
+
+    public static void streamStep(String op, Object inVal, Object outVal, int line) {
+        recordEvent("{\\\"type\\\":\\\"STREAM_PIPELINE_STEP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"streamOp\\\":\\\"" + op + "\\\",\\\"value\\\":" + formatValue(inVal) + ",\\\"newValue\\\":" + formatValue(outVal) + "}");
+    }
+
     public static void funcEnter(String name, String[] paramNames, Object[] paramValues, int line) {
         StringBuilder argsJson = new StringBuilder("{");
         if (paramNames != null && paramValues != null) {

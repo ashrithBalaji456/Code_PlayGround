@@ -14,6 +14,9 @@ import {
   RecursionTreeNode,
   LinkedListNode,
   TreeNodeData,
+  ThreadState,
+  LockState,
+  JavaConceptInfo,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -72,6 +75,30 @@ export function reconstructExecutionSteps(
   let currentComparison: ComparisonInfo | null = null;
   let currentError: ExecutionError | null = null;
   let currentHeap: HeapObject[] = [];
+  // Phase 10: JVM & OOP State Tracking
+  let currentStaticFields: Record<string, Record<string, any>> = {};
+  let currentThreads: Record<string, ThreadState> = {
+    main: {
+      id: '1',
+      name: 'main',
+      state: 'RUNNING',
+      callStack: currentCallStack,
+    },
+  };
+  let currentLocks: Record<string, LockState> = {};
+  let currentDeadlock = false;
+  let currentActiveConcept: JavaConceptInfo | null = null;
+  let currentCustomObjects: Record<
+    string,
+    {
+      id: string;
+      className: string;
+      fields: Record<string, any>;
+      creationStep: number;
+      lifecycle: 'NOT_CREATED' | 'CREATED' | 'REFERENCED' | 'MUTATED' | 'GC_ELIGIBLE';
+    }
+  > = {};
+  let currentStringPool: Array<{ value: string; references: string[] }> = [];
 
   let currentMetrics: AlgorithmMetrics = {
     comparisons: 0,
@@ -242,6 +269,65 @@ export function reconstructExecutionSteps(
         variableName: currentError.variableName,
       };
     }
+
+    // Phase 10: JVM & OOP State Immutability Cloning
+    const nextStaticFields: Record<string, Record<string, any>> = {};
+    for (const [cls, flds] of Object.entries(currentStaticFields)) {
+      nextStaticFields[cls] = { ...flds };
+    }
+
+    const nextThreads: Record<string, ThreadState> = {};
+    for (const [tid, th] of Object.entries(currentThreads)) {
+      nextThreads[tid] = {
+        ...th,
+        callStack: th.callStack.map((f) => ({
+          ...f,
+          arguments: { ...f.arguments },
+          localVariables: { ...f.localVariables },
+        })),
+      };
+    }
+
+    const nextLocks: Record<string, LockState> = {};
+    for (const [lid, lk] of Object.entries(currentLocks)) {
+      nextLocks[lid] = {
+        ...lk,
+        waitingThreadIds: [...lk.waitingThreadIds],
+      };
+    }
+
+    let nextDeadlock: boolean = currentDeadlock;
+    let nextActiveConcept: JavaConceptInfo | null = currentActiveConcept
+      ? {
+          name: currentActiveConcept.name,
+          category: currentActiveConcept.category,
+          explanation: currentActiveConcept.explanation,
+          badge: currentActiveConcept.badge,
+          details: currentActiveConcept.details ? Object.assign({}, currentActiveConcept.details) : undefined,
+        }
+      : null;
+
+    const nextCustomObjects: Record<
+      string,
+      {
+        id: string;
+        className: string;
+        fields: Record<string, any>;
+        creationStep: number;
+        lifecycle: 'NOT_CREATED' | 'CREATED' | 'REFERENCED' | 'MUTATED' | 'GC_ELIGIBLE';
+      }
+    > = {};
+    for (const [oid, obj] of Object.entries(currentCustomObjects)) {
+      nextCustomObjects[oid] = {
+        ...obj,
+        fields: { ...obj.fields },
+      };
+    }
+
+    let nextStringPool: Array<{ value: string; references: string[] }> = currentStringPool.map((sp) => ({
+      value: sp.value,
+      references: [...sp.references],
+    }));
 
     const nextMetrics: AlgorithmMetrics = { ...currentMetrics };
     const nextAlgorithmState: AlgorithmState = {
@@ -473,21 +559,475 @@ export function reconstructExecutionSteps(
         break;
       }
 
-      case 'CUSTOM_OBJECT_UPDATE': {
-        const objId = ev.objectId || ev.structureId || ev.variable || 'obj';
-        const varName = ev.variable || ev.structureId || 'obj';
-        const fields = ev.fields || {};
-        const className = ev.className || 'Object';
-        nextVariables[varName] = {
-          name: varName,
-          type: className,
-          value: `@${objId} ${JSON.stringify(fields)}`,
-          scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
-          isReference: true,
-          refTargetId: objId,
-          estimatedBytes: 24 + Object.keys(fields).length * 8,
+      // === PHASE 10: ADVANCED JAVA & JVM EXECUTION ===
+      case 'OBJECT_CREATE': {
+        const objId = ev.objectId || `obj_${Object.keys(nextCustomObjects).length + 1}`;
+        const className = ev.dataType || ev.className || 'Object';
+        const varName = ev.variable;
+        const initialFields = ev.fields || {};
+
+        nextCustomObjects[objId] = {
+          id: objId,
+          className,
+          fields: { ...initialFields },
+          creationStep: i + 1,
+          lifecycle: 'CREATED',
         };
-        explanation = `Updated object ${varName} (${className} @${objId})`;
+
+        if (varName) {
+          nextVariables[varName] = {
+            name: varName,
+            type: className,
+            value: `${className}@${objId.replace(/\D/g, '') || '1'}`,
+            scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
+            isReference: true,
+            refTargetId: objId,
+            estimatedBytes: 8,
+          };
+          const topFrame = nextCallStack[nextCallStack.length - 1];
+          if (topFrame) {
+            topFrame.localVariables[varName] = nextVariables[varName];
+          }
+        }
+
+        nextActiveConcept = {
+          name: 'Object Creation (new)',
+          category: 'OOP',
+          explanation: `new ${className}() instantiates a new object on the Heap. A reference ${varName ? `to ${varName} ` : ''}is returned pointing to ${className}#${objId.replace(/\D/g, '') || '1'}.`,
+          badge: 'Heap Allocation',
+          details: { className, objectId: objId, variable: varName },
+        };
+        explanation = `Allocated new ${className} on Heap (ID: ${objId})${varName ? ` -> ${varName}` : ''}`;
+        break;
+      }
+
+      case 'CUSTOM_OBJECT_UPDATE':
+      case 'OBJECT_FIELD_UPDATE': {
+        const objId = ev.objectId || ev.structureId || ev.variable || 'obj';
+        const varName = ev.variable || ev.structureId;
+        const className = ev.className || (nextCustomObjects[objId]?.className) || 'Object';
+        const fieldName = ev.fieldName;
+        const rawNewVal = ev.newValue !== undefined ? ev.newValue : ev.value;
+
+        if (!nextCustomObjects[objId]) {
+          nextCustomObjects[objId] = {
+            id: objId,
+            className,
+            fields: {},
+            creationStep: i + 1,
+            lifecycle: 'CREATED',
+          };
+        }
+
+        if (fieldName) {
+          nextCustomObjects[objId].fields[fieldName] = rawNewVal;
+        }
+        if (ev.fields) {
+          Object.assign(nextCustomObjects[objId].fields, ev.fields);
+        }
+        nextCustomObjects[objId].lifecycle = 'MUTATED';
+
+        if (varName && !nextVariables[varName]) {
+          nextVariables[varName] = {
+            name: varName,
+            type: className,
+            value: `${className}@${objId.replace(/\D/g, '') || '1'}`,
+            scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
+            isReference: true,
+            refTargetId: objId,
+            estimatedBytes: 8,
+          };
+        }
+
+        nextActiveConcept = {
+          name: 'Field Mutation (Heap)',
+          category: 'OOP',
+          explanation: `Direct field write${fieldName ? ` (${fieldName} = ${JSON.stringify(rawNewVal)})` : ''} on ${className}#${objId.replace(/\D/g, '') || '1'}. All references pointing to this object observe this change.`,
+          badge: 'Heap Mutation',
+          details: { objectId: objId, field: fieldName, newValue: rawNewVal },
+        };
+        explanation = `Field update: ${objId}${fieldName ? `.${fieldName}` : ''} = ${JSON.stringify(rawNewVal)}`;
+        break;
+      }
+
+      case 'OBJECT_FIELD_READ': {
+        const objId = ev.objectId || 'obj';
+        const fieldName = ev.fieldName || 'field';
+        nextActiveConcept = {
+          name: 'Field Dereference',
+          category: 'OOP',
+          explanation: `Reading field ${fieldName} via reference to ${objId}.`,
+          badge: 'Field Read',
+          details: { objectId: objId, field: fieldName, value: ev.value },
+        };
+        explanation = `Read field: ${objId}.${fieldName} => ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'CONSTRUCTOR_CALL': {
+        const className = ev.className || ev.dataType || 'Class';
+        const fnName = `${className}()`;
+        const frameId = `frame-ctor-${className}-${nextCallStack.length}`;
+        const newFrame: CallFrame = {
+          id: frameId,
+          functionName: fnName,
+          arguments: ev.arguments || {},
+          localVariables: {},
+          line: ev.line || currentLine,
+          depth: nextCallStack.length + 1,
+        };
+        nextCallStack.push(newFrame);
+        nextActiveConcept = {
+          name: 'Constructor Execution',
+          category: 'OOP',
+          explanation: `Invoking constructor ${className}(). 'this' points to the newly allocated uninitialized instance on the Heap.`,
+          badge: 'Constructor',
+          details: { className, thisRef: ev.objectId },
+        };
+        explanation = `Invoked constructor ${className}()`;
+        break;
+      }
+
+      case 'CONSTRUCTOR_RETURN': {
+        if (nextCallStack.length > 1) {
+          nextCallStack.pop();
+        }
+        explanation = `Constructor finished initializing object`;
+        break;
+      }
+
+      case 'STATIC_FIELD_UPDATE': {
+        const cls = ev.className || 'Main';
+        const field = ev.fieldName || ev.variable || 'count';
+        const val = ev.newValue !== undefined ? ev.newValue : ev.value;
+        if (!nextStaticFields[cls]) {
+          nextStaticFields[cls] = {};
+        }
+        nextStaticFields[cls][field] = val;
+        nextActiveConcept = {
+          name: 'Static / Class Area Variable',
+          category: 'MEMORY',
+          explanation: `Static field ${cls}.${field} = ${JSON.stringify(val)} stored in Metaspace/Class Area. It belongs to the class itself, not any single heap instance.`,
+          badge: 'Static Metaspace',
+          details: { class: cls, field, value: val },
+        };
+        explanation = `Static field updated: ${cls}.${field} = ${JSON.stringify(val)}`;
+        break;
+      }
+
+      case 'POLYMORPHIC_CALL':
+      case 'METHOD_OVERRIDE_CALL': {
+        const refType = ev.refType || 'ReferenceType';
+        const actualType = ev.actualType || 'ActualClass';
+        const method = ev.methodName || ev.resolvedMethod || 'method()';
+        nextActiveConcept = {
+          name: 'Polymorphism (Dynamic Dispatch)',
+          category: 'OOP',
+          explanation: `Polymorphic call on reference ${ev.variable || 'obj'} of declared type [${refType}]. JVM resolves method at runtime via virtual table to actual type: [${actualType}.${method}].`,
+          badge: 'Dynamic Dispatch',
+          details: {
+            declaredReferenceType: refType,
+            actualRuntimeType: actualType,
+            invokedMethod: method,
+            resolvedTarget: `${actualType}.${method}`,
+          },
+        };
+        explanation = `Dynamic method dispatch: ${refType} ref -> ${actualType}.${method}`;
+        break;
+      }
+
+      case 'INSTANCEOF_CHECK': {
+        nextActiveConcept = {
+          name: 'instanceof Operator',
+          category: 'OOP',
+          explanation: `Checking if object is an instance of ${ev.refType}. Result: ${ev.instanceOfResult ? 'true' : 'false'}.`,
+          badge: 'RTTI',
+          details: { target: ev.variable, checkedType: ev.refType, result: ev.instanceOfResult },
+        };
+        explanation = `Evaluated: ${ev.variable || 'obj'} instanceof ${ev.refType} => ${ev.instanceOfResult}`;
+        break;
+      }
+
+      case 'CAST_CHECK': {
+        nextActiveConcept = {
+          name: 'Reference Type Casting',
+          category: 'OOP',
+          explanation: `Casting reference from declared type [${ev.refType}] to [${ev.actualType}]. ${ev.castSuccess ? 'Cast succeeded (compatible runtime type).' : 'ClassCastException: Incompatible types.'}`,
+          badge: 'Type Cast',
+          details: { fromType: ev.refType, toType: ev.actualType, success: ev.castSuccess },
+        };
+        explanation = `Cast: (${ev.actualType}) reference of ${ev.refType}`;
+        break;
+      }
+
+      case 'TRY_ENTER': {
+        nextActiveConcept = {
+          name: 'try-catch-finally Block',
+          category: 'EXCEPTIONS',
+          explanation: 'Entering try block. The JVM monitors this block for abnormal completion to route to matching catch handlers.',
+          badge: 'Exception Handling',
+        };
+        explanation = 'Entered try block';
+        break;
+      }
+
+      case 'CATCH_ENTER': {
+        const exc = ev.dataType || 'Exception';
+        nextActiveConcept = {
+          name: 'Exception Caught',
+          category: 'EXCEPTIONS',
+          explanation: `Caught ${exc}${ev.message ? ` ("${ev.message}")` : ''}. Stack unwinding terminated at this handler.`,
+          badge: 'Catch Handler',
+          details: { exceptionType: exc, message: ev.message },
+        };
+        explanation = `Caught exception: ${exc} (${ev.message || ''})`;
+        break;
+      }
+
+      case 'FINALLY_ENTER': {
+        nextActiveConcept = {
+          name: 'finally Block Execution',
+          category: 'EXCEPTIONS',
+          explanation: 'Entering finally block. Execution is guaranteed whether an exception was thrown, caught, or normally returned.',
+          badge: 'Guaranteed Cleanup',
+        };
+        explanation = 'Entered finally block (guaranteed execution)';
+        break;
+      }
+
+      case 'EXCEPTION_THROW': {
+        const exc = ev.dataType || 'RuntimeException';
+        const msg = ev.message || 'Exception thrown';
+        nextError = {
+          type: exc,
+          message: msg,
+          line: ev.line || currentLine,
+          detail: `JVM Exception thrown: ${exc} - ${msg}`,
+        };
+        nextActiveConcept = {
+          name: 'Exception Thrown & Stack Unwinding',
+          category: 'EXCEPTIONS',
+          explanation: `Explicit throw: ${exc} ("${msg}"). The JVM begins unwinding frames from the call stack until a matching catch is reached.`,
+          badge: 'Throw',
+          details: { exception: exc, message: msg },
+        };
+        explanation = `Thrown: ${exc} ("${msg}")`;
+        break;
+      }
+
+      case 'ERROR':
+      case 'EXCEPTION': {
+        const isNpe =
+          (ev.message || '').includes('NullPointer') ||
+          (ev.detail || '').includes('NullPointer') ||
+          ev.dataType === 'NullPointerException';
+
+        const errType: string = ev.dataType || (isNpe ? 'NullPointerException' : 'RuntimeError');
+        const errMessage: string = ev.message || 'Execution error occurred';
+        const errDetail: string = ev.detail || (isNpe ? 'Attempted to dereference null reference.' : errMessage);
+        const errLine: number = ev.line || currentLine;
+
+        nextError = {
+          type: errType,
+          message: errMessage,
+          line: errLine,
+          detail: errDetail,
+          brokenReference: isNpe,
+          variableName: ev.variable || 'p',
+        };
+        nextActiveConcept = {
+          name: isNpe ? 'NullPointerException (Null Dereference)' : 'JVM Runtime Exception',
+          category: 'EXCEPTIONS',
+          explanation: isNpe
+            ? `Attempted to access field or method on reference '${ev.variable || 'p'}' which is pointing to NULL. The JVM throws NullPointerException.`
+            : `JVM runtime exception encountered: ${errMessage}`,
+          badge: isNpe ? 'Null Dereference' : 'Runtime Exception',
+          details: { errorType: errType, message: errMessage, line: errLine },
+        };
+        explanation = `Runtime Exception: ${errType} - ${errMessage}`;
+        break;
+      }
+
+      case 'EXCEPTION_UNWIND': {
+        if (nextCallStack.length > 1) {
+          const popped = nextCallStack.pop();
+          explanation = `Unwound stack frame ${popped?.functionName || ''} due to active exception`;
+        }
+        break;
+      }
+
+      case 'THREAD_START': {
+        const tid = ev.threadId || ev.threadName || 'Thread-1';
+        const tname = ev.threadName || 'Thread-1';
+        nextThreads[tid] = {
+          id: tid,
+          name: tname,
+          state: 'RUNNABLE',
+          callStack: [
+            {
+              id: `frame-${tid}`,
+              functionName: 'run',
+              arguments: {},
+              localVariables: {},
+              line: ev.line || currentLine,
+              depth: 1,
+            },
+          ],
+        };
+        nextActiveConcept = {
+          name: 'Multithreading (Thread.start)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] started. The OS and JVM allocate an independent execution thread with its own call stack and program counter.`,
+          badge: 'Thread Lifecycle',
+          details: { threadId: tid, threadName: tname, state: 'RUNNABLE' },
+        };
+        explanation = `Spawned thread [${tname}] (State: RUNNABLE)`;
+        break;
+      }
+
+      case 'THREAD_STATE_CHANGE': {
+        const tname = ev.threadName || 'Thread-1';
+        const st = (ev.threadState as any) || 'RUNNING';
+        const found = Object.values(nextThreads).find(t => t.name === tname || t.id === ev.threadId);
+        if (found) {
+          found.state = st;
+        }
+        nextActiveConcept = {
+          name: 'Thread State Transition',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] transitioned to [${st}].`,
+          badge: st,
+          details: { threadName: tname, state: st },
+        };
+        explanation = `Thread [${tname}] is now ${st}`;
+        break;
+      }
+
+      case 'LOCK_ACQUIRE': {
+        const lk = ev.lockName || 'mutex';
+        const owner = ev.ownerThread || 'main';
+        if (!nextLocks[lk]) {
+          nextLocks[lk] = { id: lk, name: lk, ownerThreadId: owner, waitingThreadIds: [] };
+        } else {
+          nextLocks[lk].ownerThreadId = owner;
+          nextLocks[lk].waitingThreadIds = nextLocks[lk].waitingThreadIds.filter(id => id !== owner);
+        }
+        nextActiveConcept = {
+          name: 'Intrinsic Lock (synchronized)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${owner}] acquired intrinsic monitor lock on [${lk}]. Entered synchronized critical section.`,
+          badge: 'Lock Acquired',
+          details: { lock: lk, owner },
+        };
+        explanation = `Lock [${lk}] acquired by [${owner}]`;
+        break;
+      }
+
+      case 'LOCK_RELEASE': {
+        const lk = ev.lockName || 'mutex';
+        const owner = ev.ownerThread || 'main';
+        if (nextLocks[lk]) {
+          nextLocks[lk].ownerThreadId = null;
+        }
+        nextActiveConcept = {
+          name: 'Lock Release',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${owner}] exited synchronized block and released lock on [${lk}].`,
+          badge: 'Lock Released',
+          details: { lock: lk, owner },
+        };
+        explanation = `Lock [${lk}] released by [${owner}]`;
+        break;
+      }
+
+      case 'LOCK_WAIT': {
+        const lk = ev.lockName || 'mutex';
+        const tname = ev.threadName || 'Thread-2';
+        if (!nextLocks[lk]) {
+          nextLocks[lk] = { id: lk, name: lk, ownerThreadId: null, waitingThreadIds: [tname] };
+        } else if (!nextLocks[lk].waitingThreadIds.includes(tname)) {
+          nextLocks[lk].waitingThreadIds.push(tname);
+        }
+        const th = Object.values(nextThreads).find(t => t.name === tname);
+        if (th) th.state = 'BLOCKED';
+        nextActiveConcept = {
+          name: 'Lock Contention (BLOCKED)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] attempted to enter synchronized block guarded by [${lk}], but lock is held by [${nextLocks[lk].ownerThreadId || 'another thread'}]. Thread is BLOCKED.`,
+          badge: 'Lock Contention',
+          details: { lock: lk, waitingThread: tname, heldBy: nextLocks[lk].ownerThreadId },
+        };
+        explanation = `Thread [${tname}] BLOCKED waiting for lock [${lk}]`;
+        break;
+      }
+
+      case 'DEADLOCK_DETECTED': {
+        nextDeadlock = true;
+        nextActiveConcept = {
+          name: 'Deadlock Detected',
+          category: 'CONCURRENCY',
+          explanation: `Deadlock Condition! Circular lock dependency detected. Neither thread can proceed: ${ev.detail || 'Circular wait'}`,
+          badge: 'POSSIBLE DEADLOCK',
+          details: { detail: ev.detail },
+        };
+        explanation = `DEADLOCK DETECTED: ${ev.detail || 'Circular lock dependency'}`;
+        break;
+      }
+
+      case 'BOXING_OP': {
+        nextActiveConcept = {
+          name: 'Autoboxing (Primitive -> Wrapper)',
+          category: 'MODERN_JAVA',
+          explanation: `Java compiler automatically boxes primitive '${ev.dataType}' into '${ev.refType}' wrapper object on the heap via ${ev.refType}.valueOf().`,
+          badge: 'Autoboxing',
+          details: { from: ev.dataType, to: ev.refType, value: ev.value },
+        };
+        explanation = `Autoboxing: primitive ${ev.dataType} -> ${ev.refType}`;
+        break;
+      }
+
+      case 'UNBOXING_OP': {
+        nextActiveConcept = {
+          name: 'Unboxing (Wrapper -> Primitive)',
+          category: 'MODERN_JAVA',
+          explanation: `Java compiler unboxes wrapper object '${ev.refType}' to primitive '${ev.dataType}'.`,
+          badge: 'Unboxing',
+          details: { from: ev.refType, to: ev.dataType, value: ev.value },
+        };
+        explanation = `Unboxing: ${ev.refType} -> primitive ${ev.dataType}`;
+        break;
+      }
+
+      case 'STRING_POOL_INTERN': {
+        const strVal = String(ev.value || '');
+        let poolEntry = nextStringPool.find(sp => sp.value === strVal);
+        if (!poolEntry) {
+          poolEntry = { value: strVal, references: [] };
+          nextStringPool.push(poolEntry);
+        }
+        if (ev.variable && !poolEntry.references.includes(ev.variable)) {
+          poolEntry.references.push(ev.variable);
+        }
+        nextActiveConcept = {
+          name: 'String Constant Pool (Conceptual JVM View)',
+          category: 'MEMORY',
+          explanation: `String literal "${strVal}" is deduplicated in the String Constant Pool. Multiple references to identical literals share the same immutable string instance.`,
+          badge: 'String Pool',
+          details: { value: strVal, references: poolEntry.references },
+        };
+        explanation = `String literal "${strVal}" referenced in String Pool`;
+        break;
+      }
+
+      case 'STREAM_PIPELINE_STEP': {
+        nextActiveConcept = {
+          name: 'Stream Pipeline Step',
+          category: 'MODERN_JAVA',
+          explanation: `Stream intermediate/terminal operation: .${ev.streamOp || 'step'}() processed ${JSON.stringify(ev.value)} => ${JSON.stringify(ev.newValue)}.`,
+          badge: `Stream .${ev.streamOp || 'op'}()`,
+          details: { operation: ev.streamOp, input: ev.value, output: ev.newValue },
+        };
+        explanation = `Stream .${ev.streamOp || 'operation'}: ${JSON.stringify(ev.value)} -> ${JSON.stringify(ev.newValue)}`;
         break;
       }
 
@@ -6555,6 +7095,44 @@ export function reconstructExecutionSteps(
       });
     }
 
+    // Phase 10: Custom OOP Objects in Heap
+    for (const obj of Object.values(nextCustomObjects)) {
+      const refVars = Object.values(nextVariables)
+        .filter(
+          v =>
+            v.refTargetId === obj.id ||
+            v.value === obj.id ||
+            (typeof v.value === 'string' &&
+              (v.value.includes(`@${obj.id}`) ||
+                v.value.includes(`${obj.className}@`) ||
+                v.value.includes(`@${obj.id.replace(/\D/g, '')}`)))
+        )
+        .map(v => v.name);
+
+      const estBytes = 24 + Object.keys(obj.fields).length * 8;
+      heapBytes += estBytes;
+      nextHeap.push({
+        id: obj.id.startsWith('@') ? obj.id : `@${obj.id}`,
+        type: obj.className,
+        className: obj.className,
+        label: `${obj.className}#${obj.id.replace(/\D/g, '') || '1'}`,
+        fields: { ...obj.fields },
+        estimatedBytes: estBytes,
+        referencesTo: Object.values(obj.fields)
+          .filter(v => typeof v === 'string' && (v.startsWith('obj-') || v.startsWith('@obj-') || v.startsWith('obj_')))
+          .map(v => v.replace(/^@/, '')),
+        referencesFrom: refVars,
+        gcEligible: refVars.length === 0,
+        creationStep: obj.creationStep,
+        lifecycle: refVars.length === 0 ? 'GC_ELIGIBLE' : obj.lifecycle,
+      });
+    }
+
+    // Ensure main thread's callStack mirrors nextCallStack
+    if (nextThreads['main']) {
+      nextThreads['main'].callStack = nextCallStack;
+    }
+
     // Calculate educational delta: "Why did this change?" (Section 41)
     let changeTarget = '';
     let changeOldVal: any = undefined;
@@ -6607,7 +7185,7 @@ export function reconstructExecutionSteps(
       nextAlgorithmState.detectionConfidence = 'DERIVED_STRUCTURE';
       nextAlgorithmState.confidencePercent = 85;
       nextAlgorithmState.derivationLabel = 'Derived Graph View';
-    } else if (Object.keys(nextStructures).length > 0 || Object.keys(nextVariables).length > 0) {
+    } else if (Object.keys(nextStructures).length > 0 || Object.keys(nextVariables).length > 0 || Object.keys(nextCustomObjects).length > 0) {
       nextAlgorithmState.detectionConfidence = 'RUNTIME_STATE';
       nextAlgorithmState.confidencePercent = 100;
     } else {
@@ -6625,6 +7203,14 @@ export function reconstructExecutionSteps(
     currentError = nextError;
     currentMetrics = nextMetrics;
     currentAlgorithmState = nextAlgorithmState;
+    // Phase 10 JVM tracking
+    currentStaticFields = nextStaticFields;
+    currentThreads = nextThreads;
+    currentLocks = nextLocks;
+    currentDeadlock = nextDeadlock;
+    currentActiveConcept = nextActiveConcept;
+    currentCustomObjects = nextCustomObjects;
+    currentStringPool = nextStringPool;
 
     steps.push({
       stepIndex: i,
@@ -6646,6 +7232,13 @@ export function reconstructExecutionSteps(
         totalBytes: stackBytes + heapBytes,
       },
       algorithmState: nextAlgorithmState,
+      // Phase 10: JVM & OOP State
+      staticFields: nextStaticFields,
+      threads: nextThreads,
+      locks: nextLocks,
+      deadlockDetected: nextDeadlock,
+      activeJavaConcept: nextActiveConcept,
+      stringPool: nextStringPool,
     });
   }
 

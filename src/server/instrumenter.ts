@@ -1004,6 +1004,109 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
+    // Phase 10: Exception Handling (try, catch, finally, throw)
+    if (trimmed.startsWith('try') && (trimmed === 'try' || trimmed.startsWith('try ') || trimmed.startsWith('try{') || trimmed.startsWith('try('))) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.tryEnter(${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    const catchMatch = trimmed.match(/^catch\s*\(\s*([A-Za-z0-9_]+)\s+([a-zA-Z_0-9]+)\s*\)/);
+    if (catchMatch) {
+      const excType = catchMatch[1];
+      const excVar = catchMatch[2];
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.catchEnter("${excType}", ${excVar}, ${lineNum});`);
+      continue;
+    }
+
+    if (trimmed.startsWith('finally') && (trimmed === 'finally' || trimmed.startsWith('finally ') || trimmed.startsWith('finally{'))) {
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.finallyEnter(${lineNum});`);
+      continue;
+    }
+
+    const throwMatch = trimmed.match(/^throw\s+(.+);$/);
+    if (throwMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    { var _throwObj = (${throwMatch[1]}); CodeFlowTracer.throwException(_throwObj, ${lineNum}); throw _throwObj; }`);
+      continue;
+    }
+
+    // Phase 10: Multithreading & Synchronization
+    const threadStartMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.start\(\);?$/);
+    if (threadStartMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadStart(${threadStartMatch[1]}, ${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    const sleepMatch = trimmed.match(/^Thread\.sleep\((.+)\);?$/);
+    if (sleepMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadState(Thread.currentThread().getName(), "TIMED_WAITING", ${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadState(Thread.currentThread().getName(), "RUNNABLE", ${lineNum});`);
+      continue;
+    }
+
+    const joinMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.join\(\);?$/);
+    if (joinMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadState("main", "WAITING", ${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadState("main", "RUNNABLE", ${lineNum});`);
+      continue;
+    }
+
+    const syncMatch = trimmed.match(/^synchronized\s*\((.+)\)/);
+    if (syncMatch) {
+      const lockExpr = syncMatch[1].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.lockAcquire("${lockExpr}", Thread.currentThread().getName(), ${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    // Phase 10: Static field updates (e.g. Counter.count = 3; or Counter.count++;)
+    const staticAssignMatch = trimmed.match(/^([A-Z][a-zA-Z_0-9]*)\.([a-zA-Z_0-9]+)\s*=\s*(.+);$/);
+    if (staticAssignMatch && !trimmed.startsWith('System.out.') && !trimmed.startsWith('Math.')) {
+      const clsName = staticAssignMatch[1];
+      const fldName = staticAssignMatch[2];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.staticFieldUpdate("${clsName}", "${fldName}", ${clsName}.${fldName}, ${lineNum});`);
+      continue;
+    }
+
+    const staticIncMatch = trimmed.match(/^([A-Z][a-zA-Z_0-9]*)\.([a-zA-Z_0-9]+)\s*(\+\+|--);$/);
+    if (staticIncMatch) {
+      const clsName = staticIncMatch[1];
+      const fldName = staticIncMatch[2];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.staticFieldUpdate("${clsName}", "${fldName}", ${clsName}.${fldName}, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 10: Polymorphic Method Call (e.g. a.sound();)
+    const methodCallMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.([a-zA-Z_0-9]+)\((.*)\);?$/);
+    if (methodCallMatch && !trimmed.startsWith('System.') && !trimmed.startsWith('CodeFlowTracer.') && !trimmed.startsWith('Thread.') && !['add', 'remove', 'get', 'put', 'offer', 'poll', 'push', 'pop', 'contains', 'containsKey', 'start', 'join', 'sleep', 'insert', 'search', 'delete'].includes(methodCallMatch[2])) {
+      const targetVar = methodCallMatch[1];
+      const mName = methodCallMatch[2];
+      const knownType = varTypes.get(targetVar);
+      if (knownType && !['List', 'ArrayList', 'LinkedList', 'Map', 'HashMap', 'Set', 'HashSet', 'Stack', 'Queue', 'PriorityQueue'].includes(knownType)) {
+        outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+        outputLines.push(`    CodeFlowTracer.polymorphicCall(${targetVar}, "${knownType}", "${mName}()", ${lineNum});`);
+        outputLines.push(rawLine);
+        continue;
+      }
+    }
+
     // 4. UNIVERSAL VARIABLE DECLARATION (primitives, arrays, collections, custom objects, nulls)
     const varDeclMatch = trimmed.match(/^(?:final\s+)?([A-Za-z0-9_<>\[\],\s]+?)\s+([a-zA-Z_0-9]+)\s*=\s*(.+);$/);
     if (varDeclMatch && !/^(return|throw|assert|package|import|break|continue|else)\b/.test(trimmed)) {
@@ -1017,6 +1120,10 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       varTypes.set(varName, declaredType);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
+
+      if (rhsExpr.startsWith('new ') && !rhsExpr.includes('[') && !rhsExpr.includes('List') && !rhsExpr.includes('Map') && !rhsExpr.includes('Set') && !rhsExpr.includes('Stack') && !rhsExpr.includes('Queue')) {
+        outputLines.push(`    CodeFlowTracer.objectCreate("${varName}", "${declaredType}", ${varName}, ${lineNum});`);
+      }
 
       const pollMatch = rhsExpr.match(/^([a-zA-Z_0-9]+)\.(?:poll|pop|remove)\(\)/);
       if (pollMatch) {
@@ -1041,8 +1148,22 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     if (fieldAssignMatch && !trimmed.startsWith('System.out.')) {
       const fieldExpr = fieldAssignMatch[1];
       const rootVar = fieldExpr.split('.')[0];
+      const fieldSub = fieldExpr.substring(fieldExpr.indexOf('.') + 1);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.fieldUpdate(${rootVar}, "${fieldSub}", ${fieldExpr}, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackObjectMutation(${rootVar}, "${rootVar}", ${lineNum});`);
+      continue;
+    }
+
+    const fieldIncMatch = trimmed.match(/^([a-zA-Z_0-9]+(?:\.[a-zA-Z_0-9]+)+)\s*(\+\+|--);$/);
+    if (fieldIncMatch && !trimmed.startsWith('System.out.')) {
+      const fieldExpr = fieldIncMatch[1];
+      const rootVar = fieldExpr.split('.')[0];
+      const fieldSub = fieldExpr.substring(fieldExpr.indexOf('.') + 1);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.fieldUpdate(${rootVar}, "${fieldSub}", ${fieldExpr}, ${lineNum});`);
       outputLines.push(`    CodeFlowTracer.trackObjectMutation(${rootVar}, "${rootVar}", ${lineNum});`);
       continue;
     }

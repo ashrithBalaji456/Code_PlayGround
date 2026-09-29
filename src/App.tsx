@@ -12,12 +12,13 @@ import { AlgorithmsPanel } from './components/panels/AlgorithmsPanel';
 import { EducationalInspectorPanel } from './components/panels/EducationalInspectorPanel';
 import { TimelineInspectorPanel } from './components/panels/TimelineInspectorPanel';
 import { LearningModePanel } from './components/panels/LearningModePanel';
+import { JavaConceptPanel } from './components/panels/JavaConceptPanel';
 import { HelpModal } from './components/HelpModal';
 import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
 import { reconstructExecutionSteps } from './engine/stateReconstructor';
-import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles } from 'lucide-react';
+import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles, BookOpen } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -36,7 +37,7 @@ export function App() {
   const [speed, setSpeed] = useState<number>(1);
   const [breakpoints, setBreakpoints] = useState<number[]>([]);
 
-  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline'>('structures');
+  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline' | 'concept'>('structures');
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
@@ -513,6 +514,23 @@ export function App() {
                         </span>
                       )}
                     </button>
+
+                    <button
+                      onClick={() => setActiveBottomTab('concept')}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
+                        activeBottomTab === 'concept'
+                          ? 'border-[#e3b341] text-[#e3b341] bg-[#161b22]'
+                          : 'border-transparent text-[#8b949e] hover:text-[#f0f6fc]'
+                      }`}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Java Concept</span>
+                      {currentStep?.activeJavaConcept && (
+                        <span className="text-[10px] bg-[#e3b341]/20 text-[#e3b341] px-1.5 rounded-full font-bold">
+                          {currentStep.activeJavaConcept.name.split(' ')[0]}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -543,6 +561,10 @@ export function App() {
                           totalBytes: 0,
                         }
                       }
+                      staticFields={currentStep?.staticFields || {}}
+                      threads={currentStep?.threads || {}}
+                      locks={currentStep?.locks || {}}
+                      stringPool={currentStep?.stringPool || []}
                     />
                   )}
                   {activeBottomTab === 'callstack' && (
@@ -562,6 +584,12 @@ export function App() {
                       steps={steps}
                       currentStepIndex={currentStepIndex}
                       onScrub={(idx) => setCurrentStepIndex(idx)}
+                    />
+                  )}
+                  {activeBottomTab === 'concept' && (
+                    <JavaConceptPanel
+                      concept={currentStep?.activeJavaConcept}
+                      line={currentStep?.line}
                     />
                   )}
                 </div>

@@ -18,6 +18,7 @@ import { StringVisualizer } from './visualizers/StringVisualizer';
 import { NumberVisualizer } from './visualizers/NumberVisualizer';
 import { SegmentTreeVisualizer } from './visualizers/SegmentTreeVisualizer';
 import { FenwickVisualizer } from './visualizers/FenwickVisualizer';
+import { JvmObjectVisualizer } from './visualizers/JvmObjectVisualizer';
 import { Sparkles, AlertCircle, ArrowRightLeft } from 'lucide-react';
 
 interface VisualizationCanvasProps {
@@ -260,7 +261,11 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
           {error.brokenReference && (
             <div className="flex items-center gap-2 text-xs font-mono bg-[#161b22] p-2 rounded border border-[#30363d] text-[#f85149]">
               <span>Broken Pointer:</span>
-              <span className="font-bold text-[#f0f6fc]">{error.brokenReference.source}</span>
+              <span className="font-bold text-[#f0f6fc]">
+                {typeof error.brokenReference === 'object'
+                  ? error.brokenReference.source
+                  : (error.variableName || 'p')}
+              </span>
               <span>────✖</span>
               <span className="italic font-bold">null (Cannot dereference null object!)</span>
             </div>
@@ -268,11 +273,29 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
         </div>
       )}
 
+      {/* Educational JVM Object & Memory View (Phase 10) */}
+      {(() => {
+        const hasJvmObjects =
+          currentStep.heap.some((h) => h.className) ||
+          (currentStep.staticFields && Object.keys(currentStep.staticFields).length > 0) ||
+          (currentStep.threads && Object.keys(currentStep.threads).length > 1) ||
+          !!currentStep.activeJavaConcept ||
+          (structures.length === 0 && Object.keys(currentStep.variables).length > 0);
+
+        if (hasJvmObjects) {
+          return <JvmObjectVisualizer currentStep={currentStep} />;
+        }
+        return null;
+      })()}
+
       {/* Render Dynamic Structures */}
       {structures.length === 0 ? (
-        <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-8 text-center text-[#8b949e] font-mono text-sm">
-          No data structures initialized yet in current step.
-        </div>
+        !currentStep.heap.some((h) => h.className) &&
+        Object.keys(currentStep.variables).length === 0 && (
+          <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-8 text-center text-[#8b949e] font-mono text-sm">
+            No data structures initialized yet in current step.
+          </div>
+        )
       ) : (
         <div className="flex flex-col gap-4">
           {/* Top Row for Multiple Stacks if present */}

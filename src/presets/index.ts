@@ -1,6 +1,8 @@
 import { CodePreset } from '../types/execution';
+import { PHASE_10_JAVA_PRESETS } from './phase10Presets';
 
 export const CODE_PRESETS: CodePreset[] = [
+  ...PHASE_10_JAVA_PRESETS,
   {
     id: 'p1-ex3-loop',
     title: 'Example 3 — Loop (Core Demo)',
