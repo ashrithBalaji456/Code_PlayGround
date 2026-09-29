@@ -669,59 +669,59 @@ export function App() {
       {/* ─── FULLSCREEN CANVAS WORKSPACE OVERLAY ─── */}
       {isCanvasFullscreen && (
         <div className="fixed inset-0 z-50 bg-[#0b0e14] flex flex-col overflow-hidden text-[#f0f6fc]">
-          {/* Top Fullscreen Header with Playback Controls */}
-          <header className="h-14 bg-[#161b22] border-b border-[#30363d] px-4 flex items-center justify-between gap-4 shadow-xl z-20 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-[#0d1117] border border-[#30363d] px-3 py-1.5 rounded-lg shadow-sm">
+          {/* Top Fullscreen Header with Title, Preset and Exit Button */}
+          <header className="h-10 bg-[#161b22] border-b border-[#30363d] px-4 flex items-center justify-between gap-4 shadow-sm z-30 flex-shrink-0">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="flex items-center gap-2 bg-[#0d1117] border border-[#30363d] px-2.5 py-1 rounded-md shadow-sm flex-shrink-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#3fb950] animate-pulse" />
                 <span className="text-xs font-bold tracking-wide text-[#f0f6fc]">
                   FULL VISUALIZER CANVAS
                 </span>
               </div>
-              <span className="text-xs text-[#8b949e] font-mono hidden md:inline">
+              <span className="text-xs text-[#8b949e] font-mono truncate">
                 Preset: <span className="text-[#58a6ff] font-semibold">{selectedPreset.title}</span>
               </span>
-            </div>
-
-            {/* Compact Execution Controls in Fullscreen Header */}
-            <div className="flex items-center gap-2">
-              <ExecutionControls
-                isRunning={isRunning}
-                isPaused={isPaused}
-                executionStatus={executionStatus}
-                currentLine={activeLine}
-                workerName={workerName}
-                currentStepIndex={currentStepIndex}
-                totalSteps={steps.length}
-                speed={speed}
-                onRun={handleRun}
-                onPause={handlePause}
-                onResume={handleResume}
-                onStop={handleStop}
-                onRestart={handleRestart}
-                onNextStep={handleNextStep}
-                onPrevStep={handlePrevStep}
-                onStepOver={handleNextStep}
-                onStepInto={handleNextStep}
-                onStepOut={handleNextStep}
-                onSpeedChange={setSpeed}
-                onScrub={handleScrub}
-              />
             </div>
 
             {/* Exit Fullscreen Button */}
             <button
               onClick={() => setIsCanvasFullscreen(false)}
-              className="flex items-center gap-2 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+              className="flex items-center gap-1.5 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] text-xs font-semibold px-3 py-1 rounded-lg transition-colors shadow-sm flex-shrink-0"
               title="Exit Fullscreen Canvas (Esc)"
             >
-              <Minimize2 className="w-4 h-4 text-[#58a6ff]" />
+              <Minimize2 className="w-3.5 h-3.5 text-[#58a6ff]" />
               <span className="hidden sm:inline">Exit Fullscreen</span>
               <kbd className="hidden md:inline px-1.5 py-0.5 text-[10px] font-mono bg-[#0d1117] border border-[#30363d] rounded text-[#8b949e]">
                 ESC
               </kbd>
             </button>
           </header>
+
+          {/* Dedicated Full-Width Execution Controls Toolbar — 100% visible, no clipping */}
+          <div className="flex-shrink-0 z-20">
+            <ExecutionControls
+              isRunning={isRunning}
+              isPaused={isPaused}
+              executionStatus={executionStatus}
+              currentLine={activeLine}
+              workerName={workerName}
+              currentStepIndex={currentStepIndex}
+              totalSteps={steps.length}
+              speed={speed}
+              onRun={handleRun}
+              onPause={handlePause}
+              onResume={handleResume}
+              onStop={handleStop}
+              onRestart={handleRestart}
+              onNextStep={handleNextStep}
+              onPrevStep={handlePrevStep}
+              onStepOver={handleNextStep}
+              onStepInto={handleNextStep}
+              onStepOut={handleNextStep}
+              onSpeedChange={setSpeed}
+              onScrub={handleScrub}
+            />
+          </div>
 
           {/* Fullscreen Canvas Content */}
           <main className="flex-1 overflow-hidden relative">

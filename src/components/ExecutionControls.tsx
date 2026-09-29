@@ -36,6 +36,7 @@ interface ExecutionControlsProps {
   onStepOut: () => void;
   onSpeedChange: (speed: number) => void;
   onScrub: (stepIndex: number) => void;
+  className?: string;
 }
 
 export const ExecutionControls: React.FC<ExecutionControlsProps> = ({
@@ -59,15 +60,16 @@ export const ExecutionControls: React.FC<ExecutionControlsProps> = ({
   onStepOut,
   onSpeedChange,
   onScrub,
+  className = '',
 }) => {
   const hasSteps = totalSteps > 0;
   const isAtStart = currentStepIndex <= 0;
   const isAtEnd = currentStepIndex >= totalSteps - 1;
 
   return (
-    <div className="bg-[#161b22] border-b border-[#30363d] px-4 py-2 flex flex-wrap items-center justify-between gap-3 shadow-md select-none">
+    <div className={`bg-[#161b22] border-b border-[#30363d] px-4 py-2 flex flex-wrap items-center justify-between gap-3 shadow-md select-none ${className}`}>
       {/* Primary Action Buttons */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         {!isRunning ? (
           <button
             onClick={onRun}
