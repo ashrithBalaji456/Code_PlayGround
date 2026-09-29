@@ -489,22 +489,47 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
             <span className="text-xs font-bold text-[#39c5cf]">Active JVM Threads & Intrinsic Locks</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5 flex flex-col gap-2">
-                <span className="font-bold text-xs text-[#39c5cf]">Threads</span>
-                {Object.values(threads).map((th) => (
-                  <div key={th.id} className="p-2 rounded bg-[#161b22] border border-[#30363d] flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-[#f0f6fc]">{th.name}</span>
-                      <span className="text-[10px] text-[#8b949e] block">ID: {th.id} | Stack Frames: {th.callStack.length}</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-[#39c5cf]">JVM Threads (Thread-Local Memory)</span>
+                  <span className="text-[10px] text-[#8b949e]">Independent Stacks</span>
+                </div>
+                {Object.values(threads).length === 0 ? (
+                  <span className="text-[#8b949e] italic py-3 text-center">No active threads</span>
+                ) : (
+                  Object.values(threads).map((th) => (
+                    <div key={th.id || th.name} className="p-2 rounded bg-[#161b22] border border-[#30363d] flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-[#f0f6fc]">{th.name}</span>
+                          <span className="text-[10px] text-[#8b949e] font-mono">(ID: {th.id || 'N/A'})</span>
+                        </div>
+                        <span className="text-[10px] text-[#8b949e] block mt-0.5">
+                          Stack Frames: {th.callStack?.length ?? th.stackFrames?.length ?? 0} | Priority: {th.priority ?? 5}
+                        </span>
+                        {th.ownedLocks && th.ownedLocks.length > 0 && (
+                          <span className="text-[10px] text-[#e3b341] block">
+                            Holds Locks: {th.ownedLocks.join(', ')}
+                          </span>
+                        )}
+                        {th.waitingFor && (
+                          <span className="text-[10px] text-amber-400 block">
+                            Waiting for: {th.waitingFor}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#39c5cf]/20 text-[#39c5cf] border border-[#39c5cf]/40 font-mono">
+                        {th.state}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#39c5cf]/20 text-[#39c5cf] border border-[#39c5cf]/40">
-                      {th.state}
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5 flex flex-col gap-2">
-                <span className="font-bold text-xs text-[#d29922]">Intrinsic Locks (Monitors)</span>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-[#d29922]">Intrinsic Locks (Monitors)</span>
+                  <span className="text-[10px] text-[#8b949e]">Shared Synchronization</span>
+                </div>
                 {Object.keys(locks).length === 0 ? (
                   <span className="text-[#8b949e] italic py-3 text-center">No active monitors</span>
                 ) : (
@@ -512,11 +537,18 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                     <div key={lk.id} className="p-2 rounded bg-[#161b22] border border-[#30363d] flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-[#d29922]">Lock [{lk.name}]</span>
-                        <span className="text-[10px] text-[#3fb950]">{lk.ownerThreadId ? `Held by ${lk.ownerThreadId}` : 'Free'}</span>
+                        <span className="text-[10px] font-mono text-[#3fb950]">
+                          {lk.ownerThreadId ? `Held by ${lk.ownerThreadId}` : 'Free'}
+                        </span>
                       </div>
-                      {lk.waitingThreadIds.length > 0 && (
+                      {(lk.entryQueue && lk.entryQueue.length > 0) && (
                         <div className="text-[10px] text-[#f85149]">
-                          Waiting Threads: {lk.waitingThreadIds.join(', ')}
+                          Entry Queue (BLOCKED): {lk.entryQueue.join(', ')}
+                        </div>
+                      )}
+                      {(lk.waitSet && lk.waitSet.length > 0) && (
+                        <div className="text-[10px] text-amber-400">
+                          Wait Set (WAITING): {lk.waitSet.join(', ')}
                         </div>
                       )}
                     </div>

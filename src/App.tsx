@@ -13,6 +13,7 @@ import { EducationalInspectorPanel } from './components/panels/EducationalInspec
 import { TimelineInspectorPanel } from './components/panels/TimelineInspectorPanel';
 import { LearningModePanel } from './components/panels/LearningModePanel';
 import { JavaConceptPanel } from './components/panels/JavaConceptPanel';
+import { ThreadsPanel } from './components/panels/ThreadsPanel';
 import { HelpModal } from './components/HelpModal';
 import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
@@ -37,7 +38,7 @@ export function App() {
   const [speed, setSpeed] = useState<number>(1);
   const [breakpoints, setBreakpoints] = useState<number[]>([]);
 
-  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline' | 'concept'>('structures');
+  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline' | 'concept' | 'threads'>('structures');
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
@@ -531,6 +532,26 @@ export function App() {
                         </span>
                       )}
                     </button>
+
+                    <button
+                      onClick={() => setActiveBottomTab('threads')}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
+                        activeBottomTab === 'threads'
+                          ? 'border-[#58a6ff] text-[#58a6ff] bg-[#161b22]'
+                          : 'border-transparent text-[#8b949e] hover:text-[#f0f6fc]'
+                      }`}
+                    >
+                      <Cpu className="w-3.5 h-3.5" />
+                      <span>Threads</span>
+                      {currentStep?.threads && Object.keys(currentStep.threads).length > 0 && (
+                        <span className="text-[10px] bg-[#58a6ff]/20 text-[#58a6ff] px-1.5 rounded-full font-bold">
+                          {Object.keys(currentStep.threads).length}
+                        </span>
+                      )}
+                      {currentStep?.deadlockDetected && (
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -593,6 +614,9 @@ export function App() {
                       line={currentStep?.line}
                       beginnerExplanation={currentStep?.beginnerExplanation}
                     />
+                  )}
+                  {activeBottomTab === 'threads' && (
+                    <ThreadsPanel currentStep={currentStep} />
                   )}
                 </div>
               </div>

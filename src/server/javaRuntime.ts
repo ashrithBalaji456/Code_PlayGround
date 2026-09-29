@@ -59,6 +59,14 @@ public class CodeFlowTracer {
         if (stepCounter >= MAX_STEPS) {
             throw new RuntimeException("CodeFlow Safety Limit: Exceeded " + MAX_STEPS + " execution steps. Possible infinite loop.");
         }
+        try {
+            Thread curr = Thread.currentThread();
+            if (curr != null && !json.contains("threadName")) {
+                if (json.endsWith("}")) {
+                    json = json.substring(0, json.length() - 1) + ",\\"threadId\\":\\"" + curr.getId() + "\\",\\"threadName\\":\\"" + curr.getName() + "\\"}";
+                }
+            }
+        } catch (Throwable ignored) {}
         events.add(json);
     }
 
@@ -211,13 +219,60 @@ public class CodeFlowTracer {
         recordEvent("{\\\"type\\\":\\\"EXCEPTION_THROW\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"dataType\\\":\\\"" + type + "\\\",\\\"message\\\":\\\"" + msg + "\\\"}");
     }
 
+    // ==========================================
+    // PHASE 13: ADVANCED MULTITHREADING & CONCURRENCY
+    // ==========================================
+
+    public static void threadCreate(Thread t, int line) {
+        if (t == null) return;
+        recordEvent("{\\\"type\\\":\\\"THREAD_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadId\\\":\\\"" + t.getId() + "\\\",\\\"threadName\\\":\\\"" + t.getName() + "\\\",\\\"threadState\\\":\\\"NEW\\\",\\\"parentThreadName\\\":\\\"" + Thread.currentThread().getName() + "\\\"}");
+    }
+
     public static void threadStart(Thread t, int line) {
         if (t == null) return;
-        recordEvent("{\\\"type\\\":\\\"THREAD_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadId\\\":\\\"" + t.getId() + "\\\",\\\"threadName\\\":\\\"" + t.getName() + "\\\",\\\"threadState\\\":\\\"RUNNABLE\\\"}");
+        recordEvent("{\\\"type\\\":\\\"THREAD_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadId\\\":\\\"" + t.getId() + "\\\",\\\"threadName\\\":\\\"" + t.getName() + "\\\",\\\"threadState\\\":\\\"RUNNABLE\\\",\\\"parentThreadName\\\":\\\"" + Thread.currentThread().getName() + "\\\"}");
+    }
+
+    public static void threadRunDirect(Thread t, int line) {
+        String targetName = t != null ? t.getName() : "Thread";
+        recordEvent("{\\\"type\\\":\\\"THREAD_RUN_DIRECT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"targetThreadName\\\":\\\"" + targetName + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"isStartVsRunWarning\\\":true}");
     }
 
     public static void threadState(String threadName, String state, int line) {
         recordEvent("{\\\"type\\\":\\\"THREAD_STATE_CHANGE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadName\\\":\\\"" + threadName + "\\\",\\\"threadState\\\":\\\"" + state + "\\\"}");
+    }
+
+    public static void threadName(Thread t, String newName, int line) {
+        if (t == null) return;
+        recordEvent("{\\\"type\\\":\\\"THREAD_NAME_CHANGE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadId\\\":\\\"" + t.getId() + "\\\",\\\"threadName\\\":\\\"" + newName + "\\\"}");
+    }
+
+    public static void threadPriority(Thread t, int priority, int line) {
+        if (t == null) return;
+        recordEvent("{\\\"type\\\":\\\"THREAD_PRIORITY_CHANGE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadId\\\":\\\"" + t.getId() + "\\\",\\\"threadName\\\":\\\"" + t.getName() + "\\\",\\\"priority\\\":" + priority + "}");
+    }
+
+    public static void threadInterrupt(Thread t, int line) {
+        if (t == null) return;
+        recordEvent("{\\\"type\\\":\\\"THREAD_INTERRUPT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"targetThreadName\\\":\\\"" + t.getName() + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\"}");
+    }
+
+    public static void threadJoinStart(Thread t, int line) {
+        String target = t != null ? t.getName() : "worker";
+        recordEvent("{\\\"type\\\":\\\"THREAD_JOIN_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"targetThreadName\\\":\\\"" + target + "\\\",\\\"threadState\\\":\\\"WAITING\\\"}");
+    }
+
+    public static void threadJoinEnd(Thread t, int line) {
+        String target = t != null ? t.getName() : "worker";
+        recordEvent("{\\\"type\\\":\\\"THREAD_JOIN_END\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"targetThreadName\\\":\\\"" + target + "\\\",\\\"threadState\\\":\\\"RUNNABLE\\\"}");
+    }
+
+    public static void threadSleepStart(long millis, int line) {
+        recordEvent("{\\\"type\\\":\\\"THREAD_SLEEP_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"threadState\\\":\\\"TIMED_WAITING\\\",\\\"value\\\":" + millis + "}");
+    }
+
+    public static void threadSleepEnd(int line) {
+        recordEvent("{\\\"type\\\":\\\"THREAD_SLEEP_END\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"threadState\\\":\\\"RUNNABLE\\\"}");
     }
 
     public static void lockAcquire(String lockName, String threadName, int line) {
@@ -230,6 +285,52 @@ public class CodeFlowTracer {
 
     public static void lockWait(String lockName, String threadName, int line) {
         recordEvent("{\\\"type\\\":\\\"LOCK_WAIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"lockName\\\":\\\"" + lockName + "\\\",\\\"threadName\\\":\\\"" + threadName + "\\\"}");
+    }
+
+    public static void monitorWait(Object lock, int line) {
+        String lockName = lock != null ? (lock.getClass().getSimpleName() + "@" + System.identityHashCode(lock)) : "lock";
+        recordEvent("{\\\"type\\\":\\\"MONITOR_WAIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"lockName\\\":\\\"" + lockName + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"threadState\\\":\\\"WAITING\\\"}");
+    }
+
+    public static void monitorNotify(Object lock, boolean isAll, int line) {
+        String lockName = lock != null ? (lock.getClass().getSimpleName() + "@" + System.identityHashCode(lock)) : "lock";
+        recordEvent("{\\\"type\\\":\\\"" + (isAll ? "MONITOR_NOTIFY_ALL" : "MONITOR_NOTIFY") + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"lockName\\\":\\\"" + lockName + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\"}");
+    }
+
+    public static void atomicOp(String varName, String op, Object oldVal, Object newVal, int line) {
+        recordEvent("{\\\"type\\\":\\\"ATOMIC_OP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"atomicOp\\\":\\\"" + op + "\\\",\\\"oldValue\\\":" + formatValue(oldVal) + ",\\\"newValue\\\":" + formatValue(newVal) + ",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\"}");
+    }
+
+    public static void executorInit(String poolType, int poolSize, int line) {
+        recordEvent("{\\\"type\\\":\\\"EXECUTOR_INIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"poolType\\\":\\\"" + poolType + "\\\",\\\"poolSize\\\":" + poolSize + "}");
+    }
+
+    public static void executorSubmit(String taskId, String taskName, int line) {
+        recordEvent("{\\\"type\\\":\\\"EXECUTOR_SUBMIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"taskId\\\":\\\"" + taskId + "\\\",\\\"taskName\\\":\\\"" + taskName + "\\\",\\\"taskStatus\\\":\\\"QUEUED\\\"}");
+    }
+
+    public static void executorTaskStart(String taskId, int line) {
+        recordEvent("{\\\"type\\\":\\\"EXECUTOR_TASK_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"taskId\\\":\\\"" + taskId + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"taskStatus\\\":\\\"RUNNING\\\"}");
+    }
+
+    public static void executorTaskComplete(String taskId, Object result, int line) {
+        recordEvent("{\\\"type\\\":\\\"EXECUTOR_TASK_COMPLETE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"taskId\\\":\\\"" + taskId + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"taskStatus\\\":\\\"COMPLETED\\\",\\\"value\\\":" + formatValue(result) + "}");
+    }
+
+    public static void futureGetStart(String taskId, int line) {
+        recordEvent("{\\\"type\\\":\\\"FUTURE_GET_START\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"taskId\\\":\\\"" + taskId + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"threadState\\\":\\\"WAITING\\\"}");
+    }
+
+    public static void futureGetEnd(String taskId, Object result, int line) {
+        recordEvent("{\\\"type\\\":\\\"FUTURE_GET_END\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"taskId\\\":\\\"" + taskId + "\\\",\\\"threadName\\\":\\\"" + Thread.currentThread().getName() + "\\\",\\\"value\\\":" + formatValue(result) + ",\\\"threadState\\\":\\\"RUNNABLE\\\"}");
+    }
+
+    public static void raceConditionObserved(String varName, Object expected, Object actual, String threads, int line) {
+        recordEvent("{\\\"type\\\":\\\"RACE_CONDITION_OBSERVED\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"value\\\":" + formatValue(expected) + ",\\\"newValue\\\":" + formatValue(actual) + ",\\\"threadName\\\":\\\"" + threads + "\\\"}");
+    }
+
+    public static void concurrentCollectionOp(String colName, String colType, String op, Object keyOrVal, int line) {
+        recordEvent("{\\\"type\\\":\\\"CONCURRENT_COLLECTION_OP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + colName + "\\\",\\\"dataType\\\":\\\"" + colType + "\\\",\\\"concurrencyAction\\\":\\\"" + op + "\\\",\\\"value\\\":" + formatValue(keyOrVal) + "}");
     }
 
     public static void deadlockDetected(String threadA, String lock1, String lock2, String threadB, int line) {

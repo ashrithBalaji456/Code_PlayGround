@@ -17,6 +17,10 @@ import {
   ThreadState,
   LockState,
   JavaConceptInfo,
+  ExecutorPoolState,
+  RaceConditionInfo,
+  DeadlockGraphInfo,
+  ConcurrencyStepInfo,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -249,6 +253,105 @@ function computeBeginnerExplanation(
       };
     }
 
+    case 'THREAD_CREATE':
+      return {
+        what: `Created Thread '${ev.threadName || 'Thread'}' in NEW state.`,
+        why: `A new Thread object exists on the heap, but it has not been scheduled or started yet. It will begin executing only when start() is called.`,
+        actionType: 'THREAD_CREATE',
+      };
+
+    case 'THREAD_START':
+      return {
+        what: `Thread '${ev.threadName || 'Thread'}' started (State: RUNNABLE).`,
+        why: `start() requests the JVM/OS thread scheduler to allocate an independent call stack and run the thread concurrently.`,
+        actionType: 'THREAD_START',
+      };
+
+    case 'THREAD_RUN_DIRECT':
+      return {
+        what: `Called run() directly on Thread '${ev.targetThreadName || 'Thread'}'!`,
+        why: `WHAT IS THE DIFFERENCE BETWEEN start() AND run()? Calling run() does NOT create a new thread! It runs synchronously like a normal method on the caller thread ('${ev.threadName || 'main'}').`,
+        actionType: 'THREAD_RUN_DIRECT',
+      };
+
+    case 'THREAD_JOIN_START':
+      return {
+        what: `Thread '${ev.threadName || 'main'}' is waiting for '${ev.targetThreadName || 'worker'}' via join().`,
+        why: `WHY IS MAIN WAITING? main() called join(), which halts the calling thread in WAITING state until '${ev.targetThreadName || 'worker'}' finishes all work and terminates.`,
+        actionType: 'JOIN_START',
+      };
+
+    case 'THREAD_JOIN_END':
+      return {
+        what: `Target thread '${ev.targetThreadName || 'worker'}' completed execution and terminated.`,
+        why: `The joined worker thread has finished, so waiting thread '${ev.threadName || 'main'}' resumes execution.`,
+        actionType: 'JOIN_END',
+      };
+
+    case 'THREAD_SLEEP_START':
+      return {
+        what: `Thread '${ev.threadName || 'main'}' paused execution for ${ev.value || 0}ms via Thread.sleep().`,
+        why: `WHY IS THE THREAD IN TIMED_WAITING? Thread.sleep() temporarily suspends the thread. Crucially, sleep() does NOT release any monitor locks acquired by the thread!`,
+        actionType: 'SLEEP_START',
+      };
+
+    case 'LOCK_ACQUIRE':
+      return {
+        what: `Thread '${ev.ownerThread || ev.threadName || 'thread'}' acquired monitor lock on '${ev.lockName}'.`,
+        why: `The thread entered a synchronized block or method. Intrinsic locks ensure mutual exclusion: only one thread can hold this lock at a time.`,
+        actionType: 'LOCK_ACQUIRE',
+      };
+
+    case 'LOCK_RELEASE':
+      return {
+        what: `Thread '${ev.ownerThread || ev.threadName || 'thread'}' released monitor lock on '${ev.lockName}'.`,
+        why: `Exited the synchronized section and relinquished lock ownership. Waiting threads can now contend for the lock.`,
+        actionType: 'LOCK_RELEASE',
+      };
+
+    case 'LOCK_WAIT':
+      return {
+        what: `Thread '${ev.threadName || 'worker'}' is BLOCKED waiting for lock '${ev.lockName}'.`,
+        why: `WHY IS WORKER BLOCKED? Another thread currently holds the monitor lock for this critical section. The blocked thread cannot continue until the lock is released.`,
+        actionType: 'LOCK_BLOCKED',
+      };
+
+    case 'MONITOR_WAIT':
+      return {
+        what: `Thread '${ev.threadName || 'thread'}' called wait() on monitor '${ev.lockName}'.`,
+        why: `WAITING VS BLOCKED: Calling wait() explicitly releases the monitor lock and places the thread into the monitor's Wait Set until notify() or notifyAll() is called.`,
+        actionType: 'MONITOR_WAIT',
+      };
+
+    case 'MONITOR_NOTIFY':
+    case 'MONITOR_NOTIFY_ALL':
+      return {
+        what: `Thread '${ev.threadName || 'thread'}' signaled ${ev.type === 'MONITOR_NOTIFY_ALL' ? 'all waiting threads' : 'one waiting thread'} on '${ev.lockName}'.`,
+        why: `Awakens thread(s) from the Wait Set and moves them to the Entry Queue so they can re-acquire the monitor lock.`,
+        actionType: 'MONITOR_NOTIFY',
+      };
+
+    case 'DEADLOCK_DETECTED':
+      return {
+        what: `DEADLOCK DETECTED! Circular lock dependency detected.`,
+        why: `WHY IS THE SYSTEM STUCK? Neither thread can proceed because Thread A holds Lock 1 and waits for Lock 2, while Thread B holds Lock 2 and waits for Lock 1. Prevention: Always acquire locks in a globally consistent order!`,
+        actionType: 'DEADLOCK',
+      };
+
+    case 'ATOMIC_OP':
+      return {
+        what: `Atomic operation ${ev.atomicOp} on '${ev.variable}': ${ev.oldValue} -> ${ev.newValue}.`,
+        why: `Atomic variables use low-level CPU Compare-And-Swap (CAS) instructions. The read-modify-write cycle occurs as a single atomic step without lock overhead.`,
+        actionType: 'ATOMIC_OP',
+      };
+
+    case 'RACE_CONDITION_OBSERVED':
+      return {
+        what: `Race condition observed on '${ev.variable}'! Expected ${ev.value}, but got ${ev.newValue}.`,
+        why: `WHY DID THE COUNTER CONFLICT? Multiple threads executed concurrent unsynchronized READ -> COMPUTE -> WRITE cycles, overwriting each other's updates.`,
+        actionType: 'RACE_CONDITION',
+      };
+
     case 'TRY_ENTER':
       return {
         what: `Entered try block. The JVM is monitoring the enclosed statements for any exceptions.`,
@@ -362,19 +465,29 @@ export function reconstructExecutionSteps(
   let currentComparison: ComparisonInfo | null = null;
   let currentError: ExecutionError | null = null;
   let currentHeap: HeapObject[] = [];
-  // Phase 10: JVM & OOP State Tracking
+  // Phase 10-13: JVM & Concurrency State Tracking
   let currentStaticFields: Record<string, Record<string, any>> = {};
   let currentThreads: Record<string, ThreadState> = {
     main: {
       id: '1',
       name: 'main',
       state: 'RUNNING',
+      priority: 5,
+      currentLine: 1,
+      currentMethod: 'main',
+      createdAt: 0,
+      startedAt: 0,
+      ownedLocks: [],
       callStack: currentCallStack,
+      stackFrames: currentCallStack,
     },
   };
   let currentLocks: Record<string, LockState> = {};
   let currentDeadlock = false;
   let currentActiveConcept: JavaConceptInfo | null = null;
+  let currentExecutor: ExecutorPoolState | undefined = undefined;
+  let currentRaceInfo: RaceConditionInfo | undefined = undefined;
+  let currentDeadlockInfo: DeadlockGraphInfo | undefined = undefined;
   let currentCustomObjects: Record<
     string,
     {
@@ -565,13 +678,16 @@ export function reconstructExecutionSteps(
 
     const nextThreads: Record<string, ThreadState> = {};
     for (const [tid, th] of Object.entries(currentThreads)) {
+      const clonedStack = th.callStack.map((f) => ({
+        ...f,
+        arguments: { ...f.arguments },
+        localVariables: { ...f.localVariables },
+      }));
       nextThreads[tid] = {
         ...th,
-        callStack: th.callStack.map((f) => ({
-          ...f,
-          arguments: { ...f.arguments },
-          localVariables: { ...f.localVariables },
-        })),
+        ownedLocks: th.ownedLocks ? [...th.ownedLocks] : [],
+        callStack: clonedStack,
+        stackFrames: clonedStack,
       };
     }
 
@@ -580,7 +696,52 @@ export function reconstructExecutionSteps(
       nextLocks[lid] = {
         ...lk,
         waitingThreadIds: [...lk.waitingThreadIds],
+        entryQueue: lk.entryQueue ? [...lk.entryQueue] : [...lk.waitingThreadIds],
+        waitSet: lk.waitSet ? [...lk.waitSet] : [],
       };
+    }
+
+    let nextExecutor: ExecutorPoolState | undefined = currentExecutor
+      ? {
+          poolName: currentExecutor.poolName,
+          poolSize: currentExecutor.poolSize,
+          activeWorkerThreads: [...currentExecutor.activeWorkerThreads],
+          taskQueue: currentExecutor.taskQueue.map((t: any) => ({ ...t })),
+          tasksCompleted: currentExecutor.tasksCompleted,
+        }
+      : undefined;
+
+    let nextRaceInfo: RaceConditionInfo | undefined = currentRaceInfo
+      ? {
+          isObserved: currentRaceInfo.isObserved,
+          variableName: currentRaceInfo.variableName,
+          threadsInvolved: [...currentRaceInfo.threadsInvolved],
+          expectedValue: currentRaceInfo.expectedValue,
+          actualValue: currentRaceInfo.actualValue,
+          explanation: currentRaceInfo.explanation,
+          conflictingAccesses: [...currentRaceInfo.conflictingAccesses],
+        }
+      : undefined;
+    let nextDeadlockInfo: DeadlockGraphInfo | undefined = currentDeadlockInfo
+      ? {
+          threads: currentDeadlockInfo.threads.map((t: any) => ({ ...t })),
+          preventionExplanation: currentDeadlockInfo.preventionExplanation,
+        }
+      : undefined;
+
+    let nextConcurrencyInfo: ConcurrencyStepInfo | undefined = undefined;
+    const currentThreadName = ev.threadName || 'main';
+    const currentThreadId = ev.threadId || (ev.threadName && ev.threadName !== 'main' ? ev.threadName : '1');
+
+    // Update active thread's currentLine
+    const activeTh = Object.values(nextThreads).find(
+      (t) => t.name === currentThreadName || t.id === currentThreadId
+    );
+    if (activeTh) {
+      activeTh.currentLine = ev.line || currentLine;
+      if (activeTh.state === 'RUNNABLE') {
+        activeTh.state = 'RUNNING';
+      }
     }
 
     let nextDeadlock: boolean = currentDeadlock;
@@ -1184,24 +1345,77 @@ export function reconstructExecutionSteps(
         break;
       }
 
-      case 'THREAD_START': {
-        const tid = ev.threadId || ev.threadName || 'Thread-1';
+      // ====================================================
+      // PHASE 13: ADVANCED JAVA MULTITHREADING & CONCURRENCY
+      // ====================================================
+
+      case 'THREAD_CREATE': {
+        const tid = ev.threadId || (ev.threadName && ev.threadName !== 'main' ? ev.threadName : 'thread-1');
         const tname = ev.threadName || 'Thread-1';
         nextThreads[tid] = {
           id: tid,
           name: tname,
-          state: 'RUNNABLE',
-          callStack: [
-            {
-              id: `frame-${tid}`,
-              functionName: 'run',
-              arguments: {},
-              localVariables: {},
-              line: ev.line || currentLine,
-              depth: 1,
-            },
-          ],
+          state: 'NEW',
+          priority: ev.priority || 5,
+          currentLine: ev.line || currentLine,
+          currentMethod: 'init',
+          createdAt: i,
+          parentThreadName: ev.parentThreadName || 'main',
+          ownedLocks: [],
+          callStack: [],
+          stackFrames: [],
         };
+        nextActiveConcept = {
+          name: 'Thread Creation (NEW)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] instantiated in NEW state. The thread object exists in memory but has not been scheduled yet until start() is invoked.`,
+          badge: 'Thread Created',
+          details: { threadId: tid, threadName: tname, state: 'NEW' },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'THREAD_CREATE',
+          threadName: tname,
+          threadId: tid,
+          description: `Thread [${tname}] created in NEW state.`,
+        };
+        explanation = `Created thread [${tname}] (State: NEW)`;
+        break;
+      }
+
+      case 'THREAD_START': {
+        const tid = ev.threadId || ev.threadName || 'Thread-1';
+        const tname = ev.threadName || 'Thread-1';
+        const existing = nextThreads[tid] || Object.values(nextThreads).find(t => t.name === tname);
+        const startFrame: CallFrame = {
+          id: `frame-${tid}`,
+          functionName: 'run',
+          arguments: {},
+          localVariables: {},
+          line: ev.line || currentLine,
+          depth: 1,
+        };
+
+        if (existing) {
+          existing.state = 'RUNNABLE';
+          existing.startedAt = i;
+          existing.callStack = [startFrame];
+          existing.stackFrames = [startFrame];
+        } else {
+          nextThreads[tid] = {
+            id: tid,
+            name: tname,
+            state: 'RUNNABLE',
+            priority: 5,
+            currentLine: ev.line || currentLine,
+            currentMethod: 'run',
+            createdAt: i,
+            startedAt: i,
+            ownedLocks: [],
+            callStack: [startFrame],
+            stackFrames: [startFrame],
+          };
+        }
+
         nextActiveConcept = {
           name: 'Multithreading (Thread.start)',
           category: 'CONCURRENCY',
@@ -1209,7 +1423,33 @@ export function reconstructExecutionSteps(
           badge: 'Thread Lifecycle',
           details: { threadId: tid, threadName: tname, state: 'RUNNABLE' },
         };
+        nextConcurrencyInfo = {
+          actionType: 'THREAD_START',
+          threadName: tname,
+          threadId: tid,
+          description: `Thread [${tname}] started (State: RUNNABLE). Registered with JVM scheduler.`,
+        };
         explanation = `Spawned thread [${tname}] (State: RUNNABLE)`;
+        break;
+      }
+
+      case 'THREAD_RUN_DIRECT': {
+        const target = ev.targetThreadName || 'Thread';
+        nextActiveConcept = {
+          name: 'start() vs run() Difference',
+          category: 'CONCURRENCY',
+          explanation: `WARNING: Calling run() executes sequentially on thread [${currentThreadName}], NOT on a new thread! To spawn a concurrent thread, invoke start().`,
+          badge: 'start() vs run()',
+          details: { caller: currentThreadName, target },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'THREAD_RUN',
+          threadName: currentThreadName,
+          targetThreadName: target,
+          isStartVsRunWarning: true,
+          description: `run() executed directly on [${currentThreadName}]. No new thread spawned!`,
+        };
+        explanation = `run() executed synchronously on [${currentThreadName}] without spawning a thread`;
         break;
       }
 
@@ -1227,19 +1467,175 @@ export function reconstructExecutionSteps(
           badge: st,
           details: { threadName: tname, state: st },
         };
+        nextConcurrencyInfo = {
+          actionType: 'STATE_CHANGE',
+          threadName: tname,
+          description: `Thread [${tname}] transitioned to state [${st}].`,
+        };
         explanation = `Thread [${tname}] is now ${st}`;
+        break;
+      }
+
+      case 'THREAD_NAME_CHANGE': {
+        const tid = ev.threadId;
+        const newName = ev.threadName || 'Worker';
+        const found = Object.values(nextThreads).find(t => t.id === tid);
+        if (found) {
+          found.name = newName;
+        }
+        explanation = `Thread name updated to [${newName}]`;
+        break;
+      }
+
+      case 'THREAD_PRIORITY_CHANGE': {
+        const tid = ev.threadId;
+        const p = ev.priority ?? 5;
+        const found = Object.values(nextThreads).find(t => t.id === tid || t.name === ev.threadName);
+        if (found) {
+          found.priority = p;
+        }
+        nextActiveConcept = {
+          name: 'Thread Priority',
+          category: 'CONCURRENCY',
+          explanation: `Priority set to ${p}. Priority is an OS/JVM scheduling hint, not a guarantee of execution order.`,
+          badge: 'Priority Hint',
+          details: { priority: p },
+        };
+        explanation = `Thread [${found?.name || 'thread'}] priority set to ${p}`;
+        break;
+      }
+
+      case 'THREAD_INTERRUPT': {
+        const target = ev.targetThreadName || 'worker';
+        nextConcurrencyInfo = {
+          actionType: 'INTERRUPT',
+          threadName: currentThreadName,
+          targetThreadName: target,
+          description: `Interrupt flag set on thread [${target}].`,
+        };
+        explanation = `Thread [${target}] received interrupt signal`;
+        break;
+      }
+
+      case 'THREAD_JOIN_START': {
+        const caller = ev.threadName || currentThreadName;
+        const target = ev.targetThreadName || 'worker';
+        const callerTh = Object.values(nextThreads).find(t => t.name === caller);
+        if (callerTh) {
+          callerTh.state = 'WAITING';
+          callerTh.waitingFor = target;
+        }
+        nextActiveConcept = {
+          name: 'Thread Coordination (join)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${caller}] called join() on [${target}]. [${caller}] is halted in WAITING state until [${target}] terminates.`,
+          badge: 'Thread.join',
+          details: { caller, target, state: 'WAITING' },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'JOIN_START',
+          threadName: caller,
+          targetThreadName: target,
+          description: `Thread [${caller}] is WAITING for [${target}] to complete via join().`,
+        };
+        explanation = `Thread [${caller}] WAITING for [${target}] via join()`;
+        break;
+      }
+
+      case 'THREAD_JOIN_END': {
+        const caller = ev.threadName || currentThreadName;
+        const target = ev.targetThreadName || 'worker';
+        const targetTh = Object.values(nextThreads).find(t => t.name === target);
+        if (targetTh) {
+          targetTh.state = 'TERMINATED';
+          targetTh.finishedAt = i;
+        }
+        const callerTh = Object.values(nextThreads).find(t => t.name === caller);
+        if (callerTh) {
+          callerTh.state = 'RUNNABLE';
+          callerTh.waitingFor = undefined;
+        }
+        nextActiveConcept = {
+          name: 'Thread Termination & Resume',
+          category: 'CONCURRENCY',
+          explanation: `Target thread [${target}] terminated. Waiting thread [${caller}] is unblocked and resumes execution.`,
+          badge: 'Thread Resumed',
+          details: { caller, target },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'JOIN_END',
+          threadName: caller,
+          targetThreadName: target,
+          description: `Target thread [${target}] finished execution. [${caller}] resumed.`,
+        };
+        explanation = `Thread [${target}] terminated; [${caller}] resumed execution`;
+        break;
+      }
+
+      case 'THREAD_SLEEP_START': {
+        const tname = ev.threadName || currentThreadName;
+        const th = Object.values(nextThreads).find(t => t.name === tname);
+        if (th) {
+          th.state = 'TIMED_WAITING';
+        }
+        nextActiveConcept = {
+          name: 'Thread.sleep (TIMED_WAITING)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] entered TIMED_WAITING for ${ev.value || 0}ms. Critical: Thread.sleep() does NOT release any acquired monitor locks!`,
+          badge: 'TIMED_WAITING',
+          details: { threadName: tname, durationMs: ev.value },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'SLEEP_START',
+          threadName: tname,
+          description: `Thread [${tname}] entered TIMED_WAITING for ${ev.value || 0}ms.`,
+        };
+        explanation = `Thread [${tname}] entered TIMED_WAITING for ${ev.value || 0}ms`;
+        break;
+      }
+
+      case 'THREAD_SLEEP_END': {
+        const tname = ev.threadName || currentThreadName;
+        const th = Object.values(nextThreads).find(t => t.name === tname);
+        if (th) {
+          th.state = 'RUNNABLE';
+        }
+        nextConcurrencyInfo = {
+          actionType: 'SLEEP_END',
+          threadName: tname,
+          description: `Thread [${tname}] finished sleeping and transitioned back to RUNNABLE.`,
+        };
+        explanation = `Thread [${tname}] sleep ended (State: RUNNABLE)`;
         break;
       }
 
       case 'LOCK_ACQUIRE': {
         const lk = ev.lockName || 'mutex';
-        const owner = ev.ownerThread || 'main';
+        const owner = ev.ownerThread || currentThreadName;
         if (!nextLocks[lk]) {
-          nextLocks[lk] = { id: lk, name: lk, ownerThreadId: owner, waitingThreadIds: [] };
+          nextLocks[lk] = {
+            id: lk,
+            name: lk,
+            ownerThreadId: owner,
+            waitingThreadIds: [],
+            entryQueue: [],
+            waitSet: [],
+            acquiredAt: i,
+          };
         } else {
           nextLocks[lk].ownerThreadId = owner;
+          nextLocks[lk].acquiredAt = i;
           nextLocks[lk].waitingThreadIds = nextLocks[lk].waitingThreadIds.filter(id => id !== owner);
+          nextLocks[lk].entryQueue = (nextLocks[lk].entryQueue || []).filter(id => id !== owner);
         }
+
+        const ownerTh = Object.values(nextThreads).find(t => t.name === owner || t.id === owner);
+        if (ownerTh) {
+          if (!ownerTh.ownedLocks) ownerTh.ownedLocks = [];
+          if (!ownerTh.ownedLocks.includes(lk)) ownerTh.ownedLocks.push(lk);
+          ownerTh.waitingFor = undefined;
+        }
+
         nextActiveConcept = {
           name: 'Intrinsic Lock (synchronized)',
           category: 'CONCURRENCY',
@@ -1247,16 +1643,29 @@ export function reconstructExecutionSteps(
           badge: 'Lock Acquired',
           details: { lock: lk, owner },
         };
+        nextConcurrencyInfo = {
+          actionType: 'LOCK_ACQUIRE',
+          threadName: owner,
+          targetLock: lk,
+          description: `Thread [${owner}] acquired monitor lock on [${lk}].`,
+        };
         explanation = `Lock [${lk}] acquired by [${owner}]`;
         break;
       }
 
       case 'LOCK_RELEASE': {
         const lk = ev.lockName || 'mutex';
-        const owner = ev.ownerThread || 'main';
+        const owner = ev.ownerThread || currentThreadName;
         if (nextLocks[lk]) {
           nextLocks[lk].ownerThreadId = null;
+          nextLocks[lk].releasedAt = i;
         }
+
+        const ownerTh = Object.values(nextThreads).find(t => t.name === owner || t.id === owner);
+        if (ownerTh && ownerTh.ownedLocks) {
+          ownerTh.ownedLocks = ownerTh.ownedLocks.filter(l => l !== lk);
+        }
+
         nextActiveConcept = {
           name: 'Lock Release',
           category: 'CONCURRENCY',
@@ -1264,20 +1673,44 @@ export function reconstructExecutionSteps(
           badge: 'Lock Released',
           details: { lock: lk, owner },
         };
+        nextConcurrencyInfo = {
+          actionType: 'LOCK_RELEASE',
+          threadName: owner,
+          targetLock: lk,
+          description: `Thread [${owner}] released lock on [${lk}].`,
+        };
         explanation = `Lock [${lk}] released by [${owner}]`;
         break;
       }
 
       case 'LOCK_WAIT': {
         const lk = ev.lockName || 'mutex';
-        const tname = ev.threadName || 'Thread-2';
+        const tname = ev.threadName || currentThreadName;
         if (!nextLocks[lk]) {
-          nextLocks[lk] = { id: lk, name: lk, ownerThreadId: null, waitingThreadIds: [tname] };
-        } else if (!nextLocks[lk].waitingThreadIds.includes(tname)) {
-          nextLocks[lk].waitingThreadIds.push(tname);
+          nextLocks[lk] = {
+            id: lk,
+            name: lk,
+            ownerThreadId: null,
+            waitingThreadIds: [tname],
+            entryQueue: [tname],
+            waitSet: [],
+          };
+        } else {
+          if (!nextLocks[lk].waitingThreadIds.includes(tname)) {
+            nextLocks[lk].waitingThreadIds.push(tname);
+          }
+          if (!nextLocks[lk].entryQueue) nextLocks[lk].entryQueue = [];
+          if (!nextLocks[lk].entryQueue.includes(tname)) {
+            nextLocks[lk].entryQueue.push(tname);
+          }
         }
+
         const th = Object.values(nextThreads).find(t => t.name === tname);
-        if (th) th.state = 'BLOCKED';
+        if (th) {
+          th.state = 'BLOCKED';
+          th.waitingFor = lk;
+        }
+
         nextActiveConcept = {
           name: 'Lock Contention (BLOCKED)',
           category: 'CONCURRENCY',
@@ -1285,12 +1718,257 @@ export function reconstructExecutionSteps(
           badge: 'Lock Contention',
           details: { lock: lk, waitingThread: tname, heldBy: nextLocks[lk].ownerThreadId },
         };
+        nextConcurrencyInfo = {
+          actionType: 'LOCK_BLOCKED',
+          threadName: tname,
+          targetLock: lk,
+          description: `Thread [${tname}] is BLOCKED waiting for lock [${lk}].`,
+        };
         explanation = `Thread [${tname}] BLOCKED waiting for lock [${lk}]`;
+        break;
+      }
+
+      case 'MONITOR_WAIT': {
+        const lk = ev.lockName || 'lock';
+        const tname = ev.threadName || currentThreadName;
+        if (!nextLocks[lk]) {
+          nextLocks[lk] = { id: lk, name: lk, ownerThreadId: null, waitingThreadIds: [], entryQueue: [], waitSet: [tname] };
+        } else {
+          nextLocks[lk].ownerThreadId = null;
+          if (!nextLocks[lk].waitSet) nextLocks[lk].waitSet = [];
+          if (!nextLocks[lk].waitSet.includes(tname)) nextLocks[lk].waitSet.push(tname);
+        }
+
+        const th = Object.values(nextThreads).find(t => t.name === tname);
+        if (th) {
+          th.state = 'WAITING';
+          th.waitingFor = lk;
+          if (th.ownedLocks) th.ownedLocks = th.ownedLocks.filter(l => l !== lk);
+        }
+
+        nextActiveConcept = {
+          name: 'Monitor wait() (WAITING)',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] called wait() on monitor [${lk}]. It relinquished lock ownership and entered the monitor's Wait Set until notified.`,
+          badge: 'Monitor wait',
+          details: { lock: lk, thread: tname },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'WAIT',
+          threadName: tname,
+          targetLock: lk,
+          description: `Thread [${tname}] entered Wait Set for [${lk}].`,
+        };
+        explanation = `Thread [${tname}] WAITING on monitor [${lk}]`;
+        break;
+      }
+
+      case 'MONITOR_NOTIFY':
+      case 'MONITOR_NOTIFY_ALL': {
+        const lk = ev.lockName || 'lock';
+        const tname = ev.threadName || currentThreadName;
+        const isAll = ev.type === 'MONITOR_NOTIFY_ALL';
+        if (nextLocks[lk] && nextLocks[lk].waitSet && nextLocks[lk].waitSet.length > 0) {
+          if (!nextLocks[lk].entryQueue) nextLocks[lk].entryQueue = [];
+          if (isAll) {
+            for (const w of nextLocks[lk].waitSet) {
+              if (!nextLocks[lk].entryQueue.includes(w)) nextLocks[lk].entryQueue.push(w);
+              const th = Object.values(nextThreads).find(t => t.name === w);
+              if (th) th.state = 'BLOCKED';
+            }
+            nextLocks[lk].waitSet = [];
+          } else {
+            const awakened = nextLocks[lk].waitSet.shift()!;
+            if (!nextLocks[lk].entryQueue.includes(awakened)) nextLocks[lk].entryQueue.push(awakened);
+            const th = Object.values(nextThreads).find(t => t.name === awakened);
+            if (th) th.state = 'BLOCKED';
+          }
+        }
+
+        nextActiveConcept = {
+          name: isAll ? 'Monitor notifyAll()' : 'Monitor notify()',
+          category: 'CONCURRENCY',
+          explanation: `Thread [${tname}] called ${isAll ? 'notifyAll()' : 'notify()'} on [${lk}]. Awakened thread(s) moved from Wait Set to Entry Queue.`,
+          badge: isAll ? 'notifyAll' : 'notify',
+          details: { lock: lk, signaler: tname },
+        };
+        nextConcurrencyInfo = {
+          actionType: isAll ? 'NOTIFY_ALL' : 'NOTIFY',
+          threadName: tname,
+          targetLock: lk,
+          description: `Thread [${tname}] signaled ${isAll ? 'all threads' : 'one thread'} on [${lk}].`,
+        };
+        explanation = `Thread [${tname}] signaled waiting threads on [${lk}]`;
+        break;
+      }
+
+      case 'ATOMIC_OP': {
+        const varN = ev.variable || 'counter';
+        const op = ev.atomicOp || 'CAS';
+        nextActiveConcept = {
+          name: 'Atomic Variable Operation',
+          category: 'CONCURRENCY',
+          explanation: `Atomic operation [${op}] on variable [${varN}]: ${ev.oldValue} -> ${ev.newValue}. Lock-free hardware CAS execution.`,
+          badge: 'Atomic CAS',
+          details: { variable: varN, op, oldValue: ev.oldValue, newValue: ev.newValue },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'ATOMIC_OP',
+          threadName: currentThreadName,
+          description: `Atomic [${op}] on [${varN}]: ${ev.oldValue} -> ${ev.newValue}`,
+          operationBreakdown: {
+            read: `Read: ${ev.oldValue}`,
+            compute: op,
+            write: `CAS commit: ${ev.newValue}`,
+          },
+        };
+        explanation = `Atomic ${op} on ${varN}: ${ev.oldValue} -> ${ev.newValue}`;
+        break;
+      }
+
+      case 'EXECUTOR_INIT': {
+        const poolType = ev.poolType || 'ThreadPool';
+        const poolSize = ev.poolSize || 2;
+        nextExecutor = {
+          poolName: poolType,
+          poolSize,
+          activeWorkerThreads: Array.from({ length: poolSize }, (_, idx) => `pool-1-thread-${idx + 1}`),
+          taskQueue: [],
+          tasksCompleted: 0,
+        };
+        nextActiveConcept = {
+          name: 'ExecutorService Thread Pool',
+          category: 'CONCURRENCY',
+          explanation: `Created ${poolType} with ${poolSize} reusable worker thread(s). Eliminates thread creation overhead.`,
+          badge: 'ExecutorService',
+          details: { poolType, poolSize },
+        };
+        explanation = `Initialized ExecutorService (${poolType}) with ${poolSize} threads`;
+        break;
+      }
+
+      case 'EXECUTOR_SUBMIT': {
+        const taskId = ev.taskId || 'task-1';
+        const taskName = ev.taskName || 'Task';
+        if (!nextExecutor) {
+          nextExecutor = {
+            poolName: 'ThreadPool',
+            poolSize: 2,
+            activeWorkerThreads: ['pool-1-thread-1', 'pool-1-thread-2'],
+            taskQueue: [],
+            tasksCompleted: 0,
+          };
+        }
+        nextExecutor.taskQueue.push({ id: taskId, name: taskName, status: 'QUEUED' });
+        nextConcurrencyInfo = {
+          actionType: 'TASK_SUBMIT',
+          threadName: currentThreadName,
+          description: `Submitted task [${taskName}] to executor task queue.`,
+        };
+        explanation = `Submitted task [${taskName}] to executor queue`;
+        break;
+      }
+
+      case 'EXECUTOR_TASK_START': {
+        const taskId = ev.taskId || 'task-1';
+        const wThread = ev.threadName || 'pool-1-thread-1';
+        if (nextExecutor) {
+          const tsk = nextExecutor.taskQueue.find((t: any) => t.id === taskId);
+          if (tsk) {
+            tsk.status = 'RUNNING';
+            tsk.workerThread = wThread;
+          }
+        }
+        nextConcurrencyInfo = {
+          actionType: 'TASK_START',
+          threadName: wThread,
+          description: `Task [${taskId}] started by worker [${wThread}].`,
+        };
+        explanation = `Executor task [${taskId}] started by [${wThread}]`;
+        break;
+      }
+
+      case 'EXECUTOR_TASK_COMPLETE': {
+        const taskId = ev.taskId || 'task-1';
+        if (nextExecutor) {
+          const tsk = nextExecutor.taskQueue.find((t: any) => t.id === taskId);
+          if (tsk) {
+            tsk.status = 'COMPLETED';
+            tsk.result = ev.value;
+            nextExecutor.tasksCompleted++;
+          }
+        }
+        nextConcurrencyInfo = {
+          actionType: 'TASK_COMPLETE',
+          threadName: ev.threadName || 'worker',
+          description: `Task [${taskId}] completed with result: ${ev.value}.`,
+        };
+        explanation = `Executor task [${taskId}] completed (Result: ${ev.value})`;
+        break;
+      }
+
+      case 'FUTURE_GET_START': {
+        const caller = ev.threadName || currentThreadName;
+        const callerTh = Object.values(nextThreads).find(t => t.name === caller);
+        if (callerTh) {
+          callerTh.state = 'WAITING';
+        }
+        explanation = `Thread [${caller}] WAITING for future.get() result`;
+        break;
+      }
+
+      case 'FUTURE_GET_END': {
+        const caller = ev.threadName || currentThreadName;
+        const callerTh = Object.values(nextThreads).find(t => t.name === caller);
+        if (callerTh) {
+          callerTh.state = 'RUNNABLE';
+        }
+        explanation = `future.get() resolved with result: ${ev.value}`;
+        break;
+      }
+
+      case 'RACE_CONDITION_OBSERVED': {
+        const varN = ev.variable || 'counter';
+        const threadsList = (ev.threadName || 'worker-1, worker-2').split(',').map(s => s.trim());
+        nextRaceInfo = {
+          isObserved: true,
+          variableName: varN,
+          threadsInvolved: threadsList,
+          expectedValue: ev.value,
+          actualValue: ev.newValue,
+          explanation: `Lost update detected on [${varN}]! Expected: ${ev.value}, Actual: ${ev.newValue}. Unsynchronized concurrent READ -> COMPUTE -> WRITE cycles caused conflicting updates.`,
+          conflictingAccesses: [
+            'READ: Both threads read stale value concurrently',
+            'COMPUTE: Both threads computed independent increments',
+            'WRITE: Second write overwrote first write (Lost Update)',
+          ],
+        };
+        nextActiveConcept = {
+          name: 'Race Condition (Lost Update)',
+          category: 'CONCURRENCY',
+          explanation: `Observed Race Condition on [${varN}]: Expected ${ev.value}, but obtained ${ev.newValue}. Compound operations (e.g. counter++) are not atomic.`,
+          badge: 'RACE CONDITION',
+          details: { variable: varN, expected: ev.value, actual: ev.newValue, threads: threadsList },
+        };
+        nextConcurrencyInfo = {
+          actionType: 'RACE_DETECTED',
+          threadName: currentThreadName,
+          description: `Race condition on [${varN}]: Expected ${ev.value}, got ${ev.newValue}.`,
+        };
+        explanation = `RACE CONDITION OBSERVED on [${varN}]: Expected ${ev.value}, Actual ${ev.newValue}`;
         break;
       }
 
       case 'DEADLOCK_DETECTED': {
         nextDeadlock = true;
+        nextDeadlockInfo = {
+          threads: [
+            { threadName: 'Thread-A', holdingLock: 'Lock-1', waitingForLock: 'Lock-2' },
+            { threadName: 'Thread-B', holdingLock: 'Lock-2', waitingForLock: 'Lock-1' },
+          ],
+          preventionExplanation:
+            'Educational Explanation: Deadlocks can be prevented by acquiring locks in a consistent order (e.g. always acquire Lock 1 before Lock 2), or utilizing tryLock() with timeouts.',
+        };
         nextActiveConcept = {
           name: 'Deadlock Detected',
           category: 'CONCURRENCY',
@@ -1298,7 +1976,24 @@ export function reconstructExecutionSteps(
           badge: 'POSSIBLE DEADLOCK',
           details: { detail: ev.detail },
         };
+        nextConcurrencyInfo = {
+          actionType: 'DEADLOCK',
+          threadName: currentThreadName,
+          description: `DEADLOCK DETECTED: ${ev.detail || 'Circular lock dependency'}`,
+        };
         explanation = `DEADLOCK DETECTED: ${ev.detail || 'Circular lock dependency'}`;
+        break;
+      }
+
+      case 'CONCURRENT_COLLECTION_OP': {
+        nextActiveConcept = {
+          name: `Concurrent Collection (${ev.dataType || 'Concurrent'})`,
+          category: 'CONCURRENCY',
+          explanation: `Thread-safe concurrent collection operation [${ev.concurrencyAction}] performed on [${ev.variable}].`,
+          badge: 'Concurrent Collection',
+          details: { collection: ev.variable, action: ev.concurrencyAction, value: ev.value },
+        };
+        explanation = `Concurrent collection [${ev.variable}] ${ev.concurrencyAction || 'op'}: ${ev.value}`;
         break;
       }
 
@@ -7657,6 +8352,9 @@ export function reconstructExecutionSteps(
     currentActiveConcept = nextActiveConcept;
     currentCustomObjects = nextCustomObjects;
     currentStringPool = nextStringPool;
+    currentExecutor = nextExecutor;
+    currentRaceInfo = nextRaceInfo;
+    currentDeadlockInfo = nextDeadlockInfo;
 
     const beginnerExp = computeBeginnerExplanation(
       ev,
@@ -7703,6 +8401,13 @@ export function reconstructExecutionSteps(
             shortCircuited: ev.meta?.shortCircuited,
           }
         : undefined,
+      // Phase 13 Java Multithreading & Concurrency State
+      currentThreadId,
+      currentThreadName,
+      concurrencyInfo: nextConcurrencyInfo,
+      executorState: nextExecutor,
+      raceConditionInfo: nextRaceInfo,
+      deadlockInfo: nextDeadlockInfo,
     });
   }
 

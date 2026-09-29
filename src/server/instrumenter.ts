@@ -1042,7 +1042,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Phase 10: Multithreading & Synchronization
+    // Phase 13: Multithreading & Synchronization
     const threadStartMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.start\(\);?$/);
     if (threadStartMatch) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
@@ -1051,21 +1051,53 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
+    const threadRunMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.run\(\);?$/);
+    if (threadRunMatch && !trimmed.startsWith('System.') && !trimmed.startsWith('CodeFlowTracer.')) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadRunDirect(${threadRunMatch[1]}, ${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    const threadSetNameMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.setName\((.+)\);?$/);
+    if (threadSetNameMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadName(${threadSetNameMatch[1]}, ${threadSetNameMatch[1]}.getName(), ${lineNum});`);
+      continue;
+    }
+
+    const threadPriorityMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.setPriority\((.+)\);?$/);
+    if (threadPriorityMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadPriority(${threadPriorityMatch[1]}, ${threadPriorityMatch[1]}.getPriority(), ${lineNum});`);
+      continue;
+    }
+
+    const threadInterruptMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.interrupt\(\);?$/);
+    if (threadInterruptMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadInterrupt(${threadInterruptMatch[1]}, ${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
     const sleepMatch = trimmed.match(/^Thread\.sleep\((.+)\);?$/);
     if (sleepMatch) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.threadState(Thread.currentThread().getName(), "TIMED_WAITING", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadSleepStart((long)(${sleepMatch[1]}), ${lineNum});`);
       outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.threadState(Thread.currentThread().getName(), "RUNNABLE", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadSleepEnd(${lineNum});`);
       continue;
     }
 
     const joinMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.join\(\);?$/);
     if (joinMatch) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.threadState("main", "WAITING", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadJoinStart(${joinMatch[1]}, ${lineNum});`);
       outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.threadState("main", "RUNNABLE", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadJoinEnd(${joinMatch[1]}, ${lineNum});`);
       continue;
     }
 
@@ -1074,6 +1106,40 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const lockExpr = syncMatch[1].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    CodeFlowTracer.lockAcquire("${lockExpr}", Thread.currentThread().getName(), ${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    const waitMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.wait\(\);?$/);
+    if (waitMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.monitorWait(${waitMatch[1]}, ${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.lockAcquire("${waitMatch[1]}", Thread.currentThread().getName(), ${lineNum});`);
+      continue;
+    }
+
+    const notifyMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(notify|notifyAll)\(\);?$/);
+    if (notifyMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.monitorNotify(${notifyMatch[1]}, ${notifyMatch[2] === 'notifyAll'}, ${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    const atomicMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(incrementAndGet|getAndIncrement|decrementAndGet|addAndGet|compareAndSet)\((.*)\);?$/);
+    if (atomicMatch) {
+      const varN = atomicMatch[1];
+      const op = atomicMatch[2];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    { Object _oldA = ${varN}.get(); ${rawLine} CodeFlowTracer.atomicOp("${varN}", "${op}", _oldA, ${varN}.get(), ${lineNum}); }`);
+      continue;
+    }
+
+    const executorSubmitMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(submit|execute)\((.+)\);?$/);
+    if (executorSubmitMatch && !trimmed.startsWith('System.') && !trimmed.startsWith('CodeFlowTracer.')) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.executorSubmit("task-" + (System.currentTimeMillis() % 1000), "Task", ${lineNum});`);
       outputLines.push(rawLine);
       continue;
     }
@@ -1129,6 +1195,13 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
 
       if (rhsExpr.startsWith('new ') && !rhsExpr.includes('[') && !rhsExpr.includes('List') && !rhsExpr.includes('Map') && !rhsExpr.includes('Set') && !rhsExpr.includes('Stack') && !rhsExpr.includes('Queue')) {
         outputLines.push(`    CodeFlowTracer.objectCreate("${varName}", "${declaredType}", ${varName}, ${lineNum});`);
+      }
+      if (declaredType === 'Thread' || rhsExpr.startsWith('new Thread(') || declaredType.endsWith('Thread')) {
+        outputLines.push(`    CodeFlowTracer.threadCreate(${varName}, ${lineNum});`);
+      }
+      if (declaredType.includes('ExecutorService') || declaredType.includes('Executor')) {
+        const poolSize = rhsExpr.includes('newSingleThreadExecutor') ? 1 : (rhsExpr.match(/\((\d+)\)/)?.[1] || 2);
+        outputLines.push(`    CodeFlowTracer.executorInit("ThreadPool", ${poolSize}, ${lineNum});`);
       }
 
       const pollMatch = rhsExpr.match(/^([a-zA-Z_0-9]+)\.(?:poll|pop|remove)\(\)/);

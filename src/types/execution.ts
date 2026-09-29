@@ -611,7 +611,28 @@ export type EventType =
   | 'SCOPE_ENTER'
   | 'SCOPE_EXIT'
   | 'STRING_OP'
-  | 'REFERENCE_REASSIGN';
+  | 'REFERENCE_REASSIGN'
+  // Phase 13 Java Multithreading & Concurrency Events
+  | 'THREAD_RUN_DIRECT'
+  | 'THREAD_NAME_CHANGE'
+  | 'THREAD_PRIORITY_CHANGE'
+  | 'THREAD_INTERRUPT'
+  | 'THREAD_JOIN_START'
+  | 'THREAD_JOIN_END'
+  | 'THREAD_SLEEP_START'
+  | 'THREAD_SLEEP_END'
+  | 'MONITOR_WAIT'
+  | 'MONITOR_NOTIFY'
+  | 'MONITOR_NOTIFY_ALL'
+  | 'ATOMIC_OP'
+  | 'EXECUTOR_INIT'
+  | 'EXECUTOR_SUBMIT'
+  | 'EXECUTOR_TASK_START'
+  | 'EXECUTOR_TASK_COMPLETE'
+  | 'FUTURE_GET_START'
+  | 'FUTURE_GET_END'
+  | 'RACE_CONDITION_OBSERVED'
+  | 'CONCURRENT_COLLECTION_OP';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -778,6 +799,18 @@ export interface ExecutionEvent {
   waitingThreads?: string[];
   streamOp?: string;
   boxingType?: string;
+  // Phase 13 Java Multithreading & Concurrency Fields
+  targetThreadName?: string;
+  parentThreadName?: string;
+  priority?: number;
+  atomicOp?: string;
+  poolType?: string;
+  poolSize?: number;
+  taskId?: string;
+  taskName?: string;
+  taskStatus?: string;
+  concurrencyAction?: string;
+  isStartVsRunWarning?: boolean;
 }
 
 export interface VariableInfo {
@@ -1066,6 +1099,17 @@ export interface ThreadState {
   name: string;
   state: 'NEW' | 'RUNNABLE' | 'RUNNING' | 'WAITING' | 'TIMED_WAITING' | 'BLOCKED' | 'TERMINATED';
   callStack: CallFrame[];
+  priority?: number;
+  currentLine?: number;
+  currentMethod?: string;
+  stackFrames?: CallFrame[];
+  createdAt?: number;
+  startedAt?: number;
+  finishedAt?: number;
+  ownedLocks?: string[];
+  waitingFor?: string;
+  parentThreadName?: string;
+  isDaemon?: boolean;
 }
 
 export interface LockState {
@@ -1073,6 +1117,74 @@ export interface LockState {
   name: string;
   ownerThreadId: string | null;
   waitingThreadIds: string[];
+  entryQueue?: string[];
+  waitSet?: string[];
+  acquiredAt?: number;
+  releasedAt?: number;
+}
+
+export interface ConcurrencyStepInfo {
+  actionType:
+    | 'THREAD_CREATE'
+    | 'THREAD_START'
+    | 'THREAD_RUN'
+    | 'STATE_CHANGE'
+    | 'LOCK_ACQUIRE'
+    | 'LOCK_RELEASE'
+    | 'LOCK_WAIT'
+    | 'LOCK_BLOCKED'
+    | 'WAIT'
+    | 'NOTIFY'
+    | 'NOTIFY_ALL'
+    | 'JOIN_START'
+    | 'JOIN_END'
+    | 'SLEEP_START'
+    | 'SLEEP_END'
+    | 'INTERRUPT'
+    | 'DEADLOCK'
+    | 'ATOMIC_OP'
+    | 'TASK_SUBMIT'
+    | 'TASK_START'
+    | 'TASK_COMPLETE'
+    | 'RACE_DETECTED';
+  threadName: string;
+  threadId?: string;
+  targetThreadName?: string;
+  targetLock?: string;
+  description: string;
+  isStartVsRunWarning?: boolean;
+  operationBreakdown?: { read?: string; compute?: string; write?: string };
+}
+
+export interface RaceConditionInfo {
+  isObserved: boolean;
+  variableName: string;
+  threadsInvolved: string[];
+  expectedValue?: string | number;
+  actualValue?: string | number;
+  explanation: string;
+  conflictingAccesses: string[];
+}
+
+export interface ExecutorTaskInfo {
+  id: string;
+  name: string;
+  status: 'SUBMITTED' | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'CANCELLED';
+  workerThread?: string;
+  result?: any;
+}
+
+export interface ExecutorPoolState {
+  poolName?: string;
+  poolSize: number;
+  activeWorkerThreads: string[];
+  taskQueue: ExecutorTaskInfo[];
+  tasksCompleted: number;
+}
+
+export interface DeadlockGraphInfo {
+  threads: Array<{ threadName: string; holdingLock: string; waitingForLock: string }>;
+  preventionExplanation: string;
 }
 
 export interface JavaConceptInfo {
@@ -1425,6 +1537,13 @@ export interface ExecutionStep {
   // Phase 12
   objectGraph?: Array<{ fromId: string; fromName: string; toId: string; toName: string; label?: string }>;
   conditionEvaluation?: { expression: string; result: boolean; shortCircuited?: boolean };
+  // Phase 13 Java Multithreading & Concurrency
+  currentThreadId?: string;
+  currentThreadName?: string;
+  concurrencyInfo?: ConcurrencyStepInfo;
+  executorState?: ExecutorPoolState;
+  raceConditionInfo?: RaceConditionInfo;
+  deadlockInfo?: DeadlockGraphInfo;
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1432,7 +1551,21 @@ export type SupportedLanguage = 'java' | 'python';
 export interface CodePreset {
   id: string;
   title: string;
-  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms' | 'Java OOP & JVM Internals' | 'Java OOP & Language Fundamentals' | 'Java Runtime & Memory Execution';
+  category:
+    | 'Arrays & Sorting'
+    | 'Stacks & Queues'
+    | 'Linked Lists'
+    | 'Trees & Heaps'
+    | 'Graphs & Algorithms'
+    | 'Hash Tables'
+    | 'Recursion'
+    | 'Bitwise'
+    | 'Error Diagnostics'
+    | 'Algorithms'
+    | 'Java OOP & JVM Internals'
+    | 'Java OOP & Language Fundamentals'
+    | 'Java Runtime & Memory Execution'
+    | 'Java Multithreading & Concurrency';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;
