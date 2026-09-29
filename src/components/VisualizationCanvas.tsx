@@ -19,6 +19,7 @@ import { NumberVisualizer } from './visualizers/NumberVisualizer';
 import { SegmentTreeVisualizer } from './visualizers/SegmentTreeVisualizer';
 import { FenwickVisualizer } from './visualizers/FenwickVisualizer';
 import { JvmObjectVisualizer } from './visualizers/JvmObjectVisualizer';
+import { StructureRelationArrows } from './StructureRelationArrows';
 import {
   Sparkles,
   AlertCircle,
@@ -43,10 +44,13 @@ import {
   Network,
   GitBranch,
   Play,
+  Zap,
+  Link2,
 } from 'lucide-react';
 
 interface VisualizationCanvasProps {
   currentStep: ExecutionStep | null;
+  previousStep?: ExecutionStep | null;
   isRunning: boolean;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
@@ -58,6 +62,7 @@ type CanvasLayoutMode = 'freeform' | 'grid';
 
 export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
   currentStep,
+  previousStep,
   isRunning,
   isFullscreen = false,
   onToggleFullscreen,
@@ -71,6 +76,8 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [maximizedCardId, setMaximizedCardId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [showRelations, setShowRelations] = useState<boolean>(true);
+  const [manualLightningTrigger, setManualLightningTrigger] = useState<number>(0);
 
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -559,6 +566,33 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
             <RotateCcw className="w-3.5 h-3.5" />
             <span className="hidden xl:inline">Reset</span>
           </button>
+
+          {/* Relations & Lightning Value Flow Controls */}
+          <div className="flex items-center gap-1 bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 flex-shrink-0">
+            <button
+              onClick={() => setShowRelations((prev) => !prev)}
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-md transition-all ${
+                showRelations
+                  ? 'bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40 shadow-sm'
+                  : 'text-[#8b949e] hover:text-[#f0f6fc]'
+              }`}
+              title="Toggle connecting relation arrows between data structures (SQL-style entities & pipelines)"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">{showRelations ? 'Relations' : 'Relations: Off'}</span>
+            </button>
+
+            {showRelations && (
+              <button
+                onClick={() => setManualLightningTrigger((prev) => prev + 1)}
+                className="flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-md bg-[#ffe600]/15 hover:bg-[#ffe600]/25 text-[#ffe600] border border-[#ffe600]/40 transition-all active:scale-95 shadow-sm"
+                title="Trigger a high-voltage lightning pulse through the relation threads"
+              >
+                <Zap className="w-3.5 h-3.5 fill-[#ffe600]" />
+                <span className="hidden xl:inline">Zap Flow</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Enlarge Fullscreen Button (Always prioritized with flex-shrink-0!) & Zoom controls */}
@@ -692,6 +726,17 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
             }
             style={layoutMode === 'freeform' ? { transform: `scale(${zoom})` } : undefined}
           >
+            {/* 0. Dynamic Entity Relation Connecting Arrows & Lightning Flow Overlay */}
+            <StructureRelationArrows
+              currentStep={currentStep}
+              previousStep={previousStep}
+              positions={positions}
+              sizes={sizes}
+              getDefaultPosition={getDefaultPosition}
+              showRelations={showRelations}
+              manualLightningTrigger={manualLightningTrigger}
+            />
+
             {/* 1. Render all Data Structures */}
             {structures.map((st, idx) => {
               const cardId = st.id;

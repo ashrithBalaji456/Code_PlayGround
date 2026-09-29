@@ -379,6 +379,7 @@ export function App() {
           <div className={`${isCanvasPaneMaximized ? 'h-full' : 'flex-1 h-3/5'} overflow-hidden border-b border-[#30363d] relative transition-all duration-200`}>
             <VisualizationCanvas
               currentStep={currentStep}
+              previousStep={currentStepIndex > 0 ? steps[currentStepIndex - 1] : null}
               isRunning={isRunning}
               isFullscreen={false}
               onToggleFullscreen={() => setIsCanvasFullscreen(true)}
@@ -727,6 +728,7 @@ export function App() {
           <main className="flex-1 overflow-hidden relative">
             <VisualizationCanvas
               currentStep={currentStep}
+              previousStep={currentStepIndex > 0 ? steps[currentStepIndex - 1] : null}
               isRunning={isRunning}
               isFullscreen={true}
               onToggleFullscreen={() => setIsCanvasFullscreen(false)}
