@@ -53,7 +53,7 @@ interface VisualizationCanvasProps {
   onRunPreset?: () => void;
 }
 
-type CardSize = 'normal' | 'wide' | 'large';
+export type CardSize = '0.25x' | '0.5x' | '1x' | '1.5x' | '2x';
 type CanvasLayoutMode = 'freeform' | 'grid';
 
 export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
@@ -81,8 +81,8 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
 
   // Helper to compute default position for a structure
   const getDefaultPosition = useCallback((id: string, index: number = 0) => {
-    const cardWidth = 470;
-    const cardHeight = 380;
+    const cardWidth = 490;
+    const cardHeight = 390;
     const gap = 24;
     const cols = isFullscreen ? 3 : 2;
     const col = index % cols;
@@ -92,6 +92,53 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
       y: 24 + row * (cardHeight + gap),
     };
   }, [isFullscreen]);
+
+  // Dimension & scale mapping for sizes: 0.25x, 0.5x, 1x, 1.5x, 2x
+  const getCardStyle = (size: CardSize) => {
+    switch (size) {
+      case '0.25x':
+        return {
+          widthClass: 'w-[230px] max-w-full',
+          scale: 0.5,
+          contentWidth: '200%',
+          maxHeight: 'max-h-[250px]',
+          gridSpan: 'col-span-1',
+        };
+      case '0.5x':
+        return {
+          widthClass: 'w-[330px] max-w-full',
+          scale: 0.72,
+          contentWidth: '138%',
+          maxHeight: 'max-h-[350px]',
+          gridSpan: 'col-span-1',
+        };
+      case '1.5x':
+        return {
+          widthClass: 'w-[680px] max-w-full',
+          scale: 1.0,
+          contentWidth: '100%',
+          maxHeight: 'max-h-[580px]',
+          gridSpan: 'col-span-1 md:col-span-2',
+        };
+      case '2x':
+        return {
+          widthClass: 'w-[920px] max-w-full',
+          scale: 1.0,
+          contentWidth: '100%',
+          maxHeight: 'max-h-[700px]',
+          gridSpan: 'col-span-1 md:col-span-2 xl:col-span-3',
+        };
+      case '1x':
+      default:
+        return {
+          widthClass: 'w-[480px] max-w-full',
+          scale: 1.0,
+          contentWidth: '100%',
+          maxHeight: 'max-h-[500px]',
+          gridSpan: 'col-span-1',
+        };
+    }
+  };
 
   // Auto-arrange all structures into a tidy grid
   const handleAutoArrangeGrid = () => {
@@ -104,7 +151,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     if (hasJvm) allIds.push('jvm-memory-card');
 
     const newPositions: Record<string, { x: number; y: number }> = {};
-    const cardWidth = 480;
+    const cardWidth = 490;
     const cardHeight = 390;
     const gap = 24;
     const cols = isFullscreen ? 3 : 2;
@@ -178,15 +225,6 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     setZoom(1.0);
   };
 
-  // Toggle card size
-  const handleToggleCardSize = (id: string) => {
-    setSizes((prev) => {
-      const curr = prev[id] || 'normal';
-      const next: CardSize = curr === 'normal' ? 'wide' : curr === 'wide' ? 'large' : 'normal';
-      return { ...prev, [id]: next };
-    });
-  };
-
   // Toggle card maximize
   const handleToggleMaximizeCard = (id: string) => {
     setMaximizedCardId((prev) => (prev === id ? null : id));
@@ -197,10 +235,22 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Smooth dragging of cards on canvas
+  // Smooth dragging of cards on canvas — catch ANYWHERE on the structure
   const handleMouseDown = (id: string, e: React.MouseEvent) => {
     if (e.button !== 0 || layoutMode === 'grid') return;
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('.no-drag')) return;
+    const target = e.target as HTMLElement;
+
+    // Do not initiate drag if user clicked an interactive control (button, input, select, link, or .no-drag)
+    if (
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select') ||
+      target.closest('textarea') ||
+      target.closest('a') ||
+      target.closest('.no-drag')
+    ) {
+      return;
+    }
 
     e.preventDefault();
     const startX = e.clientX;
@@ -392,11 +442,11 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
           <div className="mt-8 flex items-center gap-6 text-xs text-[#8b949e]">
             <span className="flex items-center gap-1.5">
               <Move className="w-3.5 h-3.5 text-[#58a6ff]" />
-              Freely move any data structure
+              Catch & move structures anywhere
             </span>
             <span className="flex items-center gap-1.5">
               <Expand className="w-3.5 h-3.5 text-[#3fb950]" />
-              Enlarge & scale structures
+              Sizes: 0.25x, 0.5x, 1x, 1.5x, 2x
             </span>
             <span className="flex items-center gap-1.5">
               <LayoutGrid className="w-3.5 h-3.5 text-[#f0883e]" />
@@ -450,7 +500,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   ? 'bg-[#58a6ff]/20 text-[#58a6ff] font-semibold'
                   : 'text-[#8b949e] hover:text-[#f0f6fc]'
               }`}
-              title="Freeform Canvas Mode (Drag & place anywhere)"
+              title="Freeform Canvas Mode (Catch & move anywhere)"
             >
               <Move className="w-3 h-3" />
               <span>Freeform</span>
@@ -636,7 +686,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
           <div
             className={
               layoutMode === 'freeform'
-                ? 'relative min-w-[2000px] min-h-[1400px] transition-transform duration-75 origin-top-left'
+                ? 'relative min-w-[2200px] min-h-[1600px] transition-transform duration-75 origin-top-left'
                 : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-12'
             }
             style={layoutMode === 'freeform' ? { transform: `scale(${zoom})` } : undefined}
@@ -645,34 +695,26 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
             {structures.map((st, idx) => {
               const cardId = st.id;
               const pos = positions[cardId] || getDefaultPosition(cardId, idx);
-              const cardSize = sizes[cardId] || 'normal';
+              const cardSize: CardSize = sizes[cardId] || '1x';
               const isCol = !!collapsed[cardId];
               const isDragging = draggingId === cardId;
-
-              // Card width classes depending on size
-              const widthClass =
-                cardSize === 'large'
-                  ? 'w-[820px] max-w-full'
-                  : cardSize === 'wide'
-                  ? 'w-[640px] max-w-full'
-                  : 'w-[470px] max-w-full';
+              const dim = getCardStyle(cardSize);
 
               return (
                 <div
                   key={st.id}
                   id={`dsa-struct-${st.id}`}
-                  className={`bg-[#161b22] border rounded-2xl shadow-xl transition-shadow ${
+                  onMouseDown={(e) => handleMouseDown(cardId, e)}
+                  className={`bg-[#161b22] border rounded-2xl shadow-xl transition-shadow select-none ${
+                    layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
+                  } ${
                     isDragging
                       ? 'border-[#58a6ff] shadow-2xl ring-2 ring-[#58a6ff]/40 z-40'
                       : 'border-[#30363d] hover:border-[#58a6ff]/50'
                   } ${
                     layoutMode === 'freeform'
-                      ? `absolute ${widthClass}`
-                      : cardSize === 'large'
-                      ? 'col-span-1 md:col-span-2 xl:col-span-3'
-                      : cardSize === 'wide'
-                      ? 'col-span-1 md:col-span-2'
-                      : 'col-span-1'
+                      ? `absolute ${dim.widthClass}`
+                      : dim.gridSpan
                   }`}
                   style={
                     layoutMode === 'freeform'
@@ -684,44 +726,56 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                       : undefined
                   }
                 >
-                  {/* Draggable Header */}
+                  {/* Header */}
                   <div
-                    onMouseDown={(e) => handleMouseDown(cardId, e)}
-                    className={`px-3.5 py-2.5 bg-[#0d1117]/90 border-b border-[#30363d] rounded-t-2xl flex items-center justify-between select-none ${
-                      layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
-                    }`}
+                    className={`px-3.5 py-2.5 bg-[#0d1117]/90 border-b border-[#30363d] rounded-t-2xl flex items-center justify-between gap-2`}
                   >
                     {/* Left: Icon, Name & Type */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 overflow-hidden">
                       {layoutMode === 'freeform' && (
-                        <Move className="w-3.5 h-3.5 text-[#8b949e] opacity-60" />
+                        <Move className="w-3.5 h-3.5 text-[#8b949e] opacity-60 flex-shrink-0" />
                       )}
                       {getStructureIcon(st.type)}
-                      <span className="text-xs font-bold text-[#f0f6fc]">{st.name || st.id}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-[#58a6ff] border border-[#30363d]">
+                      <span className="text-xs font-bold text-[#f0f6fc] truncate">{st.name || st.id}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-[#58a6ff] border border-[#30363d] flex-shrink-0">
                         {st.dataType || st.type}
                       </span>
                       {st.size !== undefined && (
-                        <span className="text-[10px] font-mono text-[#8b949e]">
-                          ({st.size} item{st.size !== 1 ? 's' : ''})
+                        <span className="text-[10px] font-mono text-[#8b949e] hidden sm:inline flex-shrink-0">
+                          ({st.size})
                         </span>
                       )}
                     </div>
 
-                    {/* Right: Card Actions (Size, Maximize, Collapse) */}
-                    <div className="flex items-center gap-1 no-drag">
-                      {/* Enlarge / Size toggle (1x / 1.5x / 2x) */}
-                      <button
-                        onClick={() => handleToggleCardSize(cardId)}
-                        className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f0f6fc] border border-[#30363d] transition-colors"
-                        title="Toggle Card Size (Normal 1x ➔ Wide 1.5x ➔ Large 2x)"
-                      >
-                        {cardSize === 'normal' ? '1x' : cardSize === 'wide' ? '1.5x' : '2x'}
-                      </button>
+                    {/* Right: Card Actions (Size options: 0.25x, 0.5x, 1x, 1.5x, 2x, Maximize, Collapse) */}
+                    <div className="flex items-center gap-1.5 no-drag flex-shrink-0">
+                      {/* Direct Size Selector Pill */}
+                      <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 text-[10px] font-mono">
+                        {(['0.25x', '0.5x', '1x', '1.5x', '2x'] as CardSize[]).map((sz) => (
+                          <button
+                            key={sz}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSizes((prev) => ({ ...prev, [cardId]: sz }));
+                            }}
+                            className={`px-1.5 py-0.5 rounded transition-colors ${
+                              cardSize === sz
+                                ? 'bg-[#58a6ff]/25 text-[#58a6ff] font-bold border border-[#58a6ff]/40 shadow-sm'
+                                : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                            }`}
+                            title={`Set size to ${sz}`}
+                          >
+                            {sz}
+                          </button>
+                        ))}
+                      </div>
 
                       {/* Solo Maximize */}
                       <button
-                        onClick={() => handleToggleMaximizeCard(cardId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleMaximizeCard(cardId);
+                        }}
                         className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#f0f6fc] transition-colors"
                         title="Focus Maximize this Structure"
                       >
@@ -730,7 +784,10 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
 
                       {/* Collapse / Fold */}
                       <button
-                        onClick={() => handleToggleCollapse(cardId)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleCollapse(cardId);
+                        }}
                         className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#f0f6fc] transition-colors"
                         title={isCol ? 'Expand Card' : 'Collapse Card'}
                       >
@@ -739,9 +796,20 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                     </div>
                   </div>
 
-                  {/* Card Content Area */}
+                  {/* Card Content Area with Proportional Scaling for 0.25x and 0.5x */}
                   {!isCol && (
-                    <div className="p-3.5 overflow-auto max-h-[500px]">
+                    <div
+                      className={`p-3 overflow-auto ${dim.maxHeight}`}
+                      style={
+                        dim.scale < 1.0
+                          ? {
+                              transform: `scale(${dim.scale})`,
+                              transformOrigin: 'top left',
+                              width: dim.contentWidth,
+                            }
+                          : undefined
+                      }
+                    >
                       {renderVisualizerContent(st)}
                     </div>
                   )}
@@ -754,29 +822,26 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
               (() => {
                 const jvmId = 'jvm-memory-card';
                 const pos = positions[jvmId] || getDefaultPosition(jvmId, structures.length);
-                const cardSize = sizes[jvmId] || 'large';
+                const cardSize: CardSize = sizes[jvmId] || '1x';
                 const isCol = !!collapsed[jvmId];
                 const isDragging = draggingId === jvmId;
-
-                const widthClass =
-                  cardSize === 'large'
-                    ? 'w-[840px] max-w-full'
-                    : cardSize === 'wide'
-                    ? 'w-[640px] max-w-full'
-                    : 'w-[470px] max-w-full';
+                const dim = getCardStyle(cardSize);
 
                 return (
                   <div
                     key={jvmId}
                     id={`dsa-struct-${jvmId}`}
-                    className={`bg-[#161b22] border rounded-2xl shadow-xl transition-shadow ${
+                    onMouseDown={(e) => handleMouseDown(jvmId, e)}
+                    className={`bg-[#161b22] border rounded-2xl shadow-xl transition-shadow select-none ${
+                      layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
+                    } ${
                       isDragging
                         ? 'border-[#3fb950] shadow-2xl ring-2 ring-[#3fb950]/40 z-40'
                         : 'border-[#30363d] hover:border-[#3fb950]/50'
                     } ${
                       layoutMode === 'freeform'
-                        ? `absolute ${widthClass}`
-                        : 'col-span-1 md:col-span-2 xl:col-span-3'
+                        ? `absolute ${dim.widthClass}`
+                        : dim.gridSpan
                     }`}
                     style={
                       layoutMode === 'freeform'
@@ -790,39 +855,56 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   >
                     {/* Header */}
                     <div
-                      onMouseDown={(e) => handleMouseDown(jvmId, e)}
-                      className={`px-3.5 py-2.5 bg-[#0d1117]/90 border-b border-[#30363d] rounded-t-2xl flex items-center justify-between select-none ${
-                        layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
-                      }`}
+                      className={`px-3.5 py-2.5 bg-[#0d1117]/90 border-b border-[#30363d] rounded-t-2xl flex items-center justify-between gap-2`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 overflow-hidden">
                         {layoutMode === 'freeform' && (
-                          <Move className="w-3.5 h-3.5 text-[#8b949e] opacity-60" />
+                          <Move className="w-3.5 h-3.5 text-[#8b949e] opacity-60 flex-shrink-0" />
                         )}
                         <Database className="w-4 h-4 text-[#3fb950]" />
-                        <span className="text-xs font-bold text-[#f0f6fc]">JVM Heap, Objects & Metaspace</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-[#3fb950] border border-[#30363d]">
-                          Runtime Memory
+                        <span className="text-xs font-bold text-[#f0f6fc] truncate">JVM Heap & Objects</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-[#3fb950] border border-[#30363d] flex-shrink-0">
+                          Memory
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1 no-drag">
+                      <div className="flex items-center gap-1.5 no-drag flex-shrink-0">
+                        {/* Direct Size Selector Pill */}
+                        <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 text-[10px] font-mono">
+                          {(['0.25x', '0.5x', '1x', '1.5x', '2x'] as CardSize[]).map((sz) => (
+                            <button
+                              key={sz}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSizes((prev) => ({ ...prev, [jvmId]: sz }));
+                              }}
+                              className={`px-1.5 py-0.5 rounded transition-colors ${
+                                cardSize === sz
+                                  ? 'bg-[#3fb950]/25 text-[#3fb950] font-bold border border-[#3fb950]/40 shadow-sm'
+                                  : 'text-[#8b949e] hover:text-[#f0f6fc]'
+                              }`}
+                              title={`Set size to ${sz}`}
+                            >
+                              {sz}
+                            </button>
+                          ))}
+                        </div>
+
                         <button
-                          onClick={() => handleToggleCardSize(jvmId)}
-                          className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f0f6fc] border border-[#30363d] transition-colors"
-                          title="Toggle Size"
-                        >
-                          {cardSize === 'normal' ? '1x' : cardSize === 'wide' ? '1.5x' : '2x'}
-                        </button>
-                        <button
-                          onClick={() => handleToggleMaximizeCard(jvmId)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleMaximizeCard(jvmId);
+                          }}
                           className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#f0f6fc] transition-colors"
                           title="Maximize Memory Card"
                         >
                           <Expand className="w-3.5 h-3.5 text-[#3fb950]" />
                         </button>
                         <button
-                          onClick={() => handleToggleCollapse(jvmId)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleCollapse(jvmId);
+                          }}
                           className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#f0f6fc] transition-colors"
                           title={isCol ? 'Expand' : 'Collapse'}
                         >
@@ -832,7 +914,18 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                     </div>
 
                     {!isCol && (
-                      <div className="p-3.5 overflow-auto max-h-[500px]">
+                      <div
+                        className={`p-3 overflow-auto ${dim.maxHeight}`}
+                        style={
+                          dim.scale < 1.0
+                            ? {
+                                transform: `scale(${dim.scale})`,
+                                transformOrigin: 'top left',
+                                width: dim.contentWidth,
+                              }
+                            : undefined
+                        }
+                      >
                         <JvmObjectVisualizer currentStep={currentStep} />
                       </div>
                     )}
