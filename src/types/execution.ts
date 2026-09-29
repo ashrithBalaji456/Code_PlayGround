@@ -584,7 +584,28 @@ export type EventType =
   | 'LOCK_RELEASE'
   | 'LOCK_WAIT'
   | 'DEADLOCK_DETECTED'
-  | 'ERROR';
+  | 'ERROR'
+  // Phase 11 Java OOP, Language & Exception Events
+  | 'METHOD_CALL'
+  | 'METHOD_RETURN'
+  | 'SUPER_CALL'
+  | 'THIS_ACCESS'
+  | 'SUPER_ACCESS'
+  | 'OBJECT_REFERENCE_UPDATE'
+  | 'METHOD_OVERLOAD_RESOLUTION'
+  | 'METHOD_OVERRIDE_RESOLUTION'
+  | 'INHERITANCE_RESOLUTION'
+  | 'INTERFACE_RESOLUTION'
+  | 'EXCEPTION_CATCH'
+  | 'EXCEPTION_FINALLY'
+  | 'EXCEPTION_PROPAGATE'
+  | 'STRING_CREATE'
+  | 'STRING_REFERENCE'
+  | 'STRING_UPDATE'
+  | 'STRING_BUILDER_APPEND'
+  | 'BOX'
+  | 'UNBOX'
+  | 'GC_ELIGIBLE';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -762,6 +783,10 @@ export interface VariableInfo {
   refTargetId?: string;
   objectId?: string;
   estimatedBytes: number;
+  // Phase 11
+  kind?: 'Primitive' | 'Reference';
+  educationalSize?: string;
+  isFinal?: boolean;
 }
 
 export interface CallFrame {
@@ -1009,7 +1034,7 @@ export interface HeapObject {
   fields: Record<string, any>;
   estimatedBytes: number;
   referencesTo: string[];
-  // Phase 10
+  // Phase 10 & 11
   className?: string;
   referencesFrom?: string[];
   gcEligible?: boolean;
@@ -1017,6 +1042,9 @@ export interface HeapObject {
   lifecycle?: 'NOT_CREATED' | 'CREATED' | 'REFERENCED' | 'MUTATED' | 'GC_ELIGIBLE';
   isStringLiteral?: boolean;
   stringLiteralValue?: string;
+  objectId?: string;
+  isEncapsulated?: boolean;
+  parentClass?: string;
 }
 
 export interface ThreadState {
@@ -1037,6 +1065,8 @@ export interface JavaConceptInfo {
   name: string;
   category: 'OOP' | 'MEMORY' | 'CONTROL_FLOW' | 'EXCEPTIONS' | 'COLLECTIONS' | 'CONCURRENCY' | 'MODERN_JAVA';
   explanation: string;
+  whyExplanation?: string;
+  actionType?: string;
   details?: Record<string, any>;
   badge?: string;
 }
@@ -1366,13 +1396,18 @@ export interface ExecutionStep {
     totalBytes: number;
   };
   algorithmState?: AlgorithmState;
-  // Phase 10 Java OOP & JVM State
+  // Phase 10 & 11 Java OOP & JVM State
   staticFields?: Record<string, Record<string, any>>;
   threads?: Record<string, ThreadState>;
   locks?: Record<string, LockState>;
   deadlockDetected?: boolean;
   activeJavaConcept?: JavaConceptInfo | null;
   stringPool?: Array<{ value: string; references: string[] }>;
+  beginnerExplanation?: {
+    what: string;
+    why?: string;
+    actionType?: string;
+  };
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1380,7 +1415,7 @@ export type SupportedLanguage = 'java' | 'python';
 export interface CodePreset {
   id: string;
   title: string;
-  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms' | 'Java OOP & JVM Internals';
+  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms' | 'Java OOP & JVM Internals' | 'Java OOP & Language Fundamentals';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;

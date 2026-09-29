@@ -590,6 +590,7 @@ export function App() {
                     <JavaConceptPanel
                       concept={currentStep?.activeJavaConcept}
                       line={currentStep?.line}
+                      beginnerExplanation={currentStep?.beginnerExplanation}
                     />
                   )}
                 </div>

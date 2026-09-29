@@ -35,7 +35,7 @@ async function runPhase10TestSuite() {
   assert(objSteps[1].heap[0].fields.name === null, 'Step 1: Initial field name is null');
   assert(objSteps[3].heap[0].fields.name === 'Ashrith', 'Step 3: Field name updated to Ashrith');
   assert(objSteps[5].heap[0].fields.age === 22, 'Step 5: Field age updated to 22');
-  assert(objSteps[5].variables['s']?.refTargetId === 'obj-1', 'Step 5: Variable s points to obj-1');
+  assert(objSteps[5].variables['s']?.refTargetId === 'object-1' || objSteps[5].variables['s']?.refTargetId === 'obj-1', 'Step 5: Variable s points to object-1 / obj-1');
 
   // Backward Replay Verification
   assert(objSteps[1].heap[0].fields.name === null, 'Replay: Step 1 heap remains unchanged (immutability)');

@@ -245,6 +245,43 @@ public class CodeFlowTracer {
         recordEvent("{\\\"type\\\":\\\"STREAM_PIPELINE_STEP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"streamOp\\\":\\\"" + op + "\\\",\\\"value\\\":" + formatValue(inVal) + ",\\\"newValue\\\":" + formatValue(outVal) + "}");
     }
 
+    // ==========================================
+    // PHASE 11: CONSTRUCTORS & STRINGBUILDER
+    // ==========================================
+
+    public static void constructorEnter(String className, String[] paramNames, Object[] paramValues, int line) {
+        StringBuilder argsJson = new StringBuilder("{");
+        if (paramNames != null && paramValues != null) {
+            for (int i = 0; i < paramNames.length; i++) {
+                if (i > 0) argsJson.append(",");
+                argsJson.append("\\\"").append(paramNames[i]).append("\\\":");
+                if (i < paramValues.length) {
+                    argsJson.append(formatValue(paramValues[i]));
+                } else {
+                    argsJson.append("\\\"null\\\"");
+                }
+            }
+        }
+        argsJson.append("}");
+        recordEvent("{\\\"type\\\":\\\"CONSTRUCTOR_CALL\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + className + "\\\",\\\"arguments\\\":" + argsJson.toString() + "}");
+        funcEnter(className, paramNames, paramValues, line);
+    }
+
+    public static void constructorExit(String className, int line) {
+        recordEvent("{\\\"type\\\":\\\"CONSTRUCTOR_RETURN\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + className + "\\\"}");
+        funcExit(className, null, line);
+    }
+
+    public static void superCall(String parentClass, int line) {
+        recordEvent("{\\\"type\\\":\\\"CONSTRUCTOR_CALL\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + parentClass + "\\\",\\\"message\\\":\\\"super() invoked\\\"}");
+    }
+
+    public static void stringBuilderAppend(Object sbInstance, String appended, int line) {
+        if (sbInstance == null) return;
+        String objId = "obj-" + System.identityHashCode(sbInstance);
+        recordEvent("{\\\"type\\\":\\\"OBJECT_FIELD_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"className\\\":\\\"StringBuilder\\\",\\\"fieldName\\\":\\\"content\\\",\\\"newValue\\\":\\\"" + sbInstance.toString().replace((char)34, (char)39) + "\\\"}");
+    }
+
     public static void funcEnter(String name, String[] paramNames, Object[] paramValues, int line) {
         StringBuilder argsJson = new StringBuilder("{");
         if (paramNames != null && paramValues != null) {

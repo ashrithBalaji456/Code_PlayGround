@@ -32,7 +32,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
   const references = Object.values(variables).filter((v) => v.isReference);
 
   const inspectedObj = selectedObjectId
-    ? heap.find((h) => h.id === selectedObjectId || h.id === `@${selectedObjectId}`)
+    ? heap.find((h) => h.objectId === selectedObjectId || h.id === selectedObjectId || h.id === `@${selectedObjectId}`)
     : null;
 
   const inspectedVar = selectedVarName ? variables[selectedVarName] : null;
@@ -180,7 +180,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                   </span>
                 ) : (
                   heap.map((obj) => {
-                    const cleanId = obj.id.replace(/^@/, '');
+                    const cleanId = obj.objectId || obj.id.replace(/^@/, '');
                     const isGcEligible = obj.gcEligible || (obj.referencesFrom && obj.referencesFrom.length === 0);
                     return (
                       <div
@@ -196,14 +196,14 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between text-[#bc8cff]">
-                          <span className="font-bold">{obj.className ? `${obj.className}#${cleanId.replace(/\D/g, '') || '1'}` : obj.id}</span>
+                          <span className="font-bold">{obj.className ? `${obj.className} (${cleanId})` : cleanId}</span>
                           <span className="text-[10px] text-[#3fb950]">~{obj.estimatedBytes} B</span>
                         </div>
                         <div className="text-[10px] text-[#8b949e] truncate flex items-center justify-between">
                           <span>Type: <strong className="text-[#f0f6fc]">{obj.className || obj.type}</strong></span>
                           {isGcEligible && (
                             <span className="text-[9px] text-[#d29922] font-bold bg-[#d29922]/15 px-1 rounded">
-                              GC Eligible
+                              Eligible for GC
                             </span>
                           )}
                         </div>
@@ -271,11 +271,15 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       <span className="font-bold text-[#f0f6fc]">{inspectedVar.name}</span>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span className="text-[#8b949e]">Kind:</span>
+                      <span className="font-bold text-[#79c0ff]">{inspectedVar.kind || (inspectedVar.isReference ? 'Reference' : 'Primitive')}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-[#8b949e]">Declared Type:</span>
                       <span className="font-bold text-[#58a6ff]">{inspectedVar.type}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[#8b949e]">Points To:</span>
+                      <span className="text-[#8b949e]">{inspectedVar.isReference ? 'Points To:' : 'Value:'}</span>
                       <span className="font-bold text-[#bc8cff]">
                         {inspectedVar.isReference ? (inspectedVar.refTargetId || 'null') : String(inspectedVar.value)}
                       </span>
@@ -284,6 +288,11 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       <span className="text-[#8b949e]">Stack Frame:</span>
                       <span className="text-[#f0f6fc]">{inspectedVar.scope}()</span>
                     </div>
+                    {inspectedVar.educationalSize && (
+                      <div className="text-[10px] text-[#8b949e] italic mt-1 border-t border-[#30363d]/50 pt-1">
+                        {inspectedVar.educationalSize}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <span className="text-[#8b949e] italic py-4 text-center">
@@ -306,7 +315,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                     <div className="flex items-center justify-between">
                       <span className="text-[#8b949e]">Object ID:</span>
                       <span className="font-bold text-[#f0f6fc]">
-                        {inspectedObj.className ? `${inspectedObj.className}#${inspectedObj.id.replace(/\D/g, '') || '1'}` : inspectedObj.id}
+                        {inspectedObj.objectId || inspectedObj.id}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">

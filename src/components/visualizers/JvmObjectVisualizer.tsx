@@ -168,7 +168,10 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
               <HardDrive className="w-4 h-4" />
               <span>HEAP (Objects & Instances)</span>
             </div>
-            <span className="text-[11px] font-mono text-[#8b949e]">~{currentStep.memoryStats.heapBytes}B</span>
+            <div className="flex items-center gap-1 text-[10px] text-[#8b949e] font-mono">
+              <span>~{currentStep.memoryStats.heapBytes}B</span>
+              <span className="text-[9px] text-[#8b949e]/70">(Est.)</span>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[380px] pr-1">
@@ -193,7 +196,7 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
                       isSelected
                         ? 'border-[#bc8cff] ring-2 ring-[#bc8cff]/30 shadow-[#bc8cff]/20'
                         : isGcEligible
-                        ? 'border-[#d29922]/50 hover:border-[#d29922]'
+                        ? 'border-[#d29922]/50 hover:border-[#d29922] bg-[#d29922]/5'
                         : 'border-[#30363d] hover:border-[#bc8cff]/60'
                     }`}
                   >
@@ -203,39 +206,43 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
                         <span className="font-bold text-xs text-[#bc8cff]">
                           {obj.className || obj.type}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-[#8b949e]">
-                          #{cleanId.replace(/\D/g, '') || '1'}
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#21262d] text-[#58a6ff] font-semibold border border-[#30363d]">
+                          {cleanId}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-1.5">
                         {isGcEligible ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#d29922]/20 text-[#d29922] border border-[#d29922]/40">
-                            GC Eligible
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#d29922]/20 text-[#d29922] border border-[#d29922]/40 animate-pulse">
+                            Eligible for GC
                           </span>
                         ) : (
                           <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/40">
-                            Active
+                            Reachable
                           </span>
                         )}
                         <span className="text-[10px] font-mono text-[#8b949e]">~{obj.estimatedBytes}B</span>
                       </div>
                     </div>
 
-                    {/* Referenced From Badges (Pointers converging on this object) */}
-                    {obj.referencesFrom && obj.referencesFrom.length > 0 && (
+                    {/* Referenced From Badges (Stack references converging on this object) */}
+                    {obj.referencesFrom && obj.referencesFrom.length > 0 ? (
                       <div className="flex items-center gap-1 text-[10px] font-mono text-[#8b949e]">
-                        <span>Refs:</span>
+                        <span>Refs from Stack:</span>
                         <div className="flex flex-wrap gap-1">
                           {obj.referencesFrom.map((rf) => (
                             <span
                               key={rf}
                               className="px-1.5 py-0.2 rounded bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40 font-bold"
                             >
-                              {rf}
+                              {rf} ──►
                             </span>
                           ))}
                         </div>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] font-mono text-[#d29922] italic">
+                        No active references (Eligible for Garbage Collection)
                       </div>
                     )}
 
@@ -245,18 +252,39 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
                         <span className="text-[#8b949e] italic text-[11px]">No fields initialized</span>
                       ) : (
                         <div className="grid grid-cols-2 gap-1 text-[11px]">
-                          {Object.entries(obj.fields).map(([fk, fv]) => (
-                            <div key={fk} className="flex items-center justify-between p-1 bg-[#161b22] rounded border border-[#30363d]/40">
-                              <span className="text-[#8b949e] font-semibold">{fk}:</span>
-                              <span className="text-[#f0f6fc] font-bold truncate max-w-[80px]">
-                                {typeof fv === 'string' && fv.startsWith('obj-') ? (
-                                  <span className="text-[#bc8cff]">➔ {fv}</span>
-                                ) : (
-                                  JSON.stringify(fv)
-                                )}
-                              </span>
-                            </div>
-                          ))}
+                          {Object.entries(obj.fields).map(([fk, fv]) => {
+                            const isRefField = typeof fv === 'string' && (fv.startsWith('object-') || fv.startsWith('obj-') || fv.startsWith('@obj-'));
+                            const cleanTarget = isRefField ? fv.replace(/^@/, '') : null;
+                            return (
+                              <div
+                                key={fk}
+                                onClick={(e) => {
+                                  if (cleanTarget) {
+                                    e.stopPropagation();
+                                    setInspectedObjectId(cleanTarget);
+                                    onSelectObject?.(cleanTarget);
+                                  }
+                                }}
+                                className={`flex items-center justify-between p-1 bg-[#161b22] rounded border ${
+                                  cleanTarget
+                                    ? 'border-[#bc8cff]/40 hover:border-[#bc8cff] cursor-pointer'
+                                    : 'border-[#30363d]/40'
+                                }`}
+                              >
+                                <span className="text-[#8b949e] font-semibold">{fk}:</span>
+                                <span className="text-[#f0f6fc] font-bold truncate max-w-[90px]">
+                                  {cleanTarget ? (
+                                    <span className="text-[#bc8cff] underline flex items-center gap-0.5">
+                                      <span>➔</span>
+                                      <span>{cleanTarget}</span>
+                                    </span>
+                                  ) : (
+                                    JSON.stringify(fv)
+                                  )}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -371,16 +399,16 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
         </div>
       </div>
 
-      {/* Interactive Object & Reference Inspector (Section 74, 75) */}
+      {/* Interactive Object & Reference Inspector (Section 48, 49, 50, 51) */}
       {(inspectedObj || inspectedVar) && (
-        <div className="bg-[#0d1117] border border-[#58a6ff]/40 rounded-xl p-3 flex flex-col gap-2 text-xs font-mono shadow-inner">
+        <div className="bg-[#0d1117] border border-[#58a6ff]/40 rounded-xl p-3 flex flex-col gap-2.5 text-xs font-mono shadow-inner">
           <div className="flex items-center justify-between border-b border-[#30363d] pb-1.5">
             <div className="flex items-center gap-2 text-[#58a6ff] font-bold">
               <Eye className="w-4 h-4" />
               <span>
                 {inspectedObj
-                  ? `OBJECT INSPECTOR — ${inspectedObj.className || inspectedObj.type}#${inspectedObj.id.replace(/\D/g, '') || '1'}`
-                  : `REFERENCE INSPECTOR — ${inspectedVar?.name}`}
+                  ? `OBJECT INSPECTOR — ${inspectedObj.className || inspectedObj.type} (${inspectedObj.id})`
+                  : `VARIABLE & REFERENCE INSPECTOR — ${inspectedVar?.name}`}
               </span>
             </div>
             <button
@@ -388,49 +416,98 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
                 setInspectedObjectId(null);
                 setInspectedVarName(null);
               }}
-              className="text-[#8b949e] hover:text-[#f0f6fc] text-xs font-bold px-2 py-0.5"
+              className="text-[#8b949e] hover:text-[#f0f6fc] text-xs font-bold px-2 py-0.5 rounded bg-[#161b22] border border-[#30363d]"
             >
               ✕ Close
             </button>
           </div>
 
           {inspectedObj && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
-              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
-                <span className="text-[#8b949e] block">Class / Type:</span>
-                <span className="text-[#bc8cff] font-bold">{inspectedObj.className || inspectedObj.type}</span>
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Object ID:</span>
+                  <span className="text-[#58a6ff] font-bold">{inspectedObj.id}</span>
+                </div>
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Class / Type:</span>
+                  <span className="text-[#bc8cff] font-bold">{inspectedObj.className || inspectedObj.type}</span>
+                </div>
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Lifecycle / GC:</span>
+                  <span
+                    className={`font-bold ${
+                      inspectedObj.gcEligible ? 'text-[#d29922]' : 'text-[#3fb950]'
+                    }`}
+                  >
+                    {inspectedObj.gcEligible ? 'Eligible for GC' : 'Reachable'}
+                  </span>
+                </div>
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Est. Memory:</span>
+                  <span className="text-[#3fb950] font-bold">~{inspectedObj.estimatedBytes} B (Educational)</span>
+                </div>
               </div>
+
+              {/* Object Fields Table */}
               <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
-                <span className="text-[#8b949e] block">Memory Size:</span>
-                <span className="text-[#3fb950] font-bold">~{inspectedObj.estimatedBytes} Bytes (Estimated)</span>
-              </div>
-              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
-                <span className="text-[#8b949e] block">GC Eligibility:</span>
-                <span
-                  className={`font-bold ${
-                    inspectedObj.gcEligible ? 'text-[#d29922]' : 'text-[#3fb950]'
-                  }`}
-                >
-                  {inspectedObj.gcEligible ? 'Eligible for GC (0 refs)' : 'Active (Referenced)'}
-                </span>
+                <span className="text-[10px] text-[#8b949e] uppercase font-bold mb-1 block">Object Fields:</span>
+                {Object.keys(inspectedObj.fields).length === 0 ? (
+                  <span className="text-[#8b949e] italic text-[10px]">No instance fields declared</span>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[11px]">
+                    {Object.entries(inspectedObj.fields).map(([fk, fv]) => (
+                      <div key={fk} className="flex items-center justify-between p-1.5 bg-[#0d1117] rounded border border-[#30363d]">
+                        <span className="text-[#8b949e] font-semibold">{fk}:</span>
+                        <span className="font-bold text-[#f0f6fc]">
+                          {typeof fv === 'string' && fv.startsWith('object-') ? (
+                            <span className="text-[#bc8cff]">➔ {fv}</span>
+                          ) : (
+                            JSON.stringify(fv)
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {inspectedVar && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
-              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
-                <span className="text-[#8b949e] block">Variable Name:</span>
-                <span className="text-[#58a6ff] font-bold">{inspectedVar.name}</span>
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Variable Name:</span>
+                  <span className="text-[#58a6ff] font-bold">{inspectedVar.name}</span>
+                </div>
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Kind:</span>
+                  <span className="text-[#e3b341] font-bold">
+                    {inspectedVar.kind || (inspectedVar.isReference ? 'Reference' : 'Primitive')}
+                  </span>
+                </div>
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Declared Type:</span>
+                  <span className="text-[#f0f6fc] font-bold">{inspectedVar.type}</span>
+                </div>
+                <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
+                  <span className="text-[#8b949e] block text-[10px]">Scope:</span>
+                  <span className="text-[#3fb950] font-bold">{inspectedVar.scope}()</span>
+                </div>
               </div>
-              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
-                <span className="text-[#8b949e] block">Declared Type:</span>
-                <span className="text-[#f0f6fc] font-bold">{inspectedVar.type}</span>
-              </div>
-              <div className="bg-[#161b22] p-2 rounded border border-[#30363d]">
-                <span className="text-[#8b949e] block">Target Heap Object:</span>
-                <span className="text-[#bc8cff] font-bold">
-                  {inspectedVar.isReference ? (inspectedVar.refTargetId || 'null') : String(inspectedVar.value)}
+
+              <div className="p-2 bg-[#161b22] rounded border border-[#30363d] flex items-center justify-between text-[11px]">
+                <div>
+                  <span className="text-[#8b949e]">Current Value / Target: </span>
+                  <span className="text-[#bc8cff] font-bold">
+                    {inspectedVar.isReference
+                      ? (inspectedVar.refTargetId ? `➔ ${inspectedVar.refTargetId}` : 'null (Null Reference)')
+                      : String(inspectedVar.value)}
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#8b949e]">
+                  {inspectedVar.educationalSize || 'Typical Java representation'}
                 </span>
               </div>
             </div>

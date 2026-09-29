@@ -52,11 +52,223 @@ function toNumericIndex(idx: number | [number, number] | undefined, defaultVal =
   return defaultVal;
 }
 
+// Phase 11: Dynamic Beginner Explanation Generator (Show -> Explain -> Animate -> Update)
+function computeBeginnerExplanation(
+  ev: ExecutionEvent,
+  stepIndex: number,
+  variables: Record<string, VariableInfo>,
+  heap: HeapObject[],
+  callStack: CallFrame[],
+  explanation: string
+): { what: string; why: string; actionType: string } {
+  const currentFn = callStack.length > 0 ? callStack[callStack.length - 1].functionName : 'main';
+
+  switch (ev.type) {
+    case 'OBJECT_CREATE': {
+      const cls = ev.className || ev.dataType || 'Java';
+      const varName = ev.variable;
+      return {
+        what: `A new ${cls} object was created on the Heap${varName ? ` and the reference variable '${varName}' now points to it` : ''}.`,
+        why: `The 'new' keyword allocates memory on the Heap and runs the class constructor to initialize its instance fields.`,
+        actionType: 'OBJECT_CREATION',
+      };
+    }
+
+    case 'OBJECT_FIELD_UPDATE':
+    case 'CUSTOM_OBJECT_UPDATE': {
+      const cls = ev.className || 'Object';
+      const field = ev.fieldName || 'field';
+      const valStr = JSON.stringify(ev.newValue !== undefined ? ev.newValue : ev.value);
+      return {
+        what: `Java followed the reference to the ${cls} object and updated field '${field}' to ${valStr}.`,
+        why: `Instance variables reside inside the heap object. Modifying a field changes the shared object in memory.`,
+        actionType: 'FIELD_MUTATION',
+      };
+    }
+
+    case 'STATIC_FIELD_UPDATE': {
+      const cls = ev.className || 'Class';
+      const field = ev.fieldName || ev.variable || 'field';
+      const valStr = JSON.stringify(ev.newValue !== undefined ? ev.newValue : ev.value);
+      return {
+        what: `Updated static variable ${cls}.${field} to ${valStr} in the Class Metaspace.`,
+        why: `Static variables belong to the Class itself in Metaspace, not to individual Heap instances. All objects share this single copy.`,
+        actionType: 'STATIC_FIELD_UPDATE',
+      };
+    }
+
+    case 'POLYMORPHIC_CALL':
+    case 'METHOD_OVERRIDE_CALL': {
+      const ref = ev.variable || 'ref';
+      const refType = ev.refType || 'SuperClass';
+      const actType = ev.actualType || 'SubClass';
+      const mName = ev.methodName || ev.resolvedMethod || 'method()';
+      return {
+        what: `Polymorphic call: reference '${ref}' (declared type ${refType}) dynamically executed ${actType}.${mName}.`,
+        why: `Java resolves overridden methods at runtime via Dynamic Method Dispatch based on the actual object on the Heap.`,
+        actionType: 'DYNAMIC_DISPATCH',
+      };
+    }
+
+    case 'CONSTRUCTOR_CALL': {
+      const cls = ev.className || 'Class';
+      return {
+        what: `Invoked constructor ${cls}(). 'this' points to the newly allocated instance on the Heap.`,
+        why: `Constructors prepare and initialize instance fields before the reference is made available to the program.`,
+        actionType: 'CONSTRUCTOR_CALL',
+      };
+    }
+
+    case 'CONSTRUCTOR_RETURN': {
+      return {
+        what: `Constructor finished initializing object fields and returned reference to caller.`,
+        why: `Constructor stack frame popped off the call stack. The newly initialized object is ready for use.`,
+        actionType: 'CONSTRUCTOR_RETURN',
+      };
+    }
+
+    case 'VARIABLE_CREATE':
+    case 'VARIABLE_UPDATE': {
+      const varName = ev.variable || 'x';
+      const val = ev.newValue !== undefined ? ev.newValue : ev.value;
+      const isNull = val === null || val === 'null';
+      const isRef = !!ev.isReference || (typeof val === 'string' && val.startsWith('object-'));
+
+      if (isNull) {
+        return {
+          what: `Variable '${varName}' was set to null. It no longer points to any object on the Heap.`,
+          why: `Assigning null clears the address stored in the reference. If no other references point to the previous object, that object becomes eligible for Garbage Collection.`,
+          actionType: 'NULL_ASSIGNMENT',
+        };
+      }
+      if (isRef) {
+        return {
+          what: `Reference variable '${varName}' now points to object ${val}.`,
+          why: `Java copies the reference value (the memory address) by value. It does not clone or duplicate the object on the Heap.`,
+          actionType: 'REFERENCE_ASSIGNMENT',
+        };
+      }
+      return {
+        what: `Stored primitive value ${JSON.stringify(val)} in variable '${varName}' inside ${currentFn}() stack frame.`,
+        why: `Primitives (int, double, boolean, char, etc.) store their raw values directly within the method's stack frame.`,
+        actionType: 'PRIMITIVE_ASSIGNMENT',
+      };
+    }
+
+    case 'FUNCTION_CALL': {
+      const fn = ev.functionName || 'method';
+      return {
+        what: `Called method ${fn}() and pushed a new stack frame onto the Call Stack.`,
+        why: `Java creates an isolated stack frame for each method call to store arguments, local variables, and the return address.`,
+        actionType: 'METHOD_CALL',
+      };
+    }
+
+    case 'FUNCTION_RETURN': {
+      const fn = ev.functionName || 'method';
+      const ret = ev.returnValue !== undefined ? ` with return value ${JSON.stringify(ev.returnValue)}` : '';
+      return {
+        what: `Method ${fn}() completed${ret}. Control returned to the caller.`,
+        why: `The method frame was popped from the Call Stack. All local variables declared in ${fn}() were reclaimed.`,
+        actionType: 'METHOD_RETURN',
+      };
+    }
+
+    case 'TRY_ENTER':
+      return {
+        what: `Entered try block. The JVM is monitoring the enclosed statements for any exceptions.`,
+        why: `Code inside try is guarded. If an exception occurs, the JVM looks for an active matching catch block.`,
+        actionType: 'TRY_BLOCK',
+      };
+
+    case 'CATCH_ENTER':
+      return {
+        what: `Caught exception [${ev.dataType || 'Exception'}]${ev.message ? `: "${ev.message}"` : ''}. Execution routed to catch block.`,
+        why: `The catch block handles the exception, preventing program termination and halting stack unwinding.`,
+        actionType: 'CATCH_HANDLER',
+      };
+
+    case 'FINALLY_ENTER':
+      return {
+        what: `Entered finally block. This cleanup code is guaranteed to execute.`,
+        why: `The JVM guarantees finally block execution whether the try block succeeded, threw an exception, or executed a return.`,
+        actionType: 'FINALLY_BLOCK',
+      };
+
+    case 'EXCEPTION_THROW':
+      return {
+        what: `Explicitly threw [${ev.dataType || 'RuntimeException'}] ("${ev.message || ''}").`,
+        why: `Throwing an exception stops normal control flow. The JVM begins unwinding frames from the call stack until a matching catch block is found.`,
+        actionType: 'EXCEPTION_THROW',
+      };
+
+    case 'BOXING_OP':
+      return {
+        what: `Autoboxing: converted primitive ${ev.dataType} ${ev.value} into a ${ev.refType} wrapper object on the Heap.`,
+        why: `Java automatically boxes primitives using Wrapper.valueOf(...) so they can be treated as objects or placed in generic collections.`,
+        actionType: 'AUTOBOXING',
+      };
+
+    case 'UNBOXING_OP':
+      return {
+        what: `Unboxing: extracted primitive ${ev.dataType} value ${ev.value} from ${ev.refType} wrapper object.`,
+        why: `Java automatically unboxes wrapper objects using xxxValue() when assigned to primitive variables or used in arithmetic.`,
+        actionType: 'UNBOXING',
+      };
+
+    case 'STRING_POOL_INTERN':
+      return {
+        what: `String literal "${ev.value}" interned in the String Constant Pool.`,
+        why: `Java stores identical string literals once in the String Pool to conserve memory. Multiple variables share the same immutable string instance.`,
+        actionType: 'STRING_POOL',
+      };
+
+    default:
+      return {
+        what: explanation,
+        why: `Java executed step ${stepIndex + 1} following the standard Java language and JVM execution rules.`,
+        actionType: ev.type,
+      };
+  }
+}
+
 export function reconstructExecutionSteps(
   events: ExecutionEvent[],
   _sourceCode: string
 ): ExecutionStep[] {
   const steps: ExecutionStep[] = [];
+
+  // Phase 11: Stable friendly Object IDs (object-1, object-2, ...) - Never expose memory address hashes
+  const objectIdMap = new Map<string, string>();
+  const getStableObjectId = (rawId: string | undefined): string => {
+    if (!rawId) return '';
+    if (rawId.startsWith('object-')) return rawId;
+    const clean = String(rawId).replace(/^@/, '');
+    if (!objectIdMap.has(clean)) {
+      const nextIdx = objectIdMap.size + 1;
+      objectIdMap.set(clean, `object-${nextIdx}`);
+    }
+    return objectIdMap.get(clean)!;
+  };
+
+  const enrichVariable = (v: VariableInfo): VariableInfo => {
+    v.kind = v.isReference ? 'Reference' : 'Primitive';
+    if (v.isReference) {
+      v.educationalSize = '8 bytes (reference, Typical Java representation)';
+    } else {
+      const t = v.type?.toLowerCase() || '';
+      if (t === 'long' || t === 'double') {
+        v.educationalSize = '8 bytes (Typical Java representation)';
+      } else if (t === 'boolean' || t === 'byte') {
+        v.educationalSize = '1 byte (Typical Java representation)';
+      } else if (t === 'short' || t === 'char') {
+        v.educationalSize = '2 bytes (Typical Java representation)';
+      } else {
+        v.educationalSize = '4 bytes (Typical Java representation)';
+      }
+    }
+    return v;
+  };
 
   let currentVariables: Record<string, VariableInfo> = {};
   let currentStructures: Record<string, DataStructureState> = {};
@@ -414,18 +626,31 @@ export function reconstructExecutionSteps(
 
       case 'VARIABLE_CREATE': {
         const type = ev.dataType || 'int';
-        const val = ev.value;
+        let val = ev.value;
         const bytes = estimateSize(type, val);
-        const isRef = !!ev.isReference || !!ev.objectId;
-        const varInfo: VariableInfo = {
+        const isNull = val === null || val === 'null';
+        const isRawObj = typeof val === 'string' && (val.startsWith('obj-') || val.startsWith('@obj-') || val.startsWith('obj_') || val.startsWith('object-') || val.startsWith('@raw-') || val.startsWith('raw-') || (val.startsWith('@') && !val.startsWith('@arr')));
+        const isCustomObjRef = !!ev.objectId || isRawObj || (typeof ev.refTargetId === 'string' && (ev.refTargetId.startsWith('obj') || ev.refTargetId.startsWith('raw') || ev.refTargetId.startsWith('object-') || ev.refTargetId.startsWith('@obj')));
+        const rawTarget = ev.objectId || (isRawObj ? (typeof val === 'string' && val.startsWith('@') ? val.replace(/^@/, '') : val) : (isCustomObjRef ? ev.refTargetId : undefined));
+        const stableId = rawTarget ? getStableObjectId(rawTarget) : undefined;
+        const finalRefId = stableId || ev.refTargetId;
+        const isRef = !isNull && (!!ev.isReference || !!ev.objectId || !!ev.refTargetId || isRawObj || !['int', 'double', 'boolean', 'char', 'byte', 'short', 'long', 'float'].includes(type));
+        if (isRef && stableId) {
+          val = stableId;
+        } else if (isNull) {
+          val = null;
+        }
+
+        const varInfo: VariableInfo = enrichVariable({
           name: ev.variable!,
           type,
           value: val,
           scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
           isReference: isRef,
-          refTargetId: ev.refTargetId || ev.objectId,
+          refTargetId: isRef ? finalRefId : undefined,
+          objectId: isRef ? (stableId || ev.objectId) : undefined,
           estimatedBytes: bytes,
-        };
+        });
         nextVariables[ev.variable!] = varInfo;
         const topFrame = nextCallStack[nextCallStack.length - 1];
         if (topFrame) {
@@ -437,34 +662,50 @@ export function reconstructExecutionSteps(
 
       case 'VARIABLE_UPDATE': {
         const v = nextVariables[ev.variable!];
-        const isRef = !!ev.isReference || !!ev.objectId;
+        const type = ev.dataType || (v?.type) || 'int';
+        let val = ev.newValue;
+        const isNull = val === null || val === 'null' || ev.value === null || ev.value === 'null';
+        const isRawObj = !isNull && typeof val === 'string' && (val.startsWith('obj-') || val.startsWith('@obj-') || val.startsWith('obj_') || val.startsWith('object-') || val.startsWith('@raw-') || val.startsWith('raw-') || (val.startsWith('@') && !val.startsWith('@arr')));
+        const isCustomObjRef = !isNull && (!!ev.objectId || isRawObj || (typeof ev.refTargetId === 'string' && (ev.refTargetId.startsWith('obj') || ev.refTargetId.startsWith('raw') || ev.refTargetId.startsWith('object-') || ev.refTargetId.startsWith('@obj'))));
+        const rawTarget = !isNull ? (ev.objectId || (isRawObj ? (typeof val === 'string' && val.startsWith('@') ? val.replace(/^@/, '') : val) : (isCustomObjRef ? ev.refTargetId : (v?.refTargetId && (v.refTargetId.startsWith('obj') || v.refTargetId.startsWith('raw') || v.refTargetId.startsWith('object-')) ? v.refTargetId : undefined)))) : undefined;
+        const stableId = rawTarget ? getStableObjectId(rawTarget) : undefined;
+        const finalRefId = stableId || ev.refTargetId || v?.refTargetId;
+        const isRef = (!!ev.isReference || !!ev.objectId || !!ev.refTargetId || isRawObj || (v && v.isReference) || !['int', 'double', 'boolean', 'char', 'byte', 'short', 'long', 'float'].includes(type));
+        if (isNull) {
+          val = null;
+        } else if (isRef && stableId) {
+          val = stableId;
+        }
+
         if (v) {
-          v.value = ev.newValue;
-          if (isRef) {
-            v.isReference = true;
-            v.refTargetId = ev.refTargetId || ev.objectId;
-          }
+          v.value = val;
+          v.isReference = isRef;
+          v.refTargetId = isNull ? undefined : (isRef ? finalRefId : undefined);
+          v.objectId = isNull ? undefined : (isRef ? (stableId || v.objectId) : undefined);
+          enrichVariable(v);
         } else {
-          nextVariables[ev.variable!] = {
+          nextVariables[ev.variable!] = enrichVariable({
             name: ev.variable!,
-            type: ev.dataType || 'int',
-            value: ev.newValue,
+            type,
+            value: val,
             scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
             isReference: isRef,
-            refTargetId: ev.refTargetId || ev.objectId,
-            estimatedBytes: estimateSize(ev.dataType || 'int', ev.newValue),
-          };
+            refTargetId: isNull ? undefined : (isRef ? finalRefId : undefined),
+            objectId: isNull ? undefined : (isRef ? stableId : undefined),
+            estimatedBytes: estimateSize(type, val),
+          });
         }
         const topFrame = nextCallStack[nextCallStack.length - 1];
         if (topFrame && nextVariables[ev.variable!]) {
           topFrame.localVariables[ev.variable!] = nextVariables[ev.variable!];
         }
-        explanation = `Updated variable ${ev.variable} from ${ev.oldValue} to ${ev.newValue}`;
+        explanation = `Updated variable ${ev.variable} to ${val}`;
         break;
       }
 
+      case 'METHOD_CALL':
       case 'FUNCTION_CALL': {
-        const fnName = ev.functionName || 'func';
+        const fnName = ev.methodName || ev.functionName || 'func';
         const frameId = `frame-${fnName}-${nextCallStack.length}`;
         const newFrame: CallFrame = {
           id: frameId,
@@ -480,8 +721,9 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      case 'METHOD_RETURN':
       case 'FUNCTION_RETURN': {
-        const fnName = ev.functionName || '';
+        const fnName = ev.methodName || ev.functionName || '';
         if (nextCallStack.length > 1) {
           nextCallStack.pop();
         }
@@ -561,7 +803,8 @@ export function reconstructExecutionSteps(
 
       // === PHASE 10: ADVANCED JAVA & JVM EXECUTION ===
       case 'OBJECT_CREATE': {
-        const objId = ev.objectId || `obj_${Object.keys(nextCustomObjects).length + 1}`;
+        const rawObjId = ev.objectId || `obj_${Object.keys(nextCustomObjects).length + 1}`;
+        const objId = getStableObjectId(rawObjId);
         const className = ev.dataType || ev.className || 'Object';
         const varName = ev.variable;
         const initialFields = ev.fields || {};
@@ -575,15 +818,16 @@ export function reconstructExecutionSteps(
         };
 
         if (varName) {
-          nextVariables[varName] = {
+          nextVariables[varName] = enrichVariable({
             name: varName,
             type: className,
-            value: `${className}@${objId.replace(/\D/g, '') || '1'}`,
+            value: objId,
             scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
             isReference: true,
             refTargetId: objId,
+            objectId: objId,
             estimatedBytes: 8,
-          };
+          });
           const topFrame = nextCallStack[nextCallStack.length - 1];
           if (topFrame) {
             topFrame.localVariables[varName] = nextVariables[varName];
@@ -593,21 +837,27 @@ export function reconstructExecutionSteps(
         nextActiveConcept = {
           name: 'Object Creation (new)',
           category: 'OOP',
-          explanation: `new ${className}() instantiates a new object on the Heap. A reference ${varName ? `to ${varName} ` : ''}is returned pointing to ${className}#${objId.replace(/\D/g, '') || '1'}.`,
+          explanation: `new ${className}() instantiates a new object on the Heap. A reference ${varName ? `to '${varName}' ` : ''}is returned pointing to ${objId}.`,
+          whyExplanation: `The 'new' operator allocates memory on the Heap and runs the class constructor to initialize its instance fields.`,
+          actionType: 'OBJECT_CREATION',
           badge: 'Heap Allocation',
           details: { className, objectId: objId, variable: varName },
         };
-        explanation = `Allocated new ${className} on Heap (ID: ${objId})${varName ? ` -> ${varName}` : ''}`;
+        explanation = `Allocated new ${className} on Heap (${objId})${varName ? ` -> ${varName}` : ''}`;
         break;
       }
 
       case 'CUSTOM_OBJECT_UPDATE':
       case 'OBJECT_FIELD_UPDATE': {
-        const objId = ev.objectId || ev.structureId || ev.variable || 'obj';
+        const rawObjId = ev.objectId || ev.structureId || ev.variable || 'obj';
+        const objId = getStableObjectId(rawObjId);
         const varName = ev.variable || ev.structureId;
         const className = ev.className || (nextCustomObjects[objId]?.className) || 'Object';
         const fieldName = ev.fieldName;
-        const rawNewVal = ev.newValue !== undefined ? ev.newValue : ev.value;
+        let rawNewVal = ev.newValue !== undefined ? ev.newValue : ev.value;
+        if (typeof rawNewVal === 'string' && (rawNewVal.startsWith('obj-') || rawNewVal.startsWith('@obj-') || rawNewVal.startsWith('obj_'))) {
+          rawNewVal = getStableObjectId(rawNewVal);
+        }
 
         if (!nextCustomObjects[objId]) {
           nextCustomObjects[objId] = {
@@ -628,21 +878,24 @@ export function reconstructExecutionSteps(
         nextCustomObjects[objId].lifecycle = 'MUTATED';
 
         if (varName && !nextVariables[varName]) {
-          nextVariables[varName] = {
+          nextVariables[varName] = enrichVariable({
             name: varName,
             type: className,
-            value: `${className}@${objId.replace(/\D/g, '') || '1'}`,
+            value: objId,
             scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
             isReference: true,
             refTargetId: objId,
+            objectId: objId,
             estimatedBytes: 8,
-          };
+          });
         }
 
         nextActiveConcept = {
           name: 'Field Mutation (Heap)',
           category: 'OOP',
-          explanation: `Direct field write${fieldName ? ` (${fieldName} = ${JSON.stringify(rawNewVal)})` : ''} on ${className}#${objId.replace(/\D/g, '') || '1'}. All references pointing to this object observe this change.`,
+          explanation: `Direct field write${fieldName ? ` (${fieldName} = ${JSON.stringify(rawNewVal)})` : ''} on ${className} (${objId}). All references pointing to this object observe this change.`,
+          whyExplanation: `Instance variables reside inside the heap object. Modifying a field changes the shared object in memory.`,
+          actionType: 'FIELD_MUTATION',
           badge: 'Heap Mutation',
           details: { objectId: objId, field: fieldName, newValue: rawNewVal },
         };
@@ -7095,32 +7348,31 @@ export function reconstructExecutionSteps(
       });
     }
 
-    // Phase 10: Custom OOP Objects in Heap
+    // Phase 10 & 11: Custom OOP Objects in Heap with Stable IDs & GC Eligibility
     for (const obj of Object.values(nextCustomObjects)) {
       const refVars = Object.values(nextVariables)
         .filter(
           v =>
-            v.refTargetId === obj.id ||
-            v.value === obj.id ||
-            (typeof v.value === 'string' &&
-              (v.value.includes(`@${obj.id}`) ||
-                v.value.includes(`${obj.className}@`) ||
-                v.value.includes(`@${obj.id.replace(/\D/g, '')}`)))
+            Boolean(v.refTargetId) &&
+            (v.refTargetId === obj.id ||
+              v.refTargetId === `@${obj.id}` ||
+              getStableObjectId(v.refTargetId) === obj.id)
         )
         .map(v => v.name);
 
       const estBytes = 24 + Object.keys(obj.fields).length * 8;
       heapBytes += estBytes;
       nextHeap.push({
-        id: obj.id.startsWith('@') ? obj.id : `@${obj.id}`,
+        id: obj.id,
+        objectId: obj.id,
         type: obj.className,
         className: obj.className,
-        label: `${obj.className}#${obj.id.replace(/\D/g, '') || '1'}`,
+        label: `${obj.className} (${obj.id})`,
         fields: { ...obj.fields },
         estimatedBytes: estBytes,
         referencesTo: Object.values(obj.fields)
-          .filter(v => typeof v === 'string' && (v.startsWith('obj-') || v.startsWith('@obj-') || v.startsWith('obj_')))
-          .map(v => v.replace(/^@/, '')),
+          .filter(v => typeof v === 'string' && (v.startsWith('object-') || v.startsWith('obj-') || v.startsWith('@obj-')))
+          .map(v => getStableObjectId(v)),
         referencesFrom: refVars,
         gcEligible: refVars.length === 0,
         creationStep: obj.creationStep,
@@ -7212,6 +7464,15 @@ export function reconstructExecutionSteps(
     currentCustomObjects = nextCustomObjects;
     currentStringPool = nextStringPool;
 
+    const beginnerExp = computeBeginnerExplanation(
+      ev,
+      i,
+      currentVariables,
+      nextHeap,
+      currentCallStack,
+      explanation
+    );
+
     steps.push({
       stepIndex: i,
       totalSteps: events.length,
@@ -7232,13 +7493,14 @@ export function reconstructExecutionSteps(
         totalBytes: stackBytes + heapBytes,
       },
       algorithmState: nextAlgorithmState,
-      // Phase 10: JVM & OOP State
+      // Phase 10 & 11: JVM & OOP State
       staticFields: nextStaticFields,
       threads: nextThreads,
       locks: nextLocks,
       deadlockDetected: nextDeadlock,
       activeJavaConcept: nextActiveConcept,
       stringPool: nextStringPool,
+      beginnerExplanation: beginnerExp,
     });
   }
 

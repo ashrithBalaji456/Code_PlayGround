@@ -38,6 +38,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
   let inMainMethod = false;
   let mainMethodDepth = 0;
   let currentMethod: { name: string; depth: number; lastWasReturn?: boolean } | null = null;
+  let pendingCtorEnter: string | null = null;
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const rawLine = lines[lineIdx];
@@ -46,6 +47,11 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     if (trimmed.length === 0) {
       outputLines.push(rawLine);
       continue;
+    }
+
+    if (pendingCtorEnter && !/^(?:super|this)\s*\(/.test(trimmed)) {
+      outputLines.push(pendingCtorEnter);
+      pendingCtorEnter = null;
     }
 
     // Check main method signature
@@ -1283,6 +1289,68 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    boolean _cond_${lineNum} = (${condExpr});`);
       outputLines.push(`    CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond_${lineNum}, ${lineNum});`);
       outputLines.push(`    if (_cond_${lineNum}) {`);
+      continue;
+    }
+
+    // Phase 11: StringBuilder append
+    const sbAppendMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.append\((.*)\);?$/);
+    if (sbAppendMatch) {
+      const sbVar = sbAppendMatch[1];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.stringBuilderAppend(${sbVar}, "", ${lineNum});`);
+      continue;
+    }
+
+    // Phase 11: super() / this() call in constructor
+    const superCallMatch = trimmed.match(/^(?:super|this)\((.*)\);?$/);
+    if (superCallMatch) {
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.superCall("${currentMethod?.name || 'SuperClass'}", ${lineNum});`);
+      if (pendingCtorEnter) {
+        outputLines.push(pendingCtorEnter);
+        pendingCtorEnter = null;
+      }
+      continue;
+    }
+
+    // Phase 11: Constructors
+    const ctorMatch = trimmed.match(/^(?:(?:public|private|protected)\s+)?([A-Z][a-zA-Z0-9_]*)\s*\(([^)]*)\)\s*(?:throws\s+[\w\s,]+)?\s*(\{)?$/);
+    if (ctorMatch && !inMainMethod && !trimmed.startsWith('class ') && !trimmed.startsWith('interface ') && !/^(if|while|for|switch|catch)\b/.test(trimmed)) {
+      const ctorName = ctorMatch[1];
+      const paramsStr = ctorMatch[2].trim();
+      outputLines.push(rawLine);
+      const paramNames: string[] = [];
+      if (paramsStr.length > 0) {
+        const parts = splitTopLevelComma(paramsStr);
+        for (const p of parts) {
+          const tokens = p.trim().split(/\s+/);
+          if (tokens.length >= 2) {
+            paramNames.push(tokens[tokens.length - 1].replace(/[\[\]]/g, ''));
+          }
+        }
+      }
+      const namesArray = paramNames.map((n) => `"${n}"`).join(', ');
+      const valuesArray = paramNames.map((n) => `(Object)(${n})`).join(', ');
+
+      let nextIsSuperOrThis = false;
+      for (let j = lineIdx + 1; j < lines.length; j++) {
+        const nextT = lines[j].replace(/\/\/.*$/, '').trim();
+        if (!nextT || nextT.startsWith('/*')) continue;
+        if (/^(?:super|this)\s*\(/.test(nextT)) {
+          nextIsSuperOrThis = true;
+        }
+        break;
+      }
+
+      const enterCall = `    CodeFlowTracer.constructorEnter("${ctorName}", new String[]{ ${namesArray} }, new Object[]{ ${valuesArray} }, ${lineNum});`;
+      if (!nextIsSuperOrThis) {
+        outputLines.push(enterCall);
+      } else {
+        pendingCtorEnter = enterCall;
+      }
+      currentMethod = { name: ctorName, depth: 1, lastWasReturn: false };
       continue;
     }
 
