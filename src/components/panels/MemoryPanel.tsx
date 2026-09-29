@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { VariableInfo, HeapObject, ThreadState, LockState } from '../../types/execution';
-import { Cpu, HardDrive, Database, Layers, Eye, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Cpu, HardDrive, Database, Layers, Eye, ShieldCheck, AlertCircle, Share2 } from 'lucide-react';
 
 interface MemoryPanelProps {
   variables: Record<string, VariableInfo>;
@@ -14,6 +14,7 @@ interface MemoryPanelProps {
   threads?: Record<string, ThreadState>;
   locks?: Record<string, LockState>;
   stringPool?: Array<{ value: string; references: string[] }>;
+  objectGraph?: Array<{ fromId: string; fromName: string; toId: string; toName: string; label?: string }>;
 }
 
 export const MemoryPanel: React.FC<MemoryPanelProps> = ({
@@ -24,8 +25,9 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
   threads = {},
   locks = {},
   stringPool = [],
+  objectGraph = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'model' | 'inspector' | 'threads' | 'strings'>('model');
+  const [activeTab, setActiveTab] = useState<'model' | 'inspector' | 'graph' | 'threads' | 'strings'>('model');
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [selectedVarName, setSelectedVarName] = useState<string | null>(null);
 
@@ -69,6 +71,16 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
             }`}
           >
             Inspector
+          </button>
+          <button
+            onClick={() => setActiveTab('graph')}
+            className={`px-2 py-0.5 rounded transition-all ${
+              activeTab === 'graph'
+                ? 'bg-[#7ee787] text-[#0d1117] font-bold'
+                : 'text-[#8b949e] hover:text-[#f0f6fc]'
+            }`}
+          >
+            Object Graph {objectGraph.length > 0 ? `(${objectGraph.length})` : ''}
           </button>
           {Object.keys(threads).length > 0 && (
             <button
@@ -141,6 +153,16 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       <div className="flex items-center gap-1.5 truncate">
                         <span className="font-bold">{v.name}</span>
                         <span className="text-[10px] text-[#8b949e]">({v.type})</span>
+                        {v.aliasedWith && v.aliasedWith.length > 0 && (
+                          <span className="px-1 py-0.2 rounded text-[9px] bg-[#f0883e]/20 text-[#f0883e] border border-[#f0883e]/40 font-bold" title={`Aliased with ${v.aliasedWith.join(', ')}`}>
+                            ALIAS ({v.aliasedWith.join(', ')})
+                          </span>
+                        )}
+                        {v.inActiveScope === false && (
+                          <span className="px-1 py-0.2 rounded text-[9px] bg-[#f85149]/20 text-[#f85149] border border-[#f85149]/40 font-bold">
+                            OUT OF SCOPE
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         {v.isReference ? (
@@ -196,7 +218,14 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between text-[#bc8cff]">
-                          <span className="font-bold">{obj.className ? `${obj.className} (${cleanId})` : cleanId}</span>
+                          <div className="flex items-center gap-1 truncate">
+                            <span className="font-bold">{obj.className ? `${obj.className} (${cleanId})` : cleanId}</span>
+                            {obj.aliased && (
+                              <span className="px-1 py-0.2 rounded text-[9px] bg-[#f0883e]/20 text-[#f0883e] border border-[#f0883e]/40 font-bold" title="Aliased by multiple references">
+                                ALIASING
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-[#3fb950]">~{obj.estimatedBytes} B</span>
                         </div>
                         <div className="text-[10px] text-[#8b949e] truncate flex items-center justify-between">
@@ -250,7 +279,7 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Interactive Object & Reference Inspector (Section 74, 75) */}
+        {/* Tab 2: Interactive Object & Reference Inspector (Section 27, 28) */}
         {activeTab === 'inspector' && (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -275,6 +304,10 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       <span className="font-bold text-[#79c0ff]">{inspectedVar.kind || (inspectedVar.isReference ? 'Reference' : 'Primitive')}</span>
                     </div>
                     <div className="flex items-center justify-between">
+                      <span className="text-[#8b949e]">Location:</span>
+                      <span className="font-bold text-[#58a6ff]">{inspectedVar.location || 'Stack'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
                       <span className="text-[#8b949e]">Declared Type:</span>
                       <span className="font-bold text-[#58a6ff]">{inspectedVar.type}</span>
                     </div>
@@ -288,6 +321,18 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                       <span className="text-[#8b949e]">Stack Frame:</span>
                       <span className="text-[#f0f6fc]">{inspectedVar.scope}()</span>
                     </div>
+                    {inspectedVar.aliasedWith && inspectedVar.aliasedWith.length > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#f0883e]">Aliased With:</span>
+                        <span className="font-bold text-[#f0883e]">{inspectedVar.aliasedWith.join(', ')}</span>
+                      </div>
+                    )}
+                    {inspectedVar.inActiveScope === false && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#f85149]">Scope Status:</span>
+                        <span className="text-[10px] font-bold text-[#f85149] bg-[#f85149]/15 px-1 rounded">No longer in active scope</span>
+                      </div>
+                    )}
                     {inspectedVar.educationalSize && (
                       <div className="text-[10px] text-[#8b949e] italic mt-1 border-t border-[#30363d]/50 pt-1">
                         {inspectedVar.educationalSize}
@@ -332,6 +377,14 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                           : 'None'}
                       </span>
                     </div>
+                    {inspectedObj.aliased && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#f0883e]">Aliasing:</span>
+                        <span className="font-bold text-[#f0883e] bg-[#f0883e]/15 px-1 rounded">
+                          Shared by multiple references ({inspectedObj.referencesFrom?.join(', ')})
+                        </span>
+                      </div>
+                    )}
 
                     {/* Fields */}
                     <div className="mt-1 pt-2 border-t border-[#30363d]">
@@ -345,6 +398,23 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                         ))}
                       </div>
                     </div>
+
+                    {/* Nested References */}
+                    {inspectedObj.nestedReferences && Object.keys(inspectedObj.nestedReferences).length > 0 && (
+                      <div className="flex flex-col gap-1 border-t border-[#30363d]/60 pt-1 mt-1">
+                        <span className="text-[#8b949e] text-[10px]">Nested Object References:</span>
+                        {Object.entries(inspectedObj.nestedReferences).map(([fKey, targetId]) => (
+                          <div
+                            key={fKey}
+                            onClick={() => setSelectedObjectId(targetId)}
+                            className="flex items-center justify-between p-1 rounded bg-[#161b22] border border-[#7ee787]/40 text-[#7ee787] cursor-pointer hover:bg-[#7ee787]/10"
+                          >
+                            <span>.{fKey} ➔</span>
+                            <span className="font-bold underline">{targetId}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <span className="text-[#8b949e] italic py-4 text-center">
@@ -352,6 +422,63 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                   </span>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Directed Object Graph (Section 26, 36, 37) */}
+        {activeTab === 'graph' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[#7ee787] flex items-center gap-1.5">
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Runtime Object Graph</span>
+              </span>
+              <span className="text-[10px] text-[#8b949e]">
+                Generated from actual runtime references (Stack ➔ Heap ➔ Nested Heap)
+              </span>
+            </div>
+
+            {objectGraph.length === 0 ? (
+              <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] italic">
+                No active object references or heap instances in memory yet.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {objectGraph.map((edge, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-[#0d1117] border border-[#30363d] hover:border-[#7ee787] transition-all rounded-lg p-3 flex flex-col gap-2 relative overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-[#58a6ff] bg-[#58a6ff]/10 border border-[#58a6ff]/30 px-1.5 py-0.5 rounded">
+                        {edge.fromName}
+                      </span>
+                      <span className="text-[#8b949e] text-[10px] font-sans italic">{edge.label || 'refers to'}</span>
+                      <span className="font-bold text-[#bc8cff] bg-[#bc8cff]/10 border border-[#bc8cff]/30 px-1.5 py-0.5 rounded">
+                        {edge.toName}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-center py-2 text-[#7ee787]">
+                      <div className="flex items-center gap-2 text-xs font-mono">
+                        <span className="h-0.5 w-12 bg-gradient-to-r from-[#58a6ff] to-[#bc8cff]"></span>
+                        <span>➔</span>
+                        <span className="text-[10px] text-[#8b949e]">Pointer Binding</span>
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-[#8b949e] bg-[#161b22] p-1.5 rounded border border-[#30363d]/60">
+                      Target Object: <strong className="text-[#f0f6fc]">{edge.toId}</strong>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="p-2.5 rounded bg-[#0d1117] border border-[#30363d] text-[11px] text-[#8b949e] flex items-center gap-2">
+              <span className="text-[#7ee787] font-bold">Concept:</span>
+              <span>Java variables do not hold objects directly. Stack variables hold references (pointers) pointing to objects allocated on the Heap. Aliasing occurs when two or more references point to the exact same Heap object ID.</span>
             </div>
           </div>
         )}

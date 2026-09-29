@@ -605,7 +605,13 @@ export type EventType =
   | 'STRING_BUILDER_APPEND'
   | 'BOX'
   | 'UNBOX'
-  | 'GC_ELIGIBLE';
+  | 'GC_ELIGIBLE'
+  // Phase 12 Complete Java Runtime & Memory Events
+  | 'CONDITION_EVAL'
+  | 'SCOPE_ENTER'
+  | 'SCOPE_EXIT'
+  | 'STRING_OP'
+  | 'REFERENCE_REASSIGN';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -783,10 +789,14 @@ export interface VariableInfo {
   refTargetId?: string;
   objectId?: string;
   estimatedBytes: number;
-  // Phase 11
+  // Phase 11 & 12
   kind?: 'Primitive' | 'Reference';
   educationalSize?: string;
   isFinal?: boolean;
+  location?: 'Stack' | 'Heap';
+  aliasedWith?: string[];
+  inActiveScope?: boolean;
+  genericType?: string;
 }
 
 export interface CallFrame {
@@ -1045,6 +1055,10 @@ export interface HeapObject {
   objectId?: string;
   isEncapsulated?: boolean;
   parentClass?: string;
+  // Phase 12
+  aliased?: boolean;
+  nestedReferences?: Record<string, string>;
+  genericType?: string;
 }
 
 export interface ThreadState {
@@ -1408,6 +1422,9 @@ export interface ExecutionStep {
     why?: string;
     actionType?: string;
   };
+  // Phase 12
+  objectGraph?: Array<{ fromId: string; fromName: string; toId: string; toName: string; label?: string }>;
+  conditionEvaluation?: { expression: string; result: boolean; shortCircuited?: boolean };
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1415,7 +1432,7 @@ export type SupportedLanguage = 'java' | 'python';
 export interface CodePreset {
   id: string;
   title: string;
-  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms' | 'Java OOP & JVM Internals' | 'Java OOP & Language Fundamentals';
+  category: 'Arrays & Sorting' | 'Stacks & Queues' | 'Linked Lists' | 'Trees & Heaps' | 'Graphs & Algorithms' | 'Hash Tables' | 'Recursion' | 'Bitwise' | 'Error Diagnostics' | 'Algorithms' | 'Java OOP & JVM Internals' | 'Java OOP & Language Fundamentals' | 'Java Runtime & Memory Execution';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;

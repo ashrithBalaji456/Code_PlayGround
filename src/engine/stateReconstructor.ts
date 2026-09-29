@@ -79,9 +79,13 @@ function computeBeginnerExplanation(
       const cls = ev.className || 'Object';
       const field = ev.fieldName || 'field';
       const valStr = JSON.stringify(ev.newValue !== undefined ? ev.newValue : ev.value);
+      const targetObj = heap.find(h => h.id === ev.objectId || h.objectId === ev.objectId || (h.referencesFrom && h.referencesFrom.includes(ev.variable || '')));
+      const isAliased = targetObj && targetObj.referencesFrom && targetObj.referencesFrom.length > 1;
       return {
         what: `Java followed the reference to the ${cls} object and updated field '${field}' to ${valStr}.`,
-        why: `Instance variables reside inside the heap object. Modifying a field changes the shared object in memory.`,
+        why: isAliased && targetObj?.referencesFrom
+          ? `WHY DID BOTH VARIABLES CHANGE? (${targetObj.referencesFrom.join(' and ')}) refer to the exact same ${cls} object on the Heap. Java copies references by value, so mutating the object through one reference is visible through all aliases.`
+          : `Instance variables reside inside the heap object. Modifying a field changes the shared object in memory.`,
         actionType: 'FIELD_MUTATION',
       };
     }
@@ -150,27 +154,98 @@ function computeBeginnerExplanation(
       }
       return {
         what: `Stored primitive value ${JSON.stringify(val)} in variable '${varName}' inside ${currentFn}() stack frame.`,
-        why: `Primitives (int, double, boolean, char, etc.) store their raw values directly within the method's stack frame.`,
+        why: `WHY DID THIS CHANGE? '${varName}' changed from ${ev.oldValue !== undefined ? JSON.stringify(ev.oldValue) : 'its initial value'} to ${JSON.stringify(val)} because the assignment statement executed.`,
         actionType: 'PRIMITIVE_ASSIGNMENT',
       };
     }
 
+    case 'METHOD_CALL':
     case 'FUNCTION_CALL': {
-      const fn = ev.functionName || 'method';
+      const fn = ev.methodName || ev.functionName || 'method';
       return {
         what: `Called method ${fn}() and pushed a new stack frame onto the Call Stack.`,
-        why: `Java creates an isolated stack frame for each method call to store arguments, local variables, and the return address.`,
+        why: `WHY DID A NEW BOX APPEAR? Java entered a new method call, so an isolated stack frame was allocated to store arguments, local variables, and the return address.`,
         actionType: 'METHOD_CALL',
       };
     }
 
+    case 'METHOD_RETURN':
     case 'FUNCTION_RETURN': {
-      const fn = ev.functionName || 'method';
+      const fn = ev.methodName || ev.functionName || 'method';
       const ret = ev.returnValue !== undefined ? ` with return value ${JSON.stringify(ev.returnValue)}` : '';
       return {
         what: `Method ${fn}() completed${ret}. Control returned to the caller.`,
         why: `The method frame was popped from the Call Stack. All local variables declared in ${fn}() were reclaimed.`,
         actionType: 'METHOD_RETURN',
+      };
+    }
+
+    case 'CONDITION_EVAL':
+    case 'CONDITION_EVALUATE': {
+      const cond = ev.condition || 'condition';
+      const res = !!ev.conditionResult;
+      const isShort = !!ev.meta?.shortCircuited;
+      return {
+        what: `Condition (${cond}) evaluated to ${res ? 'TRUE' : 'FALSE'}${isShort ? ' (Short-circuited)' : ''}.`,
+        why: isShort
+          ? `Short-circuit evaluation: The first operand determined the final logical result, so the second side was not executed.`
+          : `Java evaluates boolean conditions to determine which branch of code to execute.`,
+        actionType: 'CONDITION_EVAL',
+      };
+    }
+
+    case 'SCOPE_ENTER': {
+      const sc = ev.detail || ev.variable || 'block';
+      return {
+        what: `Entered local ${sc} scope.`,
+        why: `Local variables declared within this block are confined to this scope.`,
+        actionType: 'SCOPE_ENTER',
+      };
+    }
+
+    case 'SCOPE_EXIT': {
+      const sc = ev.detail || ev.variable || 'block';
+      return {
+        what: `Exited local ${sc} scope.`,
+        why: `Variables declared inside this block are no longer in active scope.`,
+        actionType: 'SCOPE_EXIT',
+      };
+    }
+
+    case 'STRING_OP': {
+      const op = ev.meta?.op || 'operation';
+      return {
+        what: `String operation ${ev.variable || 'str'}.${op}() returned ${JSON.stringify(ev.value ?? ev.newValue)}.`,
+        why: `Java Strings are immutable. String operations never mutate the original string; they compute results or return new instances.`,
+        actionType: 'STRING_OP',
+      };
+    }
+
+    case 'REFERENCE_REASSIGN': {
+      return {
+        what: `Reassigned reference '${ev.variable}' from ${ev.oldValue} to ${ev.newValue}.`,
+        why: `Reference reassignment changes where the pointer points without modifying or deleting the underlying object.`,
+        actionType: 'REFERENCE_REASSIGN',
+      };
+    }
+
+    case 'ERROR':
+    case 'EXCEPTION': {
+      const isNpe =
+        (ev.message || '').includes('NullPointer') ||
+        (ev.detail || '').includes('NullPointer') ||
+        ev.dataType === 'NullPointerException';
+      if (isNpe) {
+        return {
+          what: `The program crashed with NullPointerException at line ${ev.line}.`,
+          why: `WHY DID THE PROGRAM CRASH? Variable '${ev.variable || 'reference'}' is null, so Java cannot access its members or methods. Null does not point to any heap object.`,
+          actionType: 'NULL_POINTER_EXCEPTION',
+        };
+      }
+      return {
+        what: `Exception occurred: ${ev.message || ev.dataType || 'Error'}.`,
+        why: `An unhandled exception stopped execution at line ${ev.line}.`,
+        actionType: 'EXCEPTION',
       };
     }
 
@@ -242,8 +317,8 @@ export function reconstructExecutionSteps(
   const objectIdMap = new Map<string, string>();
   const getStableObjectId = (rawId: string | undefined): string => {
     if (!rawId) return '';
-    if (rawId.startsWith('object-')) return rawId;
     const clean = String(rawId).replace(/^@/, '');
+    if (clean.startsWith('object-')) return clean;
     if (!objectIdMap.has(clean)) {
       const nextIdx = objectIdMap.size + 1;
       objectIdMap.set(clean, `object-${nextIdx}`);
@@ -4038,7 +4113,8 @@ export function reconstructExecutionSteps(
         break;
       }
 
-      // === CONTROL FLOW ===
+      // === CONTROL FLOW & PHASE 12 RUNTIME EVENTS ===
+      case 'CONDITION_EVAL':
       case 'CONDITION_EVALUATE': {
         nextMetrics.comparisons++;
         nextMetrics.accesses++;
@@ -4047,9 +4123,49 @@ export function reconstructExecutionSteps(
           right: '',
           operator: '',
           result: !!ev.conditionResult,
-          explanation: `${ev.condition} ➔ ${ev.conditionResult ? 'TRUE' : 'FALSE'}`,
+          explanation: `${ev.condition} ➔ ${ev.conditionResult ? 'TRUE' : 'FALSE'}${ev.meta?.shortCircuited ? ' (Short-circuited)' : ''}`,
         };
-        explanation = `Condition (${ev.condition}) evaluated to ${ev.conditionResult ? 'TRUE ✓' : 'FALSE ✗'}`;
+        explanation = `Condition (${ev.condition}) evaluated to ${ev.conditionResult ? 'TRUE ✓' : 'FALSE ✗'}${ev.meta?.shortCircuited ? ' [Short-circuited]' : ''}`;
+        break;
+      }
+
+      case 'SCOPE_ENTER': {
+        const scName = ev.detail || ev.variable || 'block';
+        explanation = `Entered scope: ${scName}`;
+        break;
+      }
+
+      case 'SCOPE_EXIT': {
+        const scName = ev.detail || ev.variable || 'block';
+        if (ev.variable && nextVariables[ev.variable]) {
+          nextVariables[ev.variable].inActiveScope = false;
+        } else if (ev.values && Array.isArray(ev.values)) {
+          for (const vName of ev.values) {
+            if (nextVariables[vName]) nextVariables[vName].inActiveScope = false;
+          }
+        }
+        explanation = `Exited scope: ${scName}. Variables inside are no longer in active scope.`;
+        break;
+      }
+
+      case 'STRING_OP': {
+        const strVar = ev.variable || 'str';
+        const op = ev.meta?.op || 'operation';
+        const res = ev.value !== undefined ? ev.value : ev.newValue;
+        explanation = `String operation: ${strVar}.${op}() ➔ ${JSON.stringify(res)}`;
+        break;
+      }
+
+      case 'REFERENCE_REASSIGN': {
+        const varName = ev.variable || 'ref';
+        const oldTarget = ev.oldValue;
+        const newTarget = ev.newValue;
+        const stableNew = getStableObjectId(newTarget);
+        if (nextVariables[varName]) {
+          nextVariables[varName].value = stableNew || newTarget;
+          nextVariables[varName].refTargetId = stableNew || newTarget;
+        }
+        explanation = `Reassigned reference ${varName}: ${oldTarget} ➔ ${newTarget}`;
         break;
       }
 
@@ -7360,8 +7476,20 @@ export function reconstructExecutionSteps(
         )
         .map(v => v.name);
 
+      const isAliased = refVars.length > 1;
       const estBytes = 24 + Object.keys(obj.fields).length * 8;
       heapBytes += estBytes;
+
+      const nestedRefs: Record<string, string> = {};
+      for (const [fName, fVal] of Object.entries(obj.fields)) {
+        if (typeof fVal === 'string' && (fVal.startsWith('object-') || fVal.startsWith('obj-') || fVal.startsWith('@obj-') || fVal.startsWith('obj_') || fVal.startsWith('raw-') || !!nextCustomObjects[fVal])) {
+          const stableTarget = getStableObjectId(fVal);
+          if (nextCustomObjects[stableTarget]) {
+            nestedRefs[fName] = stableTarget;
+          }
+        }
+      }
+
       nextHeap.push({
         id: obj.id,
         objectId: obj.id,
@@ -7371,13 +7499,79 @@ export function reconstructExecutionSteps(
         fields: { ...obj.fields },
         estimatedBytes: estBytes,
         referencesTo: Object.values(obj.fields)
-          .filter(v => typeof v === 'string' && (v.startsWith('object-') || v.startsWith('obj-') || v.startsWith('@obj-')))
+          .filter(v => typeof v === 'string' && (v.startsWith('object-') || v.startsWith('obj-') || v.startsWith('@obj-') || v.startsWith('obj_') || v.startsWith('raw-') || !!nextCustomObjects[v]))
           .map(v => getStableObjectId(v)),
         referencesFrom: refVars,
         gcEligible: refVars.length === 0,
         creationStep: obj.creationStep,
         lifecycle: refVars.length === 0 ? 'GC_ELIGIBLE' : obj.lifecycle,
+        aliased: isAliased,
+        nestedReferences: Object.keys(nestedRefs).length > 0 ? nestedRefs : undefined,
       });
+    }
+
+    // Phase 12: Detect Stack Aliasing & Assign Stack Locations
+    const targetMap: Record<string, string[]> = {};
+    for (const v of Object.values(nextVariables)) {
+      v.location = 'Stack';
+      if (v.inActiveScope === undefined) v.inActiveScope = true;
+      if (v.isReference && v.refTargetId && v.value !== null && v.value !== 'null') {
+        const cleanTarget = v.refTargetId.startsWith('@') ? v.refTargetId.slice(1) : v.refTargetId;
+        const stableTarget = (cleanTarget.startsWith('obj') || cleanTarget.startsWith('raw')) ? getStableObjectId(cleanTarget) : cleanTarget;
+        if (!targetMap[stableTarget]) targetMap[stableTarget] = [];
+        targetMap[stableTarget].push(v.name);
+      }
+    }
+    for (const names of Object.values(targetMap)) {
+      if (names.length > 1) {
+        for (const name of names) {
+          if (nextVariables[name]) {
+            nextVariables[name].aliasedWith = names.filter(n => n !== name);
+          }
+        }
+      }
+    }
+
+    // Phase 12: Construct Directed Object Graph from Real References
+    const nextObjectGraph: Array<{ fromId: string; fromName: string; toId: string; toName: string; label?: string }> = [];
+    for (const v of Object.values(nextVariables)) {
+      if (v.isReference && v.refTargetId && v.value !== null && v.value !== 'null') {
+        const cleanTarget = v.refTargetId.startsWith('@') ? v.refTargetId.slice(1) : v.refTargetId;
+        const stableTarget = (cleanTarget.startsWith('obj') || cleanTarget.startsWith('raw')) ? getStableObjectId(cleanTarget) : cleanTarget;
+        if (nextCustomObjects[stableTarget]) {
+          nextObjectGraph.push({
+            fromId: `var-${v.name}`,
+            fromName: `${v.name} (${v.type})`,
+            toId: stableTarget,
+            toName: `${nextCustomObjects[stableTarget].className} (${stableTarget})`,
+            label: 'refers to',
+          });
+        } else if (nextStructures[cleanTarget]) {
+          nextObjectGraph.push({
+            fromId: `var-${v.name}`,
+            fromName: `${v.name} (${v.type})`,
+            toId: cleanTarget,
+            toName: `${nextStructures[cleanTarget].type} [${cleanTarget}]`,
+            label: 'refers to',
+          });
+        }
+      }
+    }
+    for (const obj of Object.values(nextCustomObjects)) {
+      for (const [fName, fVal] of Object.entries(obj.fields)) {
+        if (typeof fVal === 'string' && (fVal.startsWith('object-') || fVal.startsWith('obj-') || fVal.startsWith('@obj-') || fVal.startsWith('obj_') || fVal.startsWith('raw-') || !!nextCustomObjects[fVal])) {
+          const stableTarget = getStableObjectId(fVal);
+          if (nextCustomObjects[stableTarget]) {
+            nextObjectGraph.push({
+              fromId: obj.id,
+              fromName: `${obj.className} (${obj.id})`,
+              toId: stableTarget,
+              toName: `${nextCustomObjects[stableTarget].className} (${stableTarget})`,
+              label: `.${fName}`,
+            });
+          }
+        }
+      }
     }
 
     // Ensure main thread's callStack mirrors nextCallStack
@@ -7501,6 +7695,14 @@ export function reconstructExecutionSteps(
       activeJavaConcept: nextActiveConcept,
       stringPool: nextStringPool,
       beginnerExplanation: beginnerExp,
+      objectGraph: nextObjectGraph,
+      conditionEvaluation: ev.type === 'CONDITION_EVAL' || ev.type === 'CONDITION_EVALUATE'
+        ? {
+            expression: ev.condition || 'condition',
+            result: !!ev.conditionResult,
+            shortCircuited: ev.meta?.shortCircuited,
+          }
+        : undefined,
     });
   }
 

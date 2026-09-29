@@ -565,6 +565,7 @@ export function App() {
                       threads={currentStep?.threads || {}}
                       locks={currentStep?.locks || {}}
                       stringPool={currentStep?.stringPool || []}
+                      objectGraph={currentStep?.objectGraph || []}
                     />
                   )}
                   {activeBottomTab === 'callstack' && (

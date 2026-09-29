@@ -1,8 +1,10 @@
 import { CodePreset } from '../types/execution';
 import { PHASE_10_JAVA_PRESETS } from './phase10Presets';
 import { PHASE_11_JAVA_PRESETS } from './phase11Presets';
+import { PHASE_12_JAVA_PRESETS } from './phase12Presets';
 
 export const CODE_PRESETS: CodePreset[] = [
+  ...PHASE_12_JAVA_PRESETS,
   ...PHASE_11_JAVA_PRESETS,
   ...PHASE_10_JAVA_PRESETS,
   {
