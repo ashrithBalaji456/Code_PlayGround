@@ -19,7 +19,7 @@ import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
 import { reconstructExecutionSteps } from './engine/stateReconstructor';
-import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles, BookOpen } from 'lucide-react';
+import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles, BookOpen, Maximize2, Minimize2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -42,6 +42,19 @@ export function App() {
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
+
+  const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false);
+  const [isCanvasPaneMaximized, setIsCanvasPaneMaximized] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isCanvasFullscreen) {
+        setIsCanvasFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCanvasFullscreen]);
 
   const playTimerRef = useRef<any>(null);
 
@@ -361,17 +374,32 @@ export function App() {
         </section>
 
         {/* Right Side: Visual Canvas & Bottom Inspection Panels (60% width) */}
-        <section aria-label="Visual Canvas and Inspection" className="flex-1 flex flex-col h-full overflow-hidden">
+        <section aria-label="Visual Canvas and Inspection" className="flex-1 flex flex-col h-full overflow-hidden relative">
           {/* Upper Half: Live Visualization Canvas */}
-          <div className="flex-1 h-3/5 overflow-hidden border-b border-[#30363d]">
+          <div className={`${isCanvasPaneMaximized ? 'h-full' : 'flex-1 h-3/5'} overflow-hidden border-b border-[#30363d] relative transition-all duration-200`}>
             <VisualizationCanvas
               currentStep={currentStep}
               isRunning={isRunning}
+              isFullscreen={false}
+              onToggleFullscreen={() => setIsCanvasFullscreen(true)}
+              onRunPreset={handleRun}
             />
+
+            {/* Restore Bottom Panel pill if maximized in pane */}
+            {isCanvasPaneMaximized && (
+              <button
+                onClick={() => setIsCanvasPaneMaximized(false)}
+                className="absolute bottom-3 right-4 z-20 flex items-center gap-1.5 bg-[#161b22]/90 hover:bg-[#21262d] text-[#58a6ff] hover:text-[#f0f6fc] border border-[#30363d] px-3 py-1 rounded-lg text-xs font-semibold shadow-xl transition-all backdrop-blur-md"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span>Restore Bottom Tabs</span>
+              </button>
+            )}
           </div>
 
           {/* Lower Half: Debug Panels or Learning Mode (2/5 height) */}
-          <div className="h-2/5 flex flex-col bg-[#161b22] overflow-hidden">
+          {!isCanvasPaneMaximized && (
+            <div className="h-2/5 flex flex-col bg-[#161b22] overflow-hidden">
             {isLearningMode ? (
               <LearningModePanel
                 preset={selectedPreset}
@@ -553,6 +581,18 @@ export function App() {
                       )}
                     </button>
                   </div>
+
+                  {/* Right side of tab header: Maximize Canvas Height */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setIsCanvasPaneMaximized(!isCanvasPaneMaximized)}
+                      className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d] rounded transition-colors"
+                      title={isCanvasPaneMaximized ? 'Restore Bottom Tabs' : 'Maximize Canvas in Split View'}
+                    >
+                      {isCanvasPaneMaximized ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+                      <span className="hidden xl:inline">{isCanvasPaneMaximized ? 'Restore' : 'Maximize Canvas'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Panel Tab View */}
@@ -622,8 +662,79 @@ export function App() {
               </div>
             )}
           </div>
+        )}
         </section>
       </main>
+
+      {/* ─── FULLSCREEN CANVAS WORKSPACE OVERLAY ─── */}
+      {isCanvasFullscreen && (
+        <div className="fixed inset-0 z-50 bg-[#0b0e14] flex flex-col overflow-hidden text-[#f0f6fc]">
+          {/* Top Fullscreen Header with Playback Controls */}
+          <header className="h-14 bg-[#161b22] border-b border-[#30363d] px-4 flex items-center justify-between gap-4 shadow-xl z-20 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-[#0d1117] border border-[#30363d] px-3 py-1.5 rounded-lg shadow-sm">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#3fb950] animate-pulse" />
+                <span className="text-xs font-bold tracking-wide text-[#f0f6fc]">
+                  FULL VISUALIZER CANVAS
+                </span>
+              </div>
+              <span className="text-xs text-[#8b949e] font-mono hidden md:inline">
+                Preset: <span className="text-[#58a6ff] font-semibold">{selectedPreset.title}</span>
+              </span>
+            </div>
+
+            {/* Compact Execution Controls in Fullscreen Header */}
+            <div className="flex items-center gap-2">
+              <ExecutionControls
+                isRunning={isRunning}
+                isPaused={isPaused}
+                executionStatus={executionStatus}
+                currentLine={activeLine}
+                workerName={workerName}
+                currentStepIndex={currentStepIndex}
+                totalSteps={steps.length}
+                speed={speed}
+                onRun={handleRun}
+                onPause={handlePause}
+                onResume={handleResume}
+                onStop={handleStop}
+                onRestart={handleRestart}
+                onNextStep={handleNextStep}
+                onPrevStep={handlePrevStep}
+                onStepOver={handleNextStep}
+                onStepInto={handleNextStep}
+                onStepOut={handleNextStep}
+                onSpeedChange={setSpeed}
+                onScrub={handleScrub}
+              />
+            </div>
+
+            {/* Exit Fullscreen Button */}
+            <button
+              onClick={() => setIsCanvasFullscreen(false)}
+              className="flex items-center gap-2 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+              title="Exit Fullscreen Canvas (Esc)"
+            >
+              <Minimize2 className="w-4 h-4 text-[#58a6ff]" />
+              <span className="hidden sm:inline">Exit Fullscreen</span>
+              <kbd className="hidden md:inline px-1.5 py-0.5 text-[10px] font-mono bg-[#0d1117] border border-[#30363d] rounded text-[#8b949e]">
+                ESC
+              </kbd>
+            </button>
+          </header>
+
+          {/* Fullscreen Canvas Content */}
+          <main className="flex-1 overflow-hidden relative">
+            <VisualizationCanvas
+              currentStep={currentStep}
+              isRunning={isRunning}
+              isFullscreen={true}
+              onToggleFullscreen={() => setIsCanvasFullscreen(false)}
+              onRunPreset={handleRun}
+            />
+          </main>
+        </div>
+      )}
 
       {/* Documentation / Shortcuts Modal */}
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
