@@ -472,30 +472,31 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
   return (
     <div className="h-full w-full flex flex-col bg-[#0b0e14] text-[#f0f6fc] select-none overflow-hidden">
       {/* ─── TOP CANVAS CONTROL & ARRANGE TOOLBAR ─── */}
-      <header className="h-11 bg-[#161b22] border-b border-[#30363d] px-3 flex items-center justify-between gap-3 shadow-md z-20 flex-shrink-0">
+      {/* ─── TOP CANVAS CONTROL & ARRANGE TOOLBAR ─── */}
+      <header className="h-11 bg-[#161b22] border-b border-[#30363d] px-3 flex items-center justify-between gap-2 shadow-md z-20 flex-shrink-0 overflow-hidden">
         {/* Left: Status, Line & Structure count */}
-        <div className="flex items-center gap-2.5">
-          <span className="bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40 text-xs font-mono font-bold px-2 py-0.5 rounded-md">
+        <div className="flex items-center gap-2 overflow-hidden flex-shrink-0">
+          <span className="bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/40 text-xs font-mono font-bold px-2 py-0.5 rounded-md flex-shrink-0">
             Line {currentStep.line}
           </span>
-          <span className="text-xs font-medium text-[#f0f6fc] hidden md:inline truncate max-w-[260px]">
+          <span className="text-xs font-medium text-[#f0f6fc] hidden 2xl:inline truncate max-w-[180px]">
             {currentStep.explanation}
           </span>
-          <span className="bg-[#21262d] text-[#8b949e] border border-[#30363d] text-[11px] font-mono px-2 py-0.5 rounded-full">
-            {structures.length + (hasJvmObjects ? 1 : 0)} structure{structures.length + (hasJvmObjects ? 1 : 0) !== 1 ? 's' : ''}
+          <span className="bg-[#21262d] text-[#8b949e] border border-[#30363d] text-[11px] font-mono px-2 py-0.5 rounded-full flex-shrink-0">
+            {structures.length + (hasJvmObjects ? 1 : 0)} struct{structures.length + (hasJvmObjects ? 1 : 0) !== 1 ? 's' : ''}
           </span>
         </div>
 
         {/* Center: Arrangement & Layout Controls */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
           {/* Layout Mode Selector */}
-          <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5">
+          <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 flex-shrink-0">
             <button
               onClick={() => {
                 setLayoutMode('freeform');
                 setMaximizedCardId(null);
               }}
-              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 layoutMode === 'freeform'
                   ? 'bg-[#58a6ff]/20 text-[#58a6ff] font-semibold'
                   : 'text-[#8b949e] hover:text-[#f0f6fc]'
@@ -503,14 +504,14 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
               title="Freeform Canvas Mode (Catch & move anywhere)"
             >
               <Move className="w-3 h-3" />
-              <span>Freeform</span>
+              <span className="hidden sm:inline">Freeform</span>
             </button>
             <button
               onClick={() => {
                 setLayoutMode('grid');
                 setMaximizedCardId(null);
               }}
-              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-colors ${
                 layoutMode === 'grid'
                   ? 'bg-[#3fb950]/20 text-[#3fb950] font-semibold'
                   : 'text-[#8b949e] hover:text-[#f0f6fc]'
@@ -518,23 +519,23 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
               title="Auto Grid Mode (Neat responsive layout)"
             >
               <LayoutGrid className="w-3 h-3" />
-              <span>Grid</span>
+              <span className="hidden sm:inline">Grid</span>
             </button>
           </div>
 
           {/* Quick Arrangement Actions */}
           <button
             onClick={handleAutoArrangeGrid}
-            className="flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors"
+            className="flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0"
             title="Auto-Arrange in Neat Grid"
           >
             <LayoutGrid className="w-3.5 h-3.5 text-[#58a6ff]" />
-            <span className="hidden sm:inline">Neat Grid</span>
+            <span className="hidden md:inline">Neat Grid</span>
           </button>
 
           <button
             onClick={handleArrangeHorizontal}
-            className="hidden lg:flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors"
+            className="hidden 2xl:flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0"
             title="Arrange Horizontally"
           >
             <Columns className="w-3.5 h-3.5 text-[#bc8cff]" />
@@ -543,7 +544,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
 
           <button
             onClick={handleArrangeVertical}
-            className="hidden lg:flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors"
+            className="hidden 2xl:flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0"
             title="Arrange Vertically"
           >
             <Rows className="w-3.5 h-3.5 text-[#e3b341]" />
@@ -552,7 +553,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
 
           <button
             onClick={handleResetLayout}
-            className="flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors"
+            className="flex items-center gap-1 bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f0f6fc] border border-[#30363d] px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0"
             title="Reset All Card Positions and Sizes"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -560,10 +561,10 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
           </button>
         </div>
 
-        {/* Right: Zoom & Enlarge Fullscreen Button */}
-        <div className="flex items-center gap-2">
+        {/* Right: Enlarge Fullscreen Button (Always prioritized with flex-shrink-0!) & Zoom controls */}
+        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
           {/* Zoom controls */}
-          <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5">
+          <div className="hidden sm:flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 flex-shrink-0">
             <button
               onClick={handleZoomOut}
               className="p-1 text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d] rounded transition-colors"
@@ -587,19 +588,19 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
             </button>
           </div>
 
-          {/* Enlarge / Fullscreen Canvas Toggle Button */}
+          {/* Enlarge / Fullscreen Canvas Toggle Button — ALWAYS 100% VISIBLE & HIGHLIGHTED */}
           {onToggleFullscreen && (
             <button
               onClick={onToggleFullscreen}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-sm ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-md flex-shrink-0 cursor-pointer ${
                 isFullscreen
-                  ? 'bg-[#bc8cff]/20 text-[#d2a8ff] border border-[#bc8cff]/50 hover:bg-[#bc8cff]/30'
-                  : 'bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/50 hover:bg-[#58a6ff]/30'
+                  ? 'bg-[#bc8cff]/20 text-[#d2a8ff] border border-[#bc8cff]/60 hover:bg-[#bc8cff]/30'
+                  : 'bg-[#58a6ff] hover:bg-[#4795ee] text-black font-extrabold shadow-[0_0_12px_rgba(88,166,255,0.4)]'
               }`}
-              title={isFullscreen ? 'Restore Canvas to Split View' : 'Enlarge Visualizer Canvas to Fullscreen'}
+              title={isFullscreen ? 'Restore Canvas to Split View' : 'Enlarge Visualizer Canvas to Fullscreen Workspace'}
             >
-              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span>{isFullscreen ? 'Exit Full' : 'Enlarge Canvas Full'}</span>
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 stroke-[2.5]" />}
+              <span className="whitespace-nowrap">{isFullscreen ? 'Exit Full' : 'Enlarge Canvas'}</span>
             </button>
           )}
         </div>
