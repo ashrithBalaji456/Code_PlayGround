@@ -392,7 +392,7 @@ gantt
     dateFormat  YYYY-MM-DD
     axisFormat  %b %d
     section Foundation
-    Project setup (Vite + React + TS)   :done,    a1, 2026-01-01, 10d
+    Project setup with Vite and React   :done,    a1, 2026-01-01, 10d
     Monaco editor integration           :done,    a2, after a1, 7d
     section Core Engine
     Event schema design                 :done,    b1, after a2, 8d
@@ -403,10 +403,10 @@ gantt
     Linked Lists, Trees, Heaps          :active,  c2, after c1, 14d
     Hash Tables, Graphs                 :active,  c3, after c1, 14d
     section Debugger
-    Variables + Memory model            :active,  d1, after c2, 10d
-    Call stack + Exceptions             :         d2, after d1, 8d
+    Variables and Memory model          :active,  d1, after c2, 10d
+    Frame tracking and Exceptions       :         d2, after d1, 8d
     section Polish
-    Study Guide + Exercises             :         e1, after d2, 10d
+    Study Guide and Exercises           :         e1, after d2, 10d
     Release                             :milestone, e2, after e1, 0d
 ```
 
@@ -753,7 +753,7 @@ git push origin feature/amazing-feature
 
 <br/><br/>
 
-<img src="https://github-readme-activity-graph.vercel.app/graph?username=ashrithBalaji456&repo=Code_PlayGround&theme=tokyo-night&hide_border=true&area=true" alt="Activity graph" width="100%"/>
+<img src="https://ghchart.rshah.org/6366f1/ashrithBalaji456" alt="GitHub contribution heatmap" width="90%"/>
 
 <br/><br/>
 
