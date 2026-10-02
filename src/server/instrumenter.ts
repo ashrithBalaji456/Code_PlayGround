@@ -40,6 +40,8 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
   let currentMethod: { name: string; depth: number; lastWasReturn?: boolean } | null = null;
   let pendingCtorEnter: string | null = null;
 
+  const scopeVars: Array<string[]> = [[]];
+
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const rawLine = lines[lineIdx];
     const lineNum = lineIdx + 1;
@@ -57,6 +59,8 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     // Check main method signature
     if (trimmed.includes('public static void main(String[] args)') || trimmed.includes('public static void main(String args[])')) {
       inMainMethod = true;
+      scopeVars.length = 0;
+      scopeVars.push([]);
       outputLines.push(rawLine);
       if (rawLine.includes('{')) {
         mainMethodDepth = 1;
@@ -68,6 +72,8 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
 
     if (inMainMethod && mainMethodDepth === 0 && rawLine.includes('{')) {
       mainMethodDepth = 1;
+      scopeVars.length = 0;
+      scopeVars.push([]);
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.start();`);
       outputLines.push(`    try {`);
@@ -90,6 +96,26 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
         inMainMethod = false;
         mainMethodDepth = 0;
         continue;
+      }
+
+      if (trimmed === '}' && closeCount > 0) {
+        outputLines.push(rawLine);
+        for (let k = 0; k < closeCount; k++) {
+          if (scopeVars.length > 1) {
+            const exiting = scopeVars.pop();
+            if (exiting) {
+              for (const v of exiting) {
+                outputLines.push(`    CodeFlowTracer.variableScopeExit("${v}", ${lineNum});`);
+              }
+            }
+          }
+        }
+        mainMethodDepth += openCount - closeCount;
+        continue;
+      }
+
+      for (let k = 0; k < openCount; k++) {
+        scopeVars.push([]);
       }
 
       mainMethodDepth += openCount - closeCount;
@@ -1218,6 +1244,9 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
         outputLines.push(`    CodeFlowTracer.trackMutation(${srcCol}, "${srcCol}", ${lineNum});`);
       }
 
+      if (scopeVars.length > 0) {
+        scopeVars[scopeVars.length - 1].push(varName);
+      }
       outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${declaredType}", ${varName}, ${lineNum});`);
       continue;
     }
@@ -1261,6 +1290,26 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
         outputLines.push(`    CodeFlowTracer.trackMutation(${srcCol}, "${srcCol}", ${lineNum});`);
       }
 
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", ${varName}, ${lineNum});`);
+      continue;
+    }
+
+    // Variable increment / decrement: varName++; or varName--; or ++varName; or --varName;
+    const varIncMatch = trimmed.match(/^(?:([a-zA-Z_0-9]+)\s*(\+\+|--)|(\+\+|--)\s*([a-zA-Z_0-9]+));$/);
+    if (varIncMatch && !/^(return|throw|assert|break|continue)\b/.test(trimmed)) {
+      const varName = varIncMatch[1] || varIncMatch[4];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", ${varName}, ${lineNum});`);
+      continue;
+    }
+
+    // Compound assignment: varName += val; etc.
+    const varCompoundMatch = trimmed.match(/^([a-zA-Z_0-9]+)\s*(\+=|-=|\*=|(?:\/=|%=|<<=|>>=|>>>=|&=|\^=|\|=))\s*(.+);$/);
+    if (varCompoundMatch) {
+      const varName = varCompoundMatch[1];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.trackVar("${varName}", ${varName}, ${lineNum});`);
       continue;
     }

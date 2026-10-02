@@ -333,6 +333,33 @@ export const MemoryPanel: React.FC<MemoryPanelProps> = ({
                         <span className="text-[10px] font-bold text-[#f85149] bg-[#f85149]/15 px-1 rounded">No longer in active scope</span>
                       </div>
                     )}
+                    {inspectedVar.unicodeCodePoint !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#8b949e]">Unicode Code Point:</span>
+                        <span className="font-bold text-[#58a6ff]">
+                          {inspectedVar.unicodeCodePoint} (0x{inspectedVar.unicodeCodePoint.toString(16).toUpperCase().padStart(4, '0')})
+                        </span>
+                      </div>
+                    )}
+                    {inspectedVar.history && inspectedVar.history.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-[#30363d]/60 flex flex-col gap-1">
+                        <span className="text-[#8b949e] text-[10px] font-bold">Value History Timeline:</span>
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
+                          {inspectedVar.history.map((h, hIdx) => (
+                            <React.Fragment key={hIdx}>
+                              {hIdx > 0 && <span className="text-[#3fb950] font-bold">➔</span>}
+                              <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                                hIdx === inspectedVar.history!.length - 1
+                                  ? 'bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/50'
+                                  : 'bg-[#161b22] text-[#8b949e] border border-[#30363d]'
+                              }`}>
+                                {h.value === null ? 'null' : (typeof h.value === 'string' ? `"${h.value}"` : String(h.value))}
+                              </span>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {inspectedVar.educationalSize && (
                       <div className="text-[10px] text-[#8b949e] italic mt-1 border-t border-[#30363d]/50 pt-1">
                         {inspectedVar.educationalSize}

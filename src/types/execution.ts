@@ -612,6 +612,32 @@ export type EventType =
   | 'SCOPE_EXIT'
   | 'STRING_OP'
   | 'REFERENCE_REASSIGN'
+  // Phase 13 Complete Java Runtime & Memory Events
+  | 'VARIABLE_DECLARE'
+  | 'VARIABLE_INITIALIZE'
+  | 'VARIABLE_READ'
+  | 'VARIABLE_WRITE'
+  | 'VARIABLE_SCOPE_ENTER'
+  | 'VARIABLE_SCOPE_EXIT'
+  | 'REFERENCE_ASSIGN'
+  | 'OBJECT_FIELD_WRITE'
+  | 'STRING_ACCESS'
+  | 'STRING_OPERATION'
+  | 'CHAR_ACCESS'
+  | 'BOOLEAN_EVALUATE'
+  | 'TYPE_CONVERSION'
+  | 'BOXING'
+  | 'UNBOXING'
+  | 'BIT_OPERATION'
+  | 'BIT_MASK'
+  | 'EXCEPTION_CAUGHT'
+  | 'EXCEPTION_UNCAUGHT'
+  | 'EXCEPTION_STACK_UNWIND'
+  | 'METHOD_PARAMETER_BIND'
+  | 'STATIC_FIELD_READ'
+  | 'CONSTRUCTOR_ENTER'
+  | 'CONSTRUCTOR_EXIT'
+  | 'OBJECT_UNREACHABLE'
   // Phase 13 Java Multithreading & Concurrency Events
   | 'THREAD_RUN_DIRECT'
   | 'THREAD_NAME_CHANGE'
@@ -830,6 +856,8 @@ export interface VariableInfo {
   aliasedWith?: string[];
   inActiveScope?: boolean;
   genericType?: string;
+  history?: Array<{ step: number; line: number; value: any }>;
+  unicodeCodePoint?: number;
 }
 
 export interface CallFrame {
@@ -1206,7 +1234,16 @@ export interface ComparisonInfo {
 }
 
 export interface ExecutionError {
-  type: 'NullPointerException' | 'ArrayIndexOutOfBoundsException' | 'ArithmeticException' | 'SyntaxError' | 'RuntimeError' | string;
+  type:
+    | 'NullPointerException'
+    | 'ArrayIndexOutOfBoundsException'
+    | 'ArithmeticException'
+    | 'NumberFormatException'
+    | 'ClassCastException'
+    | 'StringIndexOutOfBoundsException'
+    | 'SyntaxError'
+    | 'RuntimeError'
+    | string;
   message: string;
   line: number;
   variableName?: string;

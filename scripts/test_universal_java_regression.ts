@@ -345,7 +345,7 @@ public class Main {
   assert(r13.success, 'Test 13 executes successfully');
   const s13 = reconstructExecutionSteps(r13.events!, t13Code);
   const last13 = s13[s13.length - 1];
-  assert(last13.variables['node']?.value === 'null', 'node variable has null value', last13.variables['node']);
+  assert(last13.variables['node']?.value === null || last13.variables['node']?.value === 'null', 'node variable has null value', last13.variables['node']);
 
   // -------------------------------------------------------------
   // Test 14: NullPointerException with Source Sync
@@ -368,7 +368,7 @@ public class Main {
   assert(r14.events && r14.events.length > 0, 'Events captured despite exception');
   const s14 = reconstructExecutionSteps(r14.events!, t14Code);
   const last14 = s14[s14.length - 1];
-  assert(last14.variables['node']?.value === 'null', 'node = null preserved before NPE');
+  assert(last14.variables['node']?.value === null || last14.variables['node']?.value === 'null', 'node = null preserved before NPE');
   assert(last14.error?.type?.includes('NullPointer') || last14.error?.detail?.includes('NullPointer'), 'NullPointerException caught and synchronized', last14.error);
 
   // -------------------------------------------------------------

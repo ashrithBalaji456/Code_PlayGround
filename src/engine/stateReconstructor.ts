@@ -233,22 +233,99 @@ function computeBeginnerExplanation(
       };
     }
 
+    case 'TYPE_CONVERSION': {
+      const fromT = ev.dataType || 'type';
+      const toT = ev.refType || 'type';
+      const vFrom = ev.oldValue !== undefined ? ev.oldValue : ev.value;
+      const vTo = ev.newValue !== undefined ? ev.newValue : ev.value;
+      return {
+        what: `Type conversion: (${fromT}) ${vFrom} ➔ (${toT}) ${vTo}.`,
+        why: `WHAT HAPPENED TO THE VALUE? Java performed numeric conversion (widening preserves numeric value in a larger type, narrowing explicit cast truncates/converts the value).`,
+        actionType: 'TYPE_CONVERSION',
+      };
+    }
+
+    case 'CHAR_ACCESS': {
+      const ch = ev.value !== undefined ? String(ev.value) : (ev.char || 'A');
+      const codePoint = ch.charCodeAt(0);
+      return {
+        what: `Character evaluated: '${ch}' (Unicode code point: ${codePoint}).`,
+        why: `Java char stores a 16-bit unsigned Unicode character representation. In arithmetic/increments, Java operates on its underlying integer code point.`,
+        actionType: 'CHAR_ACCESS',
+      };
+    }
+
+    case 'BIT_OPERATION':
+    case 'BIT_SHIFT':
+    case 'BIT_MASK': {
+      const op = ev.operator || ev.detail || '&';
+      return {
+        what: `Bitwise operation: ${ev.leftVal ?? ev.oldValue ?? ''} ${op} ${ev.rightVal ?? ev.value ?? ''} = ${ev.newValue ?? ev.returnValue ?? ''}.`,
+        why: `Bitwise operators manipulate the raw 32-bit two's-complement binary bits directly in CPU integer registers.`,
+        actionType: 'BIT_OPERATION',
+      };
+    }
+
+    case 'OBJECT_UNREACHABLE': {
+      const rawTgt = ev.objectId || ev.variable || 'object';
+      return {
+        what: `Object ${rawTgt} is no longer reachable from active stack references.`,
+        why: `ELIGIBLE FOR GARBAGE COLLECTION: No live reference variables point to this Heap object. The JVM may reclaim its memory in subsequent GC cycles.`,
+        actionType: 'OBJECT_UNREACHABLE',
+      };
+    }
+
     case 'ERROR':
     case 'EXCEPTION': {
-      const isNpe =
-        (ev.message || '').includes('NullPointer') ||
-        (ev.detail || '').includes('NullPointer') ||
-        ev.dataType === 'NullPointerException';
-      if (isNpe) {
+      const msg = ev.message || '';
+      const det = ev.detail || '';
+      const dt = ev.dataType || '';
+      const combined = `${msg} ${det} ${dt}`;
+      if (combined.includes('NullPointer')) {
         return {
           what: `The program crashed with NullPointerException at line ${ev.line}.`,
-          why: `WHY DID THE PROGRAM CRASH? Variable '${ev.variable || 'reference'}' is null, so Java cannot access its members or methods. Null does not point to any heap object.`,
+          why: `WHY DID THE PROGRAM CRASH? Attempted to access a member, field, method, or index through a null reference. Null does not refer to any valid object on the Heap.`,
           actionType: 'NULL_POINTER_EXCEPTION',
+        };
+      }
+      if (combined.includes('ArrayIndexOutOfBounds')) {
+        return {
+          what: `The program crashed with ArrayIndexOutOfBoundsException at line ${ev.line}.`,
+          why: `WHY DID THE PROGRAM CRASH? Attempted to access an array element outside valid index bounds [0 to length-1]. ${msg}`,
+          actionType: 'ARRAY_INDEX_OUT_OF_BOUNDS',
+        };
+      }
+      if (combined.includes('ArithmeticException')) {
+        return {
+          what: `The program crashed with ArithmeticException at line ${ev.line}.`,
+          why: `WHY DID THE PROGRAM CRASH? Invalid arithmetic operation (integer division by zero: / by zero). In Java, integer division by zero throws ArithmeticException.`,
+          actionType: 'ARITHMETIC_EXCEPTION',
+        };
+      }
+      if (combined.includes('NumberFormatException')) {
+        return {
+          what: `The program crashed with NumberFormatException at line ${ev.line}.`,
+          why: `WHY DID THE PROGRAM CRASH? Attempted to parse an invalid string into a numeric value (e.g. Integer.parseInt). ${msg}`,
+          actionType: 'NUMBER_FORMAT_EXCEPTION',
+        };
+      }
+      if (combined.includes('ClassCastException')) {
+        return {
+          what: `The program crashed with ClassCastException at line ${ev.line}.`,
+          why: `WHY DID THE PROGRAM CRASH? Incompatible explicit cast attempted between unrelated object types in the class hierarchy. ${msg}`,
+          actionType: 'CLASS_CAST_EXCEPTION',
+        };
+      }
+      if (combined.includes('StringIndexOutOfBounds')) {
+        return {
+          what: `The program crashed with StringIndexOutOfBoundsException at line ${ev.line}.`,
+          why: `WHY DID THE PROGRAM CRASH? Attempted to access a character or substring index outside valid bounds [0 to length-1]. ${msg}`,
+          actionType: 'STRING_INDEX_OUT_OF_BOUNDS',
         };
       }
       return {
         what: `Exception occurred: ${ev.message || ev.dataType || 'Error'}.`,
-        why: `An unhandled exception stopped execution at line ${ev.line}.`,
+        why: `An unhandled exception stopped normal program execution at line ${ev.line}.`,
         actionType: 'EXCEPTION',
       };
     }
@@ -445,6 +522,12 @@ export function reconstructExecutionSteps(
         v.educationalSize = '4 bytes (Typical Java representation)';
       }
     }
+    if ((v.type === 'char' || v.type === 'Character') && v.value !== undefined && v.value !== null) {
+      const s = String(v.value);
+      if (s.length > 0) {
+        v.unicodeCodePoint = s.codePointAt(0) ?? s.charCodeAt(0);
+      }
+    }
     return v;
   };
 
@@ -526,7 +609,7 @@ export function reconstructExecutionSteps(
     // Clone mutable objects for step immutability
     const nextVariables: Record<string, VariableInfo> = {};
     for (const [k, v] of Object.entries(currentVariables)) {
-      nextVariables[k] = { ...v };
+      nextVariables[k] = { ...v, history: v.history ? [...v.history] : [] };
     }
 
     const nextStructures: Record<string, DataStructureState> = {};
@@ -860,7 +943,10 @@ export function reconstructExecutionSteps(
         explanation = `Executing line ${ev.line}`;
         break;
 
-      case 'VARIABLE_CREATE': {
+      case 'VARIABLE_CREATE':
+      case 'VARIABLE_DECLARE':
+      case 'VARIABLE_INITIALIZE':
+      case 'REFERENCE_CREATE': {
         const type = ev.dataType || 'int';
         let val = ev.value;
         const bytes = estimateSize(type, val);
@@ -886,6 +972,7 @@ export function reconstructExecutionSteps(
           refTargetId: isRef ? finalRefId : undefined,
           objectId: isRef ? (stableId || ev.objectId) : undefined,
           estimatedBytes: bytes,
+          history: [{ step: i + 1, line: currentLine, value: val }],
         });
         nextVariables[ev.variable!] = varInfo;
         const topFrame = nextCallStack[nextCallStack.length - 1];
@@ -896,10 +983,12 @@ export function reconstructExecutionSteps(
         break;
       }
 
-      case 'VARIABLE_UPDATE': {
+      case 'VARIABLE_UPDATE':
+      case 'VARIABLE_WRITE':
+      case 'REFERENCE_ASSIGN': {
         const v = nextVariables[ev.variable!];
         const type = ev.dataType || (v?.type) || 'int';
-        let val = ev.newValue;
+        let val = ev.newValue !== undefined ? ev.newValue : ev.value;
         const isNull = val === null || val === 'null' || ev.value === null || ev.value === 'null';
         const isRawObj = !isNull && typeof val === 'string' && (val.startsWith('obj-') || val.startsWith('@obj-') || val.startsWith('obj_') || val.startsWith('object-') || val.startsWith('@raw-') || val.startsWith('raw-') || (val.startsWith('@') && !val.startsWith('@arr')));
         const isCustomObjRef = !isNull && (!!ev.objectId || isRawObj || (typeof ev.refTargetId === 'string' && (ev.refTargetId.startsWith('obj') || ev.refTargetId.startsWith('raw') || ev.refTargetId.startsWith('object-') || ev.refTargetId.startsWith('@obj'))));
@@ -918,6 +1007,11 @@ export function reconstructExecutionSteps(
           v.isReference = isRef;
           v.refTargetId = isNull ? undefined : (isRef ? finalRefId : undefined);
           v.objectId = isNull ? undefined : (isRef ? (stableId || v.objectId) : undefined);
+          if (!v.history) v.history = [];
+          const lastH = v.history[v.history.length - 1];
+          if (!lastH || lastH.value !== val) {
+            v.history.push({ step: i + 1, line: currentLine, value: val });
+          }
           enrichVariable(v);
         } else {
           nextVariables[ev.variable!] = enrichVariable({
@@ -929,6 +1023,7 @@ export function reconstructExecutionSteps(
             refTargetId: isNull ? undefined : (isRef ? finalRefId : undefined),
             objectId: isNull ? undefined : (isRef ? stableId : undefined),
             estimatedBytes: estimateSize(type, val),
+            history: [{ step: i + 1, line: currentLine, value: val }],
           });
         }
         const topFrame = nextCallStack[nextCallStack.length - 1];
@@ -1084,6 +1179,7 @@ export function reconstructExecutionSteps(
       }
 
       case 'CUSTOM_OBJECT_UPDATE':
+      case 'OBJECT_FIELD_WRITE':
       case 'OBJECT_FIELD_UPDATE': {
         const rawObjId = ev.objectId || ev.structureId || ev.variable || 'obj';
         const objId = getStableObjectId(rawObjId);
@@ -1342,6 +1438,25 @@ export function reconstructExecutionSteps(
           const popped = nextCallStack.pop();
           explanation = `Unwound stack frame ${popped?.functionName || ''} due to active exception`;
         }
+        break;
+      }
+
+      case 'VARIABLE_SCOPE_EXIT': {
+        const vName = ev.variable;
+        if (vName && nextVariables[vName]) {
+          delete nextVariables[vName];
+        }
+        const topF = nextCallStack[nextCallStack.length - 1];
+        if (topF && vName && topF.localVariables[vName]) {
+          delete topF.localVariables[vName];
+        }
+        nextActiveConcept = {
+          name: 'Variable Out of Active Scope',
+          category: 'MEMORY',
+          explanation: `Variable '${vName}' has exited its enclosing block scope and is no longer accessible.`,
+          badge: 'Scope Exit',
+        };
+        explanation = `Variable ${vName} is no longer in active scope`;
         break;
       }
 
@@ -4808,7 +4923,8 @@ export function reconstructExecutionSteps(
         break;
       }
 
-      // === CONTROL FLOW & PHASE 12 RUNTIME EVENTS ===
+      // === CONTROL FLOW & PHASE 12/13 RUNTIME EVENTS ===
+      case 'BOOLEAN_EVALUATE':
       case 'CONDITION_EVAL':
       case 'CONDITION_EVALUATE': {
         nextMetrics.comparisons++;
@@ -4824,12 +4940,14 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      case 'VARIABLE_SCOPE_ENTER':
       case 'SCOPE_ENTER': {
         const scName = ev.detail || ev.variable || 'block';
         explanation = `Entered scope: ${scName}`;
         break;
       }
 
+      case 'VARIABLE_SCOPE_EXIT':
       case 'SCOPE_EXIT': {
         const scName = ev.detail || ev.variable || 'block';
         if (ev.variable && nextVariables[ev.variable]) {
@@ -4843,6 +4961,8 @@ export function reconstructExecutionSteps(
         break;
       }
 
+      case 'STRING_ACCESS':
+      case 'STRING_OPERATION':
       case 'STRING_OP': {
         const strVar = ev.variable || 'str';
         const op = ev.meta?.op || 'operation';
@@ -4859,8 +4979,159 @@ export function reconstructExecutionSteps(
         if (nextVariables[varName]) {
           nextVariables[varName].value = stableNew || newTarget;
           nextVariables[varName].refTargetId = stableNew || newTarget;
+          if (!nextVariables[varName].history) nextVariables[varName].history = [];
+          nextVariables[varName].history.push({ step: i + 1, line: currentLine, value: stableNew || newTarget });
         }
         explanation = `Reassigned reference ${varName}: ${oldTarget} ➔ ${newTarget}`;
+        break;
+      }
+
+      case 'REFERENCE_NULL': {
+        const varName = ev.variable || 'ref';
+        if (nextVariables[varName]) {
+          nextVariables[varName].value = null;
+          nextVariables[varName].refTargetId = undefined;
+          if (!nextVariables[varName].history) nextVariables[varName].history = [];
+          nextVariables[varName].history.push({ step: i + 1, line: currentLine, value: null });
+        }
+        explanation = `Reference ${varName} set to null`;
+        break;
+      }
+
+      case 'VARIABLE_READ': {
+        const vName = ev.variable || 'var';
+        const v = nextVariables[vName];
+        explanation = `Read variable '${vName}' (value = ${v ? JSON.stringify(v.value) : ev.value})`;
+        break;
+      }
+
+      case 'TYPE_CONVERSION': {
+        const fromT = ev.dataType || 'type';
+        const toT = ev.refType || 'type';
+        const vFrom = ev.oldValue !== undefined ? ev.oldValue : ev.value;
+        const vTo = ev.newValue !== undefined ? ev.newValue : ev.value;
+        explanation = `Type conversion from ${fromT} to ${toT}: ${vFrom} ➔ ${vTo}`;
+        break;
+      }
+
+      case 'CHAR_ACCESS': {
+        const ch = ev.value !== undefined ? String(ev.value) : (ev.char || 'A');
+        const codePoint = ch.charCodeAt(0);
+        explanation = `Character evaluated: '${ch}' (Unicode code point: ${codePoint})`;
+        break;
+      }
+
+      case 'BOXING':
+      case 'BOX':
+      case 'BOXING_OP': {
+        const fromT = ev.dataType || 'primitive';
+        const toT = ev.refType || 'wrapper';
+        const val = ev.value !== undefined ? ev.value : ev.newValue;
+        explanation = `Autoboxing: ${fromT} value (${val}) boxed into ${toT} object`;
+        break;
+      }
+
+      case 'UNBOXING':
+      case 'UNBOX':
+      case 'UNBOXING_OP': {
+        const fromT = ev.refType || 'wrapper';
+        const toT = ev.dataType || 'primitive';
+        const val = ev.value !== undefined ? ev.value : ev.newValue;
+        explanation = `Unboxing: ${fromT} object unboxed into primitive ${toT} value (${val})`;
+        break;
+      }
+
+      case 'BIT_OPERATION':
+      case 'BIT_SHIFT':
+      case 'BIT_MASK': {
+        const op = ev.operator || ev.detail || '&';
+        const opA = typeof ev.leftVal === 'number' ? ev.leftVal : (typeof ev.oldValue === 'number' ? ev.oldValue : 0);
+        const opB = typeof ev.rightVal === 'number' ? ev.rightVal : (typeof ev.value === 'number' ? ev.value : undefined);
+        const res = typeof ev.newValue === 'number' ? ev.newValue : (typeof ev.returnValue === 'number' ? ev.returnValue : 0);
+        const stKey = ev.structureId || 'bits';
+        nextStructures[stKey] = {
+          id: stKey,
+          name: stKey,
+          type: 'bits',
+          dataType: 'int (Binary Register)',
+          size: 32,
+          bitData: {
+            operandA: opA,
+            operandB: opB,
+            operator: op,
+            result: res,
+            explanation: `${opA} ${op} ${opB !== undefined ? opB : ''} = ${res}`,
+          },
+        };
+        explanation = `Bit operation: ${opA} ${op} ${opB !== undefined ? opB : ''} ➔ ${res}`;
+        break;
+      }
+
+      case 'EXCEPTION_CAUGHT': {
+        const excType = ev.dataType || 'Exception';
+        explanation = `Caught exception: ${excType} ${ev.message ? `(${ev.message})` : ''}`;
+        break;
+      }
+
+      case 'EXCEPTION_UNCAUGHT': {
+        const exName = ev.dataType || 'Exception';
+        nextError = {
+          type: exName,
+          message: ev.message || `Uncaught ${exName}`,
+          line: ev.line || currentLine,
+          detail: `Uncaught exception terminated program: ${ev.message || exName}`,
+        };
+        explanation = `Program terminated due to uncaught ${exName} on line ${ev.line || currentLine}`;
+        break;
+      }
+
+      case 'EXCEPTION_STACK_UNWIND': {
+        if (nextCallStack.length > 1) {
+          const popped = nextCallStack.pop();
+          explanation = `Exception unwound call stack frame: ${popped?.functionName}()`;
+        }
+        break;
+      }
+
+      case 'METHOD_PARAMETER_BIND': {
+        const paramName = ev.variable || 'param';
+        const paramVal = ev.value;
+        const topFrame = nextCallStack[nextCallStack.length - 1];
+        if (topFrame && paramName) {
+          topFrame.arguments[paramName] = paramVal;
+        }
+        explanation = `Bound method parameter: ${paramName} = ${JSON.stringify(paramVal)}`;
+        break;
+      }
+
+      case 'STATIC_FIELD_READ': {
+        const cls = ev.className || 'Class';
+        const fld = ev.fieldName || ev.variable || 'field';
+        const val = nextStaticFields[cls]?.[fld] ?? ev.value;
+        explanation = `Read static field ${cls}.${fld} (value = ${JSON.stringify(val)})`;
+        break;
+      }
+
+      case 'CONSTRUCTOR_ENTER': {
+        const cName = ev.className || 'Constructor';
+        explanation = `Entered constructor: ${cName}()`;
+        break;
+      }
+
+      case 'CONSTRUCTOR_EXIT': {
+        const cName = ev.className || 'Constructor';
+        explanation = `Completed constructor: ${cName}()`;
+        break;
+      }
+
+      case 'OBJECT_UNREACHABLE': {
+        const rawTgt = ev.objectId || ev.variable;
+        const targetId = getStableObjectId(rawTgt);
+        const obj = nextCustomObjects[targetId];
+        if (obj) {
+          obj.lifecycle = 'GC_ELIGIBLE';
+        }
+        explanation = `Object ${targetId} is no longer reachable from any active reference (ELIGIBLE FOR GARBAGE COLLECTION)`;
         break;
       }
 
@@ -8008,6 +8279,9 @@ export function reconstructExecutionSteps(
           'NullPointerException',
           'ArrayIndexOutOfBoundsException',
           'ArithmeticException',
+          'NumberFormatException',
+          'ClassCastException',
+          'StringIndexOutOfBoundsException',
           'SyntaxError',
           'RuntimeError',
         ];
@@ -8018,7 +8292,13 @@ export function reconstructExecutionSteps(
         } else if (matchedType === 'ArrayIndexOutOfBoundsException') {
           detail = `ArrayIndexOutOfBoundsException: Attempted to access an array element outside valid bounds. Message: ${ev.message || ''}`;
         } else if (matchedType === 'ArithmeticException') {
-          detail = `ArithmeticException: Arithmetic failure (e.g., division by zero). Message: ${ev.message || ''}`;
+          detail = `ArithmeticException: Invalid arithmetic operation (e.g. division by zero: / 0). Message: ${ev.message || ''}`;
+        } else if (matchedType === 'NumberFormatException') {
+          detail = `NumberFormatException: Invalid string format for numeric conversion. Message: ${ev.message || ''}`;
+        } else if (matchedType === 'ClassCastException') {
+          detail = `ClassCastException: Incompatible type cast between object references. Message: ${ev.message || ''}`;
+        } else if (matchedType === 'StringIndexOutOfBoundsException') {
+          detail = `StringIndexOutOfBoundsException: String character index outside valid range [0 to length-1]. Message: ${ev.message || ''}`;
         }
         nextError = {
           type: matchedType,

@@ -155,6 +155,11 @@ public class CodeFlowTracer {
         trackVar(rootVar, target.getClass().getSimpleName(), target, line);
     }
 
+    public static void variableScopeExit(String varName, int line) {
+        trackedVars.remove(varName);
+        recordEvent("{\\\"type\\\":\\\"VARIABLE_SCOPE_EXIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"message\\\":\\\"Variable " + varName + " no longer in active scope\\\"}");
+    }
+
     // ==========================================
     // PHASE 10: ADVANCED JVM & OOP METHODS
     // ==========================================

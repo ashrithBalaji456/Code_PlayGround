@@ -3,8 +3,10 @@ import { PHASE_10_JAVA_PRESETS } from './phase10Presets';
 import { PHASE_11_JAVA_PRESETS } from './phase11Presets';
 import { PHASE_12_JAVA_PRESETS } from './phase12Presets';
 import { PHASE_13_CONCURRENCY_PRESETS } from './phase13Presets';
+import { PHASE_13_RUNTIME_JAVA_PRESETS } from './phase13RuntimePresets';
 
 export const CODE_PRESETS: CodePreset[] = [
+  ...PHASE_13_RUNTIME_JAVA_PRESETS,
   ...PHASE_13_CONCURRENCY_PRESETS,
   ...PHASE_12_JAVA_PRESETS,
   ...PHASE_11_JAVA_PRESETS,
