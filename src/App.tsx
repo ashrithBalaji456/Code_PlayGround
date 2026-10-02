@@ -15,6 +15,7 @@ import { LearningModePanel } from './components/panels/LearningModePanel';
 import { JavaConceptPanel } from './components/panels/JavaConceptPanel';
 import { ThreadsPanel } from './components/panels/ThreadsPanel';
 import { HelpModal } from './components/HelpModal';
+import { PasteCodeModal } from './components/PasteCodeModal';
 import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
@@ -41,6 +42,7 @@ export function App() {
   const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline' | 'concept' | 'threads'>('structures');
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [isPasteModalOpen, setIsPasteModalOpen] = useState<boolean>(false);
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
 
   const [isCanvasFullscreen, setIsCanvasFullscreen] = useState(false);
@@ -68,7 +70,10 @@ export function App() {
   const activeLine: number | null = currentStep ? currentStep.line : (compilationError ? compilationError.line : null);
 
   // Run via real Java execution worker with graceful client fallback
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (overrideCode?: string, overrideLanguage?: SupportedLanguage) => {
+    const codeToRun = typeof overrideCode === 'string' ? overrideCode : code;
+    const langToRun = overrideLanguage || language;
+
     setExecutionStatus('COMPILING');
     setCompilationError(null);
     setIsRunning(true);
@@ -79,7 +84,7 @@ export function App() {
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language }),
+        body: JSON.stringify({ code: codeToRun, language: langToRun }),
       });
 
       if (!response.ok) {
@@ -89,7 +94,7 @@ export function App() {
       const result = await response.json();
 
       if (result.success && Array.isArray(result.events)) {
-        const recordedSteps = reconstructExecutionSteps(result.events, code);
+        const recordedSteps = reconstructExecutionSteps(result.events, codeToRun);
         setSteps(recordedSteps);
         setWorkerName(result.worker || 'Java 22.0.1 (JVM Sandboxed)');
         setExecutionStatus('RUNNING');
@@ -149,7 +154,7 @@ export function App() {
       // Offline fallback: Use client-side ExecutionEngine
       console.warn('Backend unavailable, using client-side execution engine fallback:', err);
       const engine = new ExecutionEngine();
-      const recordedSteps = engine.execute(code, language);
+      const recordedSteps = engine.execute(codeToRun, langToRun);
       setSteps(recordedSteps);
       setWorkerName('Client Engine Fallback');
       setExecutionStatus('RUNNING');
@@ -160,6 +165,29 @@ export function App() {
       }
     }
   }, [code, language]);
+
+  // Handle user pasting and running custom code
+  const handleRunCustomCode = useCallback(async (customCode: string, lang: SupportedLanguage) => {
+    setCode(customCode);
+    setLanguage(lang);
+
+    const customPreset: CodePreset = {
+      id: 'custom-user-code',
+      title: 'Custom User Code',
+      category: 'Custom Code',
+      difficulty: 'Medium',
+      language: lang,
+      timeComplexity: 'Dynamic',
+      spaceComplexity: 'Dynamic',
+      description: 'Custom code pasted and executed by user',
+      explanation: 'Executing live user-provided code on the execution engine',
+      code: customCode,
+    };
+    setSelectedPreset(customPreset);
+
+    // Immediately execute the custom code without closure staleness
+    await handleRun(customCode, lang);
+  }, [handleRun]);
 
   // Stepping actions
   const handleNextStep = useCallback(() => {
@@ -328,6 +356,7 @@ export function App() {
         onSelectPreset={handleSelectPreset}
         onToggleLearningMode={() => setIsLearningMode((prev) => !prev)}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenPasteModal={() => setIsPasteModalOpen(true)}
       />
 
       {/* Execution Controls Toolbar */}
@@ -370,6 +399,7 @@ export function App() {
               // Basic trim formatting
               setCode(code.trim());
             }}
+            onOpenPasteModal={() => setIsPasteModalOpen(true)}
           />
         </section>
 
@@ -384,6 +414,7 @@ export function App() {
               isFullscreen={false}
               onToggleFullscreen={() => setIsCanvasFullscreen(true)}
               onRunPreset={handleRun}
+              onOpenPasteModal={() => setIsPasteModalOpen(true)}
             />
 
             {/* Restore Bottom Panel pill if maximized in pane */}
@@ -740,6 +771,14 @@ export function App() {
 
       {/* Documentation / Shortcuts Modal */}
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+
+      {/* Paste & Run Custom Code Modal */}
+      <PasteCodeModal
+        isOpen={isPasteModalOpen}
+        currentLanguage={language}
+        onClose={() => setIsPasteModalOpen(false)}
+        onRunCode={handleRunCustomCode}
+      />
     </div>
   );
 }

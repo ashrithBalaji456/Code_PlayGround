@@ -6,6 +6,7 @@ import {
   BookOpen,
   HelpCircle,
   FolderOpen,
+  ClipboardPaste,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -16,6 +17,7 @@ interface NavbarProps {
   onSelectPreset: (preset: CodePreset) => void;
   onToggleLearningMode: () => void;
   onOpenHelp: () => void;
+  onOpenPasteModal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,6 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectPreset,
   onToggleLearningMode,
   onOpenHelp,
+  onOpenPasteModal,
 }) => {
   // Group presets by category
   const categories = Array.from(new Set(CODE_PRESETS.map((p) => p.category)));
@@ -105,8 +108,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Right Controls: Learning Mode & Help */}
+      {/* Right Controls: Paste & Run, Learning Mode & Help */}
       <div className="flex items-center gap-2">
+        {onOpenPasteModal && (
+          <button
+            onClick={onOpenPasteModal}
+            className="flex items-center gap-1.5 bg-[#238636] hover:bg-[#2ea043] text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-[#238636]/20 transition-all transform active:scale-95"
+            title="Paste custom code to execute and visualize"
+          >
+            <ClipboardPaste className="w-3.5 h-3.5" />
+            <span>Paste & Run</span>
+          </button>
+        )}
+
         <button
           onClick={onToggleLearningMode}
           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
@@ -117,7 +131,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           title="Toggle Learning Mode Study Guide"
         >
           <BookOpen className="w-3.5 h-3.5" />
-          <span>Study Guide</span>
+          <span className="hidden sm:inline">Study Guide</span>
         </button>
 
         <button

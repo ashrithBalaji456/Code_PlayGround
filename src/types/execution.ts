@@ -1565,7 +1565,8 @@ export interface CodePreset {
     | 'Java OOP & JVM Internals'
     | 'Java OOP & Language Fundamentals'
     | 'Java Runtime & Memory Execution'
-    | 'Java Multithreading & Concurrency';
+    | 'Java Multithreading & Concurrency'
+    | 'Custom Code';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
   description: string;

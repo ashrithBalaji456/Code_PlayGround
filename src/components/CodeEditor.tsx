@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { SupportedLanguage } from '../types/execution';
-import { RotateCcw, Sparkles } from 'lucide-react';
+import { RotateCcw, Sparkles, ClipboardPaste } from 'lucide-react';
 
 interface CodeEditorProps {
   code: string;
@@ -12,6 +12,7 @@ interface CodeEditorProps {
   onToggleBreakpoint: (line: number) => void;
   onReset: () => void;
   onFormat: () => void;
+  onOpenPasteModal?: () => void;
 }
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({
@@ -23,6 +24,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onToggleBreakpoint,
   onReset,
   onFormat,
+  onOpenPasteModal,
 }) => {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
@@ -119,6 +121,16 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {onOpenPasteModal && (
+            <button
+              onClick={onOpenPasteModal}
+              className="flex items-center gap-1 text-[11px] font-semibold text-[#58a6ff] hover:text-white px-2 py-0.5 rounded bg-[#58a6ff]/10 hover:bg-[#58a6ff]/25 border border-[#58a6ff]/30 transition-all shadow-sm"
+              title="Paste your own code to execute and visualize"
+            >
+              <ClipboardPaste className="w-3 h-3" />
+              <span>Paste Code</span>
+            </button>
+          )}
           <button
             onClick={onFormat}
             className="flex items-center gap-1 text-[11px] text-[#8b949e] hover:text-[#f0f6fc] px-2 py-0.5 rounded hover:bg-[#21262d] transition-colors"

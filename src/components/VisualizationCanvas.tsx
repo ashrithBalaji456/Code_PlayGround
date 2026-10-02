@@ -46,6 +46,7 @@ import {
   Play,
   Zap,
   Link2,
+  ClipboardPaste,
 } from 'lucide-react';
 
 interface VisualizationCanvasProps {
@@ -55,6 +56,7 @@ interface VisualizationCanvasProps {
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onRunPreset?: () => void;
+  onOpenPasteModal?: () => void;
 }
 
 export type CardSize = '0.25x' | '0.5x' | '1x' | '1.5x' | '2x';
@@ -67,6 +69,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
   isFullscreen = false,
   onToggleFullscreen,
   onRunPreset,
+  onOpenPasteModal,
 }) => {
   // Canvas arrangement state
   const [layoutMode, setLayoutMode] = useState<CanvasLayoutMode>('freeform');
@@ -432,6 +435,16 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>Run Code & Populate Canvas</span>
+              </button>
+            )}
+
+            {onOpenPasteModal && (
+              <button
+                onClick={onOpenPasteModal}
+                className="flex items-center gap-2 bg-[#58a6ff]/15 hover:bg-[#58a6ff]/25 text-[#58a6ff] hover:text-white border border-[#58a6ff]/40 font-bold text-xs px-4 py-2 rounded-lg shadow-md transition-all transform hover:scale-105"
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
+                <span>Paste & Run Custom Code</span>
               </button>
             )}
 
