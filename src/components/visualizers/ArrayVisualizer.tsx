@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { DataStructureState, ExecutionEvent } from '../../types/execution';
-import { BarChart2, Layers, Network, ArrowRight, Shuffle, Repeat } from 'lucide-react';
+import { BarChart2, Layers, Network, ArrowRight } from 'lucide-react';
 
 interface ArrayVisualizerProps {
   structure: DataStructureState;
@@ -300,23 +300,15 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   let effectiveSwappingIndices: [number, number] | undefined = structure.swappingIndices
     ? structure.swappingIndices
     : (lastEvent && (evType === 'ARRAY_SWAP' || evType === 'SWAP') && lastEvent.indices && lastEvent.indices.length >= 2)
-    ? [lastEvent.indices[0], lastEvent.indices[1]] as [number, number]
+    ? [Number(lastEvent.indices[0]), Number(lastEvent.indices[1])] as [number, number]
     : undefined;
 
-  // If not explicitly marked as swap, check if an operation or two-pointer exchange is active
   if (!effectiveSwappingIndices) {
     const isSwapOp = structure.lastOperation?.toLowerCase().includes('swap') ||
                      whyChanged?.reason?.toLowerCase().includes('swap') ||
                      (lastEvent as any)?.operation?.toLowerCase().includes('swap');
-    if (isSwapOp) {
-      if (lastEvent?.indices && lastEvent.indices.length >= 2) {
-        effectiveSwappingIndices = [Number(lastEvent.indices[0]), Number(lastEvent.indices[1])];
-      } else if (uniquePtrs.length >= 2) {
-        effectiveSwappingIndices = [uniquePtrs[0], uniquePtrs[1]];
-      }
-    } else if (uniquePtrs.length === 2 && targetIdx !== undefined && uniquePtrs.includes(targetIdx)) {
-      // Two pointers active and one of the pointers was updated (e.g. i=0 and j=2, arr[2] mutated)
-      effectiveSwappingIndices = [uniquePtrs[0], uniquePtrs[1]];
+    if (isSwapOp && lastEvent?.indices && lastEvent.indices.length >= 2) {
+      effectiveSwappingIndices = [Number(lastEvent.indices[0]), Number(lastEvent.indices[1])];
     }
   }
 
@@ -333,7 +325,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
     }
   }
 
-  // Detect element shifting (right or left) in ArrayList or Array insertions/removals
+  // Detect element shifting in ArrayList or Array insertions/removals
   let effectiveShiftedIndices: number[] = [];
   let shiftDirection: 'right' | 'left' = 'right';
 
@@ -343,75 +335,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   } else if ((structure as any).shiftedIndices && (structure as any).shiftedIndices.length > 0) {
     effectiveShiftedIndices = (structure as any).shiftedIndices;
     shiftDirection = ((structure as any).lastOperation?.includes('remove')) ? 'left' : 'right';
-  } else if (lastEvent && (evType === 'ARRAY_SHIFT' || (lastEvent as any).isShift)) {
-    if (evIndex !== undefined && evIndex < arr.length - 1) {
-      effectiveShiftedIndices = Array.from({ length: Math.max(0, arr.length - 1 - evIndex) }, (_, k) => evIndex + k);
-      shiftDirection = 'right';
-    }
-  } else if (structure.lastOperation?.includes('add(') && evIndex !== undefined && evIndex < arr.length - 1) {
-    effectiveShiftedIndices = Array.from({ length: Math.max(0, arr.length - 1 - evIndex) }, (_, k) => evIndex + k);
-    shiftDirection = 'right';
   }
-
-  // Detect single element relocation / move (e.g. insertion sort, heap sift, or element transfer)
-  let relocation: { from: number; to: number; value?: any } | undefined = undefined;
-
-  if (!effectiveSwappingIndices) {
-    if (lastEvent && typeof (lastEvent as any).sourceIndex === 'number' && targetIdx !== undefined && (lastEvent as any).sourceIndex !== targetIdx) {
-      relocation = { from: (lastEvent as any).sourceIndex, to: targetIdx, value: whyChanged?.newValue ?? lastEvent.value ?? arr[targetIdx] };
-    } else if (targetIdx !== undefined && targetIdx >= 0 && targetIdx < arr.length) {
-      // Find source from pointers or other elements
-      const otherPtrs = uniquePtrs.filter(p => p !== targetIdx);
-      if (otherPtrs.length > 0) {
-        relocation = { from: otherPtrs[0], to: targetIdx, value: whyChanged?.newValue ?? lastEvent?.value ?? arr[targetIdx] };
-      } else {
-        const movingVal = whyChanged?.newValue ?? lastEvent?.value;
-        if (movingVal !== undefined) {
-          const matchIdx = arr.findIndex((v, k) => k !== targetIdx && v === movingVal);
-          if (matchIdx !== -1) {
-            relocation = { from: matchIdx, to: targetIdx, value: movingVal };
-          }
-        }
-      }
-    }
-  }
-
-  // Track exact DOM cell coordinates for animated SVG movement arrows
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cellRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const [cellCoords, setCellCoords] = useState<Record<number, { x: number; y: number; w: number; h: number }>>({});
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const cRect = containerRef.current.getBoundingClientRect();
-    const nextCoords: Record<number, { x: number; y: number; w: number; h: number }> = {};
-    for (let i = 0; i < arr.length; i++) {
-      const el = cellRefs.current[i];
-      if (el) {
-        const elRect = el.getBoundingClientRect();
-        nextCoords[i] = {
-          x: elRect.left - cRect.left + elRect.width / 2 + (containerRef.current.scrollLeft || 0),
-          y: elRect.top - cRect.top + elRect.height / 2,
-          w: elRect.width,
-          h: elRect.height,
-        };
-      }
-    }
-    setCellCoords(nextCoords);
-  }, [arr, structure, effectiveSwappingIndices, effectiveShiftedIndices, effectiveComparingIndices, viewMode]);
-
-  const getCoords = (idx: number) => {
-    if (cellCoords[idx]) return cellCoords[idx];
-    const cellW = isNestedList ? 72 : 56;
-    const gap = 8;
-    const startX = 36;
-    return {
-      x: startX + idx * (cellW + gap),
-      y: 75,
-      w: cellW,
-      h: 56,
-    };
-  };
 
   return (
     <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-lg flex flex-col gap-3">
@@ -547,23 +471,6 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
         </div>
       )}
 
-      {/* Live Single Element Relocation Banner */}
-      {relocation && !effectiveSwappingIndices && (
-        <div className="bg-[#3fb950]/15 border-2 border-[#3fb950]/60 rounded-xl p-3 flex flex-col gap-2 shadow-lg shadow-[#3fb950]/20 animate-pulse">
-          <div className="flex items-center justify-between text-xs font-mono font-bold text-[#3fb950]">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#3fb950] animate-ping" />
-              <span className="text-sm font-semibold">➔ Element Movement: Relocated</span>
-            </div>
-            <span className="bg-[#3fb950]/30 text-[#f0f6fc] px-2 py-0.5 rounded border border-[#3fb950]/50">
-              Index [{relocation.from}] ➔ [{relocation.to}]
-            </span>
-          </div>
-          <div className="text-[11px] text-[#3fb950]/90 font-mono">
-            Element value moved from index {relocation.from} to destination index {relocation.to}.
-          </div>
-        </div>
-      )}
 
       {/* Live Data Selection & Comparison Arc */}
       {effectiveComparingIndices.length >= 2 && !effectiveSwappingIndices && (
@@ -778,193 +685,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
           </div>
         </div>
       ) : viewMode === 'boxes' ? (
-        <div ref={containerRef} className="overflow-x-auto py-8 relative">
-          {/* Animated SVG Movement & Motion Arrows Canvas Overlay */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
-            <defs>
-              <marker id="arr-swap-top" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 1 L 10 5 L 0 9 z" fill="#bc8cff" />
-              </marker>
-              <marker id="arr-swap-bottom" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 1 L 10 5 L 0 9 z" fill="#58a6ff" />
-              </marker>
-              <marker id="arr-shift-gold" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 1 L 10 5 L 0 9 z" fill="#e3b341" />
-              </marker>
-              <marker id="arr-move-green" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 1 L 10 5 L 0 9 z" fill="#3fb950" />
-              </marker>
-              <filter id="glow-purple" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="3.5" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-              <filter id="glow-blue" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="3.5" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-              <filter id="glow-gold" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="3" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-            </defs>
-
-            {/* 1. SWAP MOTION ARCS */}
-            {effectiveSwappingIndices && effectiveSwappingIndices.length === 2 && (() => {
-              const idx1 = Math.min(effectiveSwappingIndices[0], effectiveSwappingIndices[1]);
-              const idx2 = Math.max(effectiveSwappingIndices[0], effectiveSwappingIndices[1]);
-              if (idx1 >= 0 && idx2 < arr.length) {
-                const c1 = getCoords(idx1);
-                const c2 = getCoords(idx2);
-                const dx = c2.x - c1.x;
-                const arcHeight = Math.min(55, Math.max(28, dx * 0.22));
-
-                const topY = c1.y - c1.h / 2 - 8;
-                const topPath = `M ${c1.x} ${topY} C ${c1.x + dx * 0.25} ${topY - arcHeight}, ${c2.x - dx * 0.25} ${topY - arcHeight}, ${c2.x} ${topY}`;
-
-                const botY = c1.y + c1.h / 2 + 18;
-                const botPath = `M ${c2.x} ${botY} C ${c2.x - dx * 0.25} ${botY + arcHeight}, ${c1.x + dx * 0.25} ${botY + arcHeight}, ${c1.x} ${botY}`;
-
-                return (
-                  <g className="animate-pulse-glow">
-                    {/* Top Arc Path (idx1 -> idx2) */}
-                    <path
-                      d={topPath}
-                      fill="none"
-                      stroke="#bc8cff"
-                      strokeWidth="2.5"
-                      strokeDasharray="6,4"
-                      className="animate-dash-flow"
-                      markerEnd="url(#arr-swap-top)"
-                      filter="url(#glow-purple)"
-                    />
-                    {/* Flying Element Token with Value (idx1 -> idx2) */}
-                    <g>
-                      <animateMotion path={topPath} dur="1.3s" repeatCount="indefinite" />
-                      <circle r="18" fill="#bc8cff" opacity="0.35" filter="url(#glow-purple)" />
-                      <circle r="14" fill="#0d1117" stroke="#bc8cff" strokeWidth="2.5" />
-                      <text textAnchor="middle" dy="4.5" fill="#ffffff" fontSize="11" fontWeight="bold" fontFamily="monospace">
-                        {String(arr[idx1])}
-                      </text>
-                    </g>
-
-                    {/* Bottom Arc Path (idx2 -> idx1) */}
-                    <path
-                      d={botPath}
-                      fill="none"
-                      stroke="#58a6ff"
-                      strokeWidth="2.5"
-                      strokeDasharray="6,4"
-                      className="animate-dash-flow-reverse"
-                      markerEnd="url(#arr-swap-bottom)"
-                      filter="url(#glow-blue)"
-                    />
-                    {/* Flying Element Token with Value (idx2 -> idx1) */}
-                    <g>
-                      <animateMotion path={botPath} dur="1.3s" repeatCount="indefinite" />
-                      <circle r="18" fill="#58a6ff" opacity="0.35" filter="url(#glow-blue)" />
-                      <circle r="14" fill="#0d1117" stroke="#58a6ff" strokeWidth="2.5" />
-                      <text textAnchor="middle" dy="4.5" fill="#ffffff" fontSize="11" fontWeight="bold" fontFamily="monospace">
-                        {String(arr[idx2])}
-                      </text>
-                    </g>
-
-                    {/* Midpoint Label Badges */}
-                    <foreignObject x={c1.x + dx / 2 - 60} y={topY - arcHeight - 20} width="120" height="24">
-                      <div className="flex justify-center items-center">
-                        <span className="bg-[#bc8cff] text-black font-extrabold text-[9px] font-mono px-2 py-0.5 rounded-full shadow-lg border border-white/20 whitespace-nowrap">
-                          #{idx1} ➔ #{idx2} ({String(arr[idx1])})
-                        </span>
-                      </div>
-                    </foreignObject>
-
-                    <foreignObject x={c1.x + dx / 2 - 60} y={botY + arcHeight + 2} width="120" height="24">
-                      <div className="flex justify-center items-center">
-                        <span className="bg-[#58a6ff] text-black font-extrabold text-[9px] font-mono px-2 py-0.5 rounded-full shadow-lg border border-white/20 whitespace-nowrap">
-                          #{idx2} ➔ #{idx1} ({String(arr[idx2])})
-                        </span>
-                      </div>
-                    </foreignObject>
-                  </g>
-                );
-              }
-              return null;
-            })()}
-
-            {/* 2. SHIFT MOTION ARROWS */}
-            {effectiveShiftedIndices.length > 0 && !effectiveSwappingIndices && (() => {
-              return effectiveShiftedIndices.map((sIdx, i) => {
-                const targetIdx = shiftDirection === 'right' ? sIdx + 1 : sIdx - 1;
-                if (targetIdx >= 0 && targetIdx < arr.length) {
-                  const ca = getCoords(sIdx);
-                  const cb = getCoords(targetIdx);
-                  const isRight = targetIdx > sIdx;
-                  const dx = cb.x - ca.x;
-                  const arcY = ca.y - ca.h / 2 - 8;
-                  const shiftPath = `M ${ca.x} ${arcY} Q ${ca.x + dx / 2} ${arcY - 24} ${cb.x} ${arcY}`;
-
-                  return (
-                    <g key={`shift-${sIdx}-${i}`}>
-                      <path
-                        d={shiftPath}
-                        fill="none"
-                        stroke="#e3b341"
-                        strokeWidth="2.2"
-                        strokeDasharray="4,3"
-                        className={isRight ? 'animate-dash-flow' : 'animate-dash-flow-reverse'}
-                        markerEnd="url(#arr-shift-gold)"
-                        filter="url(#glow-gold)"
-                      />
-                      <circle r="3.5" fill="#f2cc60">
-                        <animateMotion path={shiftPath} dur="0.9s" repeatCount="indefinite" />
-                      </circle>
-                    </g>
-                  );
-                }
-                return null;
-              });
-            })()}
-
-            {/* 3. RELOCATION / MOVE ARCS */}
-            {relocation && !effectiveSwappingIndices && (() => {
-              const ca = getCoords(relocation.from);
-              const cb = getCoords(relocation.to);
-              const dx = cb.x - ca.x;
-              const arcH = Math.min(50, Math.max(25, Math.abs(dx) * 0.25));
-              const topY = ca.y - ca.h / 2 - 8;
-              const movePath = `M ${ca.x} ${topY} C ${ca.x + dx * 0.25} ${topY - arcH}, ${cb.x - dx * 0.25} ${topY - arcH}, ${cb.x} ${topY}`;
-
-              return (
-                <g>
-                  <path
-                    d={movePath}
-                    fill="none"
-                    stroke="#3fb950"
-                    strokeWidth="2.5"
-                    strokeDasharray="5,3"
-                    className="animate-dash-flow"
-                    markerEnd="url(#arr-move-green)"
-                  />
-                  {/* Flying Element Token with Value (from -> to) */}
-                  <g>
-                    <animateMotion path={movePath} dur="1.2s" repeatCount="indefinite" />
-                    <circle r="18" fill="#3fb950" opacity="0.35" filter="url(#glow-gold)" />
-                    <circle r="14" fill="#0d1117" stroke="#3fb950" strokeWidth="2.5" />
-                    <text textAnchor="middle" dy="4.5" fill="#3fb950" fontSize="11" fontWeight="bold" fontFamily="monospace">
-                      {String(relocation.value ?? arr[relocation.to])}
-                    </text>
-                  </g>
-                  <foreignObject x={Math.min(ca.x, cb.x) + Math.abs(dx) / 2 - 50} y={topY - arcH - 18} width="100" height="22">
-                    <div className="flex justify-center items-center">
-                      <span className="bg-[#3fb950] text-black font-extrabold text-[9px] font-mono px-2 py-0.5 rounded-full shadow-lg">
-                        Move ➔ #{relocation.to}
-                      </span>
-                    </div>
-                  </foreignObject>
-                </g>
-              );
-            })()}
-          </svg>
-
+        <div className="overflow-x-auto py-6 relative">
           <div className="flex items-end justify-center min-w-max gap-2 px-2 relative z-10">
             {arr.map((val, idx) => {
               const activePtrs = pointersByIndex[idx] || [];
@@ -975,7 +696,6 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               const isComparing = effectiveComparingIndices.includes(idx);
               const isSwapping = !!effectiveSwappingIndices?.includes(idx);
               const isShifted = effectiveShiftedIndices.includes(idx);
-              const otherSwapIdx = effectiveSwappingIndices ? (effectiveSwappingIndices[0] === idx ? effectiveSwappingIndices[1] : effectiveSwappingIndices[0]) : null;
               const isPivot = structure.pivotIndex === idx;
               const isSorted = structure.sortedIndices?.includes(idx);
 
@@ -1034,39 +754,17 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                 borderColor = 'border-[#39c5cf]/70';
               }
 
-              // Compute physical movement transform for moving elements
-              let motionTransform = '';
-              if (isSwapping && effectiveSwappingIndices) {
-                const isLeft = idx === Math.min(effectiveSwappingIndices[0], effectiveSwappingIndices[1]);
-                motionTransform = isLeft ? 'translateX(10px) translateY(-4px) scale(1.04)' : 'translateX(-10px) translateY(4px) scale(1.04)';
-              } else if (isShifted) {
-                motionTransform = shiftDirection === 'right' ? 'translateX(8px)' : 'translateX(-8px)';
-              }
-
               const dimClass = !inSearchRange ? 'opacity-30 grayscale scale-95' : 'opacity-100 scale-100';
               const cellWidthClass = isNestedList ? 'min-w-[4.5rem] w-auto px-2.5 h-14' : 'w-14 h-14';
 
               return (
                 <div
                   key={idx}
-                  ref={(el) => { cellRefs.current[idx] = el; }}
                   className={`flex flex-col items-center gap-1.5 transition-all duration-300 ${dimClass}`}
-                  style={{
-                    transform: motionTransform ? motionTransform : undefined,
-                    transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s',
-                  }}
                 >
                   {/* Pointers & Algorithm Badges above cell */}
                   <div className="h-6 flex items-center justify-center">
-                    {isSwapping && otherSwapIdx !== null ? (
-                      <span className="bg-[#bc8cff] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg animate-bounce flex items-center gap-0.5 whitespace-nowrap z-10">
-                        {idx < otherSwapIdx ? '➔' : '←'} To #{otherSwapIdx}
-                      </span>
-                    ) : isShifted ? (
-                      <span className="bg-[#e3b341] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5 whitespace-nowrap z-10 animate-pulse">
-                        {shiftDirection === 'right' ? 'Shift ➔' : '⬅ Shift'}
-                      </span>
-                    ) : isComparing ? (
+                    {isComparing ? (
                       <span className="bg-[#d29922] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5 whitespace-nowrap z-10 animate-pulse">
                         Selected {idx === effectiveComparingIndices[0] ? 'A' : 'B'}
                       </span>
@@ -1106,17 +804,17 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                     )}
                     {isSwapping && (
                       <span className="absolute bottom-0.5 text-[8px] font-mono text-[#bc8cff] font-bold tracking-tight animate-pulse">
-                        ⇄ moving
+                        swap
                       </span>
                     )}
                     {isShifted && !isSwapping && (
                       <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
-                        {shiftDirection === 'right' ? '➔ shifted' : '⬅ shifted'}
+                        shift
                       </span>
                     )}
                     {isComparing && !isSwapping && !isShifted && (
                       <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
-                        inspect
+                        compare
                       </span>
                     )}
                     {isUpdated && lastEvent.oldValue !== undefined ? (
