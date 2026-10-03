@@ -282,11 +282,43 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
     ? comparisonIndices
     : (structure.comparingIndices || []);
 
-  const effectiveSwappingIndices = structure.swappingIndices
+  const evIndex = lastEvent && typeof lastEvent.index === 'number' ? (lastEvent.index as number) : undefined;
+  const evType = lastEvent ? (lastEvent.type as string) : '';
+
+  // Extract target index from lastEvent or whyChanged (e.g. arr[2])
+  const matchIdxFromWhy = whyChanged?.target?.match(/\[(\d+)\]/);
+  const targetIdx = evIndex !== undefined
+    ? evIndex
+    : matchIdxFromWhy
+    ? parseInt(matchIdxFromWhy[1], 10)
+    : undefined;
+
+  // Active pointer indices
+  const ptrIndices = (Object.values(pointers).filter(p => typeof p === 'number' && p >= 0 && p < arr.length) as number[]);
+  const uniquePtrs = [...new Set(ptrIndices)];
+
+  let effectiveSwappingIndices: [number, number] | undefined = structure.swappingIndices
     ? structure.swappingIndices
-    : (lastEvent && (lastEvent.type === 'ARRAY_SWAP' || lastEvent.type === 'SWAP') && lastEvent.indices && lastEvent.indices.length >= 2)
+    : (lastEvent && (evType === 'ARRAY_SWAP' || evType === 'SWAP') && lastEvent.indices && lastEvent.indices.length >= 2)
     ? [lastEvent.indices[0], lastEvent.indices[1]] as [number, number]
     : undefined;
+
+  // If not explicitly marked as swap, check if an operation or two-pointer exchange is active
+  if (!effectiveSwappingIndices) {
+    const isSwapOp = structure.lastOperation?.toLowerCase().includes('swap') ||
+                     whyChanged?.reason?.toLowerCase().includes('swap') ||
+                     (lastEvent as any)?.operation?.toLowerCase().includes('swap');
+    if (isSwapOp) {
+      if (lastEvent?.indices && lastEvent.indices.length >= 2) {
+        effectiveSwappingIndices = [Number(lastEvent.indices[0]), Number(lastEvent.indices[1])];
+      } else if (uniquePtrs.length >= 2) {
+        effectiveSwappingIndices = [uniquePtrs[0], uniquePtrs[1]];
+      }
+    } else if (uniquePtrs.length === 2 && targetIdx !== undefined && uniquePtrs.includes(targetIdx)) {
+      // Two pointers active and one of the pointers was updated (e.g. i=0 and j=2, arr[2] mutated)
+      effectiveSwappingIndices = [uniquePtrs[0], uniquePtrs[1]];
+    }
+  }
 
   const effectiveActiveIndices = (activeIndices && activeIndices.length > 0)
     ? activeIndices
@@ -305,9 +337,6 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
   let effectiveShiftedIndices: number[] = [];
   let shiftDirection: 'right' | 'left' = 'right';
 
-  const evIndex = lastEvent && typeof lastEvent.index === 'number' ? (lastEvent.index as number) : undefined;
-  const evType = lastEvent ? (lastEvent.type as string) : '';
-
   if (lastEvent?.shiftedIndices && lastEvent.shiftedIndices.length > 0) {
     effectiveShiftedIndices = lastEvent.shiftedIndices;
     shiftDirection = (lastEvent.operation === 'remove' || lastEvent.detail?.includes('remove')) ? 'left' : 'right';
@@ -324,10 +353,28 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
     shiftDirection = 'right';
   }
 
-  // Detect single element relocation / move (e.g. insertion sort, heap sift)
-  const relocation = (lastEvent && (evType === 'ARRAY_SET' || evType === 'ARRAY_MOVE') && typeof lastEvent.sourceIndex === 'number' && evIndex !== undefined && lastEvent.sourceIndex !== evIndex)
-    ? { from: lastEvent.sourceIndex, to: evIndex }
-    : undefined;
+  // Detect single element relocation / move (e.g. insertion sort, heap sift, or element transfer)
+  let relocation: { from: number; to: number; value?: any } | undefined = undefined;
+
+  if (!effectiveSwappingIndices) {
+    if (lastEvent && typeof (lastEvent as any).sourceIndex === 'number' && targetIdx !== undefined && (lastEvent as any).sourceIndex !== targetIdx) {
+      relocation = { from: (lastEvent as any).sourceIndex, to: targetIdx, value: whyChanged?.newValue ?? lastEvent.value ?? arr[targetIdx] };
+    } else if (targetIdx !== undefined && targetIdx >= 0 && targetIdx < arr.length) {
+      // Find source from pointers or other elements
+      const otherPtrs = uniquePtrs.filter(p => p !== targetIdx);
+      if (otherPtrs.length > 0) {
+        relocation = { from: otherPtrs[0], to: targetIdx, value: whyChanged?.newValue ?? lastEvent?.value ?? arr[targetIdx] };
+      } else {
+        const movingVal = whyChanged?.newValue ?? lastEvent?.value;
+        if (movingVal !== undefined) {
+          const matchIdx = arr.findIndex((v, k) => k !== targetIdx && v === movingVal);
+          if (matchIdx !== -1) {
+            relocation = { from: matchIdx, to: targetIdx, value: movingVal };
+          }
+        }
+      }
+    }
+  }
 
   // Track exact DOM cell coordinates for animated SVG movement arrows
   const containerRef = useRef<HTMLDivElement>(null);
@@ -790,10 +837,15 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                       markerEnd="url(#arr-swap-top)"
                       filter="url(#glow-purple)"
                     />
-                    {/* Animated moving particle along top path */}
-                    <circle r="4.5" fill="#d2a8ff">
-                      <animateMotion path={topPath} dur="1.2s" repeatCount="indefinite" />
-                    </circle>
+                    {/* Flying Element Token with Value (idx1 -> idx2) */}
+                    <g>
+                      <animateMotion path={topPath} dur="1.3s" repeatCount="indefinite" />
+                      <circle r="18" fill="#bc8cff" opacity="0.35" filter="url(#glow-purple)" />
+                      <circle r="14" fill="#0d1117" stroke="#bc8cff" strokeWidth="2.5" />
+                      <text textAnchor="middle" dy="4.5" fill="#ffffff" fontSize="11" fontWeight="bold" fontFamily="monospace">
+                        {String(arr[idx1])}
+                      </text>
+                    </g>
 
                     {/* Bottom Arc Path (idx2 -> idx1) */}
                     <path
@@ -806,10 +858,15 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                       markerEnd="url(#arr-swap-bottom)"
                       filter="url(#glow-blue)"
                     />
-                    {/* Animated moving particle along bottom path */}
-                    <circle r="4.5" fill="#79c0ff">
-                      <animateMotion path={botPath} dur="1.2s" repeatCount="indefinite" />
-                    </circle>
+                    {/* Flying Element Token with Value (idx2 -> idx1) */}
+                    <g>
+                      <animateMotion path={botPath} dur="1.3s" repeatCount="indefinite" />
+                      <circle r="18" fill="#58a6ff" opacity="0.35" filter="url(#glow-blue)" />
+                      <circle r="14" fill="#0d1117" stroke="#58a6ff" strokeWidth="2.5" />
+                      <text textAnchor="middle" dy="4.5" fill="#ffffff" fontSize="11" fontWeight="bold" fontFamily="monospace">
+                        {String(arr[idx2])}
+                      </text>
+                    </g>
 
                     {/* Midpoint Label Badges */}
                     <foreignObject x={c1.x + dx / 2 - 60} y={topY - arcHeight - 20} width="120" height="24">
@@ -887,9 +944,15 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                     className="animate-dash-flow"
                     markerEnd="url(#arr-move-green)"
                   />
-                  <circle r="4" fill="#3fb950">
-                    <animateMotion path={movePath} dur="1.1s" repeatCount="indefinite" />
-                  </circle>
+                  {/* Flying Element Token with Value (from -> to) */}
+                  <g>
+                    <animateMotion path={movePath} dur="1.2s" repeatCount="indefinite" />
+                    <circle r="18" fill="#3fb950" opacity="0.35" filter="url(#glow-gold)" />
+                    <circle r="14" fill="#0d1117" stroke="#3fb950" strokeWidth="2.5" />
+                    <text textAnchor="middle" dy="4.5" fill="#3fb950" fontSize="11" fontWeight="bold" fontFamily="monospace">
+                      {String(relocation.value ?? arr[relocation.to])}
+                    </text>
+                  </g>
                   <foreignObject x={Math.min(ca.x, cb.x) + Math.abs(dx) / 2 - 50} y={topY - arcH - 18} width="100" height="22">
                     <div className="flex justify-center items-center">
                       <span className="bg-[#3fb950] text-black font-extrabold text-[9px] font-mono px-2 py-0.5 rounded-full shadow-lg">

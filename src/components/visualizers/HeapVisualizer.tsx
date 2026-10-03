@@ -102,6 +102,57 @@ export const HeapVisualizer: React.FC<HeapVisualizerProps> = ({ structure }) => 
             height={layout.height}
             className="overflow-visible select-none"
           >
+            {/* Defs for Swap Markers */}
+            <defs>
+              <marker id="heap-swap-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#f0883e" />
+              </marker>
+              <marker id="heap-swap-arrow-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#58a6ff" />
+              </marker>
+            </defs>
+
+            {/* Swap Motion Arcs and Flying Tokens between Swapping Nodes */}
+            {swappingIndices && swappingIndices.length === 2 && (() => {
+              const idx1 = swappingIndices[0];
+              const idx2 = swappingIndices[1];
+              const n1 = layout.nodes.find(n => n.id === `heap_${idx1}`);
+              const n2 = layout.nodes.find(n => n.id === `heap_${idx2}`);
+              if (n1 && n2) {
+                const dx = n2.x - n1.x;
+                const dy = n2.y - n1.y;
+                const p1 = `M ${n1.x} ${n1.y} Q ${n1.x + dx / 2 - 25} ${n1.y + dy / 2} ${n2.x} ${n2.y}`;
+                const p2 = `M ${n2.x} ${n2.y} Q ${n1.x + dx / 2 + 25} ${n1.y + dy / 2} ${n1.x} ${n1.y}`;
+                return (
+                  <g className="z-30">
+                    <path d={p1} fill="none" stroke="#f0883e" strokeWidth="2.5" strokeDasharray="5 3" className="animate-dash-flow" markerEnd="url(#heap-swap-arrow)" />
+                    <path d={p2} fill="none" stroke="#58a6ff" strokeWidth="2.5" strokeDasharray="5 3" className="animate-dash-flow-reverse" markerEnd="url(#heap-swap-arrow-blue)" />
+
+                    {/* Flying Token 1: value from idx1 to idx2 */}
+                    <g>
+                      <animateMotion path={p1} dur="1.2s" repeatCount="indefinite" />
+                      <circle r="15" fill="#f0883e" opacity="0.3" />
+                      <circle r="12" fill="#0d1117" stroke="#f0883e" strokeWidth="2" />
+                      <text textAnchor="middle" dy="4" fill="#f0883e" fontSize="10" fontWeight="bold" fontFamily="monospace">
+                        {String(elements[idx1])}
+                      </text>
+                    </g>
+
+                    {/* Flying Token 2: value from idx2 to idx1 */}
+                    <g>
+                      <animateMotion path={p2} dur="1.2s" repeatCount="indefinite" />
+                      <circle r="15" fill="#58a6ff" opacity="0.3" />
+                      <circle r="12" fill="#0d1117" stroke="#58a6ff" strokeWidth="2" />
+                      <text textAnchor="middle" dy="4" fill="#58a6ff" fontSize="10" fontWeight="bold" fontFamily="monospace">
+                        {String(elements[idx2])}
+                      </text>
+                    </g>
+                  </g>
+                );
+              }
+              return null;
+            })()}
+
             {/* Edges */}
             {layout.edges.map((edge) => {
               const isLeft = edge.isLeft;
@@ -217,6 +268,12 @@ export const HeapVisualizer: React.FC<HeapVisualizerProps> = ({ structure }) => 
               <div
                 key={idx}
                 onClick={() => setSelectedIndex(idx)}
+                style={{
+                  transform: isSwapping && swappingIndices && swappingIndices.length === 2
+                    ? (idx === Math.min(swappingIndices[0], swappingIndices[1]) ? 'translateX(8px) translateY(-3px) scale(1.05)' : 'translateX(-8px) translateY(3px) scale(1.05)')
+                    : undefined,
+                  transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
                 className={`flex flex-col items-center p-2 rounded-lg border font-mono transition-all duration-200 cursor-pointer min-w-[50px] ${
                   isSwapping
                     ? 'bg-[#f0883e]/20 border-[#f0883e] shadow-lg ring-1 ring-[#f0883e]'
