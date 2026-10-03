@@ -204,7 +204,7 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ structure }) =
   };
 
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-xl flex flex-col gap-3 transition-all duration-200">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-xl p-4 shadow-xl flex flex-col gap-3 transition-all duration-200">
       {/* 1. Header & Badges */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#30363d]/70 pb-3">
         <div className="flex items-center gap-2">

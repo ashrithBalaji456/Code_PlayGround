@@ -45,8 +45,13 @@ export const LinkedListVisualizer: React.FC<LinkedListVisualizerProps> = ({
     }
   }
 
+  // Swapping indices calculation
+  const swappingIndices = structure.swappingIndices;
+  const idx1 = swappingIndices && swappingIndices.length === 2 ? Math.min(swappingIndices[0], swappingIndices[1]) : 0;
+  const idx2 = swappingIndices && swappingIndices.length === 2 ? Math.max(swappingIndices[0], swappingIndices[1]) : 0;
+
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
         <div className="flex items-center gap-2">
@@ -66,7 +71,7 @@ export const LinkedListVisualizer: React.FC<LinkedListVisualizerProps> = ({
       </div>
 
       {/* Linked Nodes Row */}
-      <div className="flex items-center gap-3 p-4 bg-[#0d1117] rounded-xl overflow-x-auto min-h-[140px] shadow-inner">
+      <div className="flex items-center gap-3 p-6 py-10 bg-[#0d1117] rounded-xl overflow-x-auto min-h-[160px] shadow-inner relative">
         {orderedNodes.length === 0 ? (
           <div className="text-xs text-[#8b949e] font-mono mx-auto flex items-center gap-2">
             <span>head ──→</span>
@@ -80,13 +85,49 @@ export const LinkedListVisualizer: React.FC<LinkedListVisualizerProps> = ({
             const isHead = node.id === llData.headId;
             const isLast = nodeIdx === orderedNodes.length - 1;
 
+            const isSwapping = !!swappingIndices && swappingIndices.includes(nodeIdx);
+            const isLeftSwap = isSwapping && nodeIdx === idx1;
+            const cellPitch = 120; // node width + next + arrow ≈ 120px
+            const swapDeltaX = (idx2 - idx1) * cellPitch;
+
+            const swapStyle: React.CSSProperties = isSwapping
+              ? ({
+                  '--swap-dist': `${swapDeltaX}px`,
+                  animation: isLeftSwap
+                    ? 'swapLiftMoveRight 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                    : 'swapLiftMoveLeft 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                  zIndex: 40,
+                } as any)
+              : {};
+
             return (
-              <div key={node.id} className="flex items-center gap-2.5">
+              <div key={node.id} className="flex items-center gap-2.5 relative">
+                {/* Ghost receptacle slot when node lifts into the air */}
+                {isSwapping && (
+                  <div
+                    className="absolute inset-0 rounded-xl border-2 border-dashed border-[#bc8cff]/50 bg-[#bc8cff]/10 flex items-center justify-center font-mono text-[9px] font-bold text-[#bc8cff] pointer-events-none select-none z-0"
+                    style={{ height: '72px', top: '24px' }}
+                  >
+                    Slot #{nodeIdx}
+                  </div>
+                )}
+
                 {/* Node Box */}
-                <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className="flex flex-col items-center gap-1.5 relative z-10"
+                  style={swapStyle}
+                >
                   {/* Pointers above node */}
                   <div className="h-6 flex items-center justify-center">
-                    {activePtrs.length > 0 ? (
+                    {isSwapping ? (
+                      <span
+                        className={`text-black font-extrabold text-[9px] font-mono px-2 py-0.5 rounded shadow whitespace-nowrap ${
+                          isLeftSwap ? 'bg-[#bc8cff]' : 'bg-[#58a6ff]'
+                        }`}
+                      >
+                        {isLeftSwap ? `▲ LIFT ➔ #${idx2}` : `▼ LIFT ⬅ #${idx1}`}
+                      </span>
+                    ) : activePtrs.length > 0 ? (
                       <div className="flex gap-1 animate-pointer">
                         {activePtrs.map((ptr) => (
                           <span
@@ -113,7 +154,15 @@ export const LinkedListVisualizer: React.FC<LinkedListVisualizerProps> = ({
                   </div>
 
                   {/* Visual Node: [ Value | next • ] */}
-                  <div className="flex rounded-xl overflow-hidden border-2 border-[#3fb950]/60 bg-[#161b22] shadow-lg hover:border-[#3fb950] transition-all">
+                  <div
+                    className={`flex rounded-xl overflow-hidden border-2 transition-all shadow-lg ${
+                      isSwapping
+                        ? isLeftSwap
+                          ? 'border-[#bc8cff] ring-2 ring-[#bc8cff] shadow-[0_20px_35px_rgba(188,140,255,0.45)]'
+                          : 'border-[#58a6ff] ring-2 ring-[#58a6ff] shadow-[0_20px_35px_rgba(88,166,255,0.45)]'
+                        : 'border-[#3fb950]/60 bg-[#161b22] hover:border-[#3fb950]'
+                    }`}
+                  >
                     <div className="px-4 py-2.5 font-mono font-bold text-base text-[#f0f6fc] bg-[#21262d] flex items-center justify-center min-w-[48px]">
                       {String(node.value)}
                     </div>

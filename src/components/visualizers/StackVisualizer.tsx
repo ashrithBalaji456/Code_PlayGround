@@ -24,8 +24,12 @@ export const StackVisualizer: React.FC<StackVisualizerProps> = ({ structure, las
   const poppedValue = isPopEvent && lastEvent ? (lastEvent.value ?? lastEvent.returnValue) : null;
   const pushedValue = isPushEvent && lastEvent ? lastEvent.value : null;
 
+  const swappingIndices = structure.swappingIndices;
+  const idx1 = swappingIndices && swappingIndices.length === 2 ? Math.min(swappingIndices[0], swappingIndices[1]) : 0;
+  const idx2 = swappingIndices && swappingIndices.length === 2 ? Math.max(swappingIndices[0], swappingIndices[1]) : 0;
+
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4 shadow-xl flex flex-col gap-3 min-w-[220px] flex-1">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col gap-3 min-w-[220px] flex-1">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
         <div className="flex items-center gap-2">
@@ -68,20 +72,42 @@ export const StackVisualizer: React.FC<StackVisualizerProps> = ({ structure, las
       </div>
 
       {/* Physical Stack Vessel */}
-      <div className="flex flex-col items-center justify-end min-h-[220px] max-h-[280px] p-3.5 bg-[#0d1117] rounded-xl border-x-2 border-b-4 border-[#30363d] relative overflow-y-auto shadow-inner">
+      <div className="flex flex-col items-center justify-end min-h-[220px] max-h-[300px] p-3.5 px-8 bg-[#0d1117] rounded-xl border-x-2 border-b-4 border-[#30363d] relative overflow-y-auto shadow-inner">
         {elements.length === 0 ? (
           <div className="text-xs text-[#8b949e] font-mono flex flex-col items-center gap-1 my-auto">
             <span className="font-semibold text-[#8b949e]">[ Empty Stack ]</span>
             <span className="text-[11px] text-[#8b949e]/60">stack.push(val) to add</span>
           </div>
         ) : (
-          <div className="flex flex-col-reverse gap-2 w-full max-w-[170px]">
+          <div className="flex flex-col-reverse gap-2 w-full max-w-[170px] relative">
             {elements.map((val, idx) => {
               const isTop = idx === topIndex;
+              const isSwapping = !!swappingIndices && swappingIndices.includes(idx);
+              const isLowerSwap = isSwapping && idx === idx1;
+              const cellPitchY = 46;
+              const swapDeltaY = (idx2 - idx1) * cellPitchY;
+
+              const swapStyle: React.CSSProperties = isSwapping
+                ? ({
+                    '--swap-dist-y': `${swapDeltaY}px`,
+                    animation: isLowerSwap
+                      ? 'verticalSwapUp 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                      : 'verticalSwapDown 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                    zIndex: 40,
+                  } as any)
+                : {};
+
               return (
                 <div key={idx} className="relative flex items-center justify-center">
+                  {/* Ghost receptacle slot when element lifts */}
+                  {isSwapping && (
+                    <div className="absolute inset-0 rounded-xl border-2 border-dashed border-[#bc8cff]/50 bg-[#bc8cff]/10 flex items-center justify-center font-mono text-[9px] font-bold text-[#bc8cff] pointer-events-none select-none z-0">
+                      Slot #{idx}
+                    </div>
+                  )}
+
                   {/* Top pointer badge */}
-                  {isTop && (
+                  {isTop && !isSwapping && (
                     <div className="absolute -left-16 flex items-center gap-1 text-[10px] font-mono font-bold text-[#bc8cff] bg-[#bc8cff]/15 border border-[#bc8cff]/40 px-1.5 py-0.5 rounded shadow">
                       <span>top</span>
                       <span>➔</span>
@@ -89,8 +115,13 @@ export const StackVisualizer: React.FC<StackVisualizerProps> = ({ structure, las
                   )}
 
                   <div
-                    className={`w-full py-2.5 px-3 rounded-xl font-mono text-center font-bold text-sm border shadow-md transition-all duration-300 ${
-                      isTop
+                    style={swapStyle}
+                    className={`w-full py-2.5 px-3 rounded-xl font-mono text-center font-bold text-sm border shadow-md transition-all duration-300 relative z-10 ${
+                      isSwapping
+                        ? isLowerSwap
+                          ? 'bg-[#bc8cff]/30 border-[#bc8cff] text-[#bc8cff] ring-2 ring-[#bc8cff] shadow-[0_15px_30px_rgba(188,140,255,0.45)]'
+                          : 'bg-[#58a6ff]/30 border-[#58a6ff] text-[#58a6ff] ring-2 ring-[#58a6ff] shadow-[0_15px_30px_rgba(88,166,255,0.45)]'
+                        : isTop
                         ? 'bg-[#bc8cff]/20 border-[#bc8cff] text-[#bc8cff] ring-2 ring-[#bc8cff]/50 shadow-[#bc8cff]/20'
                         : 'bg-[#161b22] border-[#30363d] text-[#f0f6fc]'
                     }`}

@@ -716,7 +716,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
               </button>
             </div>
 
-            <div className="flex-1 bg-[#161b22]/90 border border-[#30363d] rounded-2xl p-4 overflow-auto shadow-2xl">
+            <div className="flex-1 backdrop-blur-2xl bg-[#161b22]/80 border border-white/15 rounded-2xl p-4 overflow-auto shadow-[0_20px_60px_rgba(0,0,0,0.7)] relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent">
               {maximizedCardId === 'jvm-memory-card' ? (
                 <JvmObjectVisualizer currentStep={currentStep} />
               ) : (
@@ -764,12 +764,12 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   key={st.id}
                   id={`dsa-struct-${st.id}`}
                   onMouseDown={(e) => handleMouseDown(cardId, e)}
-                  className={`bg-[#161b22] border rounded-2xl shadow-xl transition-shadow select-none ${
+                  className={`backdrop-blur-xl bg-[#161b22]/75 border rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.55)] transition-all duration-200 select-none relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent before:opacity-100 ${
                     layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
                   } ${
                     isDragging
-                      ? 'border-[#58a6ff] shadow-2xl ring-2 ring-[#58a6ff]/40 z-40'
-                      : 'border-[#30363d] hover:border-[#58a6ff]/50'
+                      ? 'border-[#58a6ff] shadow-[0_20px_60px_rgba(88,166,255,0.35)] ring-2 ring-[#58a6ff]/50 z-40 scale-[1.01]'
+                      : 'border-white/10 hover:border-white/20 hover:shadow-[0_16px_45px_rgba(0,0,0,0.65)] hover:bg-[#161b22]/85'
                   } ${
                     layoutMode === 'freeform'
                       ? `absolute ${dim.widthClass}`
@@ -787,7 +787,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                 >
                   {/* Header */}
                   <div
-                    className={`px-3.5 py-2.5 bg-[#0d1117]/90 border-b border-[#30363d] rounded-t-2xl flex items-center justify-between gap-2`}
+                    className={`px-3.5 py-2.5 bg-[#0d1117]/80 backdrop-blur-md border-b border-white/10 rounded-t-2xl flex items-center justify-between gap-2 relative z-10`}
                   >
                     {/* Left: Icon, Name & Type */}
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -858,7 +858,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   {/* Card Content Area with Proportional Scaling for 0.25x and 0.5x */}
                   {!isCol && (
                     <div
-                      className={`p-3 overflow-auto ${dim.maxHeight}`}
+                      className={`p-3 overflow-auto ${dim.maxHeight} bg-[#0d1117]/30 backdrop-blur-sm rounded-b-2xl relative z-10`}
                       style={
                         dim.scale < 1.0
                           ? {
@@ -891,12 +891,12 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                     key={jvmId}
                     id={`dsa-struct-${jvmId}`}
                     onMouseDown={(e) => handleMouseDown(jvmId, e)}
-                    className={`bg-[#161b22] border rounded-2xl shadow-xl transition-shadow select-none ${
+                    className={`backdrop-blur-xl bg-[#161b22]/75 border rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.55)] transition-all duration-200 select-none relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent before:opacity-100 ${
                       layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
                     } ${
                       isDragging
-                        ? 'border-[#3fb950] shadow-2xl ring-2 ring-[#3fb950]/40 z-40'
-                        : 'border-[#30363d] hover:border-[#3fb950]/50'
+                        ? 'border-[#3fb950] shadow-[0_20px_60px_rgba(63,185,80,0.35)] ring-2 ring-[#3fb950]/50 z-40 scale-[1.01]'
+                        : 'border-white/10 hover:border-white/20 hover:shadow-[0_16px_45px_rgba(0,0,0,0.65)] hover:bg-[#161b22]/85'
                     } ${
                       layoutMode === 'freeform'
                         ? `absolute ${dim.widthClass}`
@@ -914,7 +914,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   >
                     {/* Header */}
                     <div
-                      className={`px-3.5 py-2.5 bg-[#0d1117]/90 border-b border-[#30363d] rounded-t-2xl flex items-center justify-between gap-2`}
+                      className={`px-3.5 py-2.5 bg-[#0d1117]/80 backdrop-blur-md border-b border-white/10 rounded-t-2xl flex items-center justify-between gap-2 relative z-10`}
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
                         {layoutMode === 'freeform' && (
@@ -974,7 +974,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
 
                     {!isCol && (
                       <div
-                        className={`p-3 overflow-auto ${dim.maxHeight}`}
+                        className={`p-3 overflow-auto ${dim.maxHeight} bg-[#0d1117]/30 backdrop-blur-sm rounded-b-2xl relative z-10`}
                         style={
                           dim.scale < 1.0
                             ? {

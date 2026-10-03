@@ -23,8 +23,12 @@ export const QueueVisualizer: React.FC<QueueVisualizerProps> = ({ structure, las
   const dequeuedValue = isDequeueEvent && lastEvent ? (lastEvent.value ?? lastEvent.returnValue) : null;
   const enqueuedValue = isEnqueueEvent && lastEvent ? lastEvent.value : null;
 
+  const swappingIndices = structure.swappingIndices;
+  const idx1 = swappingIndices && swappingIndices.length === 2 ? Math.min(swappingIndices[0], swappingIndices[1]) : 0;
+  const idx2 = swappingIndices && swappingIndices.length === 2 ? Math.max(swappingIndices[0], swappingIndices[1]) : 0;
+
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#30363d]/60 pb-2">
         <div className="flex items-center gap-2">
@@ -75,7 +79,7 @@ export const QueueVisualizer: React.FC<QueueVisualizerProps> = ({ structure, las
       </div>
 
       {/* Queue Conveyor Pipe */}
-      <div className="flex items-center justify-between gap-3 p-4 bg-[#0d1117] rounded-xl border-y-2 border-[#30363d] overflow-x-auto min-h-[120px] shadow-inner relative">
+      <div className="flex items-center justify-between gap-3 p-4 py-8 bg-[#0d1117] rounded-xl border-y-2 border-[#30363d] overflow-x-auto min-h-[140px] shadow-inner relative">
         {/* Dequeue Exit Indicator */}
         <div className="flex flex-col items-center gap-1 text-[11px] font-mono text-[#f85149] font-bold min-w-[70px]">
           <span className="bg-[#f85149]/15 border border-[#f85149]/30 px-2 py-0.5 rounded text-[10px]">
@@ -87,35 +91,70 @@ export const QueueVisualizer: React.FC<QueueVisualizerProps> = ({ structure, las
         </div>
 
         {/* Elements Conduit */}
-        <div className="flex items-center gap-2 flex-1 justify-center px-4">
+        <div className="flex items-center gap-2 flex-1 justify-center px-4 relative">
           {elements.length === 0 ? (
             <div className="text-xs text-[#8b949e] font-mono">[ Empty Queue: 0 elements ]</div>
           ) : (
             elements.map((val, idx) => {
               const isFront = idx === 0;
               const isRear = idx === elements.length - 1;
+              const isSwapping = !!swappingIndices && swappingIndices.includes(idx);
+              const isLeftSwap = isSwapping && idx === idx1;
+              const cellPitch = 64; // w-14 (56px) + gap-2 (8px) = 64px
+              const swapDeltaX = (idx2 - idx1) * cellPitch;
+
+              const swapStyle: React.CSSProperties = isSwapping
+                ? ({
+                    '--swap-dist': `${swapDeltaX}px`,
+                    animation: isLeftSwap
+                      ? 'swapLiftMoveRight 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                      : 'swapLiftMoveLeft 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                    zIndex: 40,
+                  } as any)
+                : {};
 
               return (
-                <div key={idx} className="flex flex-col items-center gap-1.5">
-                  <span className={`text-[10px] font-mono font-bold ${
-                    isFront ? 'text-[#39c5cf]' : isRear ? 'text-[#3fb950]' : 'text-[#8b949e]'
-                  }`}>
-                    {isFront ? 'FRONT' : isRear ? 'REAR' : `#${idx}`}
-                  </span>
+                <div key={idx} className="relative flex flex-col items-center">
+                  {/* Ghost receptacle slot when element lifts */}
+                  {isSwapping && (
+                    <div
+                      className="absolute inset-0 w-14 h-14 rounded-xl border-2 border-dashed border-[#39c5cf]/50 bg-[#39c5cf]/10 flex items-center justify-center font-mono text-[9px] font-bold text-[#39c5cf] pointer-events-none select-none z-0"
+                      style={{ top: '22px' }}
+                    >
+                      Slot #{idx}
+                    </div>
+                  )}
+
                   <div
-                    className={`w-14 h-14 rounded-xl flex items-center justify-center font-mono font-bold text-base border shadow-md transition-all duration-300 ${
-                      isFront
-                        ? 'bg-[#39c5cf]/20 border-[#39c5cf] text-[#39c5cf] ring-2 ring-[#39c5cf]/60 shadow-[#39c5cf]/20'
-                        : isRear
-                        ? 'bg-[#3fb950]/20 border-[#3fb950] text-[#3fb950] ring-1 ring-[#3fb950]/50'
-                        : 'bg-[#161b22] border-[#30363d] text-[#f0f6fc]'
-                    }`}
+                    style={swapStyle}
+                    className="flex flex-col items-center gap-1.5 relative z-10"
                   >
-                    {String(val)}
+                    <span className={`text-[10px] font-mono font-bold ${
+                      isSwapping
+                        ? isLeftSwap ? 'text-[#bc8cff]' : 'text-[#58a6ff]'
+                        : isFront ? 'text-[#39c5cf]' : isRear ? 'text-[#3fb950]' : 'text-[#8b949e]'
+                    }`}>
+                      {isSwapping ? (isLeftSwap ? `➔ #${idx2}` : `⬅ #${idx1}`) : isFront ? 'FRONT' : isRear ? 'REAR' : `#${idx}`}
+                    </span>
+                    <div
+                      className={`w-14 h-14 rounded-xl flex items-center justify-center font-mono font-bold text-base border shadow-md transition-all duration-300 ${
+                        isSwapping
+                          ? isLeftSwap
+                            ? 'bg-[#bc8cff]/25 border-[#bc8cff] text-[#bc8cff] ring-2 ring-[#bc8cff] shadow-[0_15px_30px_rgba(188,140,255,0.45)]'
+                            : 'bg-[#58a6ff]/25 border-[#58a6ff] text-[#58a6ff] ring-2 ring-[#58a6ff] shadow-[0_15px_30px_rgba(88,166,255,0.45)]'
+                          : isFront
+                          ? 'bg-[#39c5cf]/20 border-[#39c5cf] text-[#39c5cf] ring-2 ring-[#39c5cf]/60 shadow-[#39c5cf]/20'
+                          : isRear
+                          ? 'bg-[#3fb950]/20 border-[#3fb950] text-[#3fb950] ring-1 ring-[#3fb950]/50'
+                          : 'bg-[#161b22] border-[#30363d] text-[#f0f6fc]'
+                      }`}
+                    >
+                      {String(val)}
+                    </div>
+                    <span className="text-[9px] font-mono text-[#8b949e]">
+                      [{idx}]
+                    </span>
                   </div>
-                  <span className="text-[9px] font-mono text-[#8b949e]">
-                    [{idx}]
-                  </span>
                 </div>
               );
             })

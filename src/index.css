@@ -165,3 +165,78 @@
   }
 }
 
+/* 2D Tree/Graph Node Arc Swap Keyframes */
+@keyframes treeNodeSwapRight {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(calc(var(--target-dx, 40px) * 0.25), calc(var(--target-dy, 0px) * 0.25 - 28px)) scale(1.18);
+  }
+  75% {
+    transform: translate(calc(var(--target-dx, 40px) * 0.75), calc(var(--target-dy, 0px) * 0.75 - 28px)) scale(1.18);
+  }
+  90% {
+    transform: translate(var(--target-dx, 40px), var(--target-dy, 0px)) scale(1.05);
+  }
+  100% {
+    transform: translate(var(--target-dx, 40px), var(--target-dy, 0px)) scale(1);
+  }
+}
+
+@keyframes treeNodeSwapLeft {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(calc(var(--target-dx, -40px) * 0.25), calc(var(--target-dy, 0px) * 0.25 + 28px)) scale(1.18);
+  }
+  75% {
+    transform: translate(calc(var(--target-dx, -40px) * 0.75), calc(var(--target-dy, 0px) * 0.75 + 28px)) scale(1.18);
+  }
+  90% {
+    transform: translate(var(--target-dx, -40px), var(--target-dy, 0px)) scale(1.05);
+  }
+  100% {
+    transform: translate(var(--target-dx, -40px), var(--target-dy, 0px)) scale(1);
+  }
+}
+
+/* Vertical Stack/Column Physical Swap Keyframes */
+@keyframes verticalSwapUp {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(45px, 0) scale(1.12);
+  }
+  70% {
+    transform: translate(45px, calc(-1 * var(--swap-dist-y, 48px))) scale(1.12);
+  }
+  90% {
+    transform: translate(0, calc(-1 * var(--swap-dist-y, 48px))) scale(1.04);
+  }
+  100% {
+    transform: translate(0, calc(-1 * var(--swap-dist-y, 48px))) scale(1);
+  }
+}
+
+@keyframes verticalSwapDown {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(-45px, 0) scale(1.12);
+  }
+  70% {
+    transform: translate(-45px, var(--swap-dist-y, 48px)) scale(1.12);
+  }
+  90% {
+    transform: translate(0, var(--swap-dist-y, 48px)) scale(1.04);
+  }
+  100% {
+    transform: translate(0, var(--swap-dist-y, 48px)) scale(1);
+  }
+}
+
+

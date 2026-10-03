@@ -80,7 +80,7 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
   const traversalType = treeData.traversalType || 'TRAVERSAL';
 
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-lg flex flex-col gap-3">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-xl p-4 shadow-lg flex flex-col gap-3">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#30363d]/60 pb-2.5">
         <div className="flex items-center gap-2">
@@ -268,15 +268,40 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
           })}
 
           {/* Node Circles */}
-          {layout.nodes.map((node) => {
+          {layout.nodes.map((node, nodeIdx) => {
             const isRoot = node.id === treeData.rootId;
             const isActive = node.id === activeNodeId;
             const isInspected = node.id === inspectedNodeId;
 
+            // Swapping detection across tree nodes
+            const swappingIndices = structure.swappingIndices;
+            const isSwapping = !!swappingIndices && swappingIndices.includes(nodeIdx);
+            const otherIdx = swappingIndices && swappingIndices.length === 2
+              ? (swappingIndices[0] === nodeIdx ? swappingIndices[1] : swappingIndices[0])
+              : null;
+            const otherNode = otherIdx !== null && layout.nodes[otherIdx] ? layout.nodes[otherIdx] : null;
+            const isFirstSwapNode = swappingIndices ? nodeIdx === Math.min(swappingIndices[0], swappingIndices[1]) : false;
+            const dx = otherNode ? otherNode.x - node.x : 0;
+            const dy = otherNode ? otherNode.y - node.y : 0;
+
+            const nodeSwapStyle: React.CSSProperties = isSwapping && otherNode
+              ? ({
+                  '--target-dx': `${dx}px`,
+                  '--target-dy': `${dy}px`,
+                  animation: isFirstSwapNode
+                    ? 'treeNodeSwapRight 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                    : 'treeNodeSwapLeft 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                  transformOrigin: `${node.x}px ${node.y}px`,
+                } as any)
+              : {};
+
             let strokeColor = '#30363d';
             let fillColor = '#161b22';
 
-            if (isActive) {
+            if (isSwapping) {
+              strokeColor = '#bc8cff';
+              fillColor = '#bc8cff33';
+            } else if (isActive) {
               strokeColor = '#f0883e';
               fillColor = '#f0883e22';
             } else if (isInspected) {
@@ -287,12 +312,36 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
             }
 
             return (
-              <g
-                key={node.id}
-                transform={`translate(${node.x}, ${node.y})`}
-                onClick={() => setSelectedNodeId(node.id)}
-                className="cursor-pointer transition-transform duration-200 hover:scale-110"
-              >
+              <React.Fragment key={node.id}>
+                {/* Ghost Slot Placeholder when tree node lifts and glides */}
+                {isSwapping && (
+                  <g transform={`translate(${node.x}, ${node.y})`}>
+                    <circle
+                      r="21"
+                      fill="rgba(188, 140, 255, 0.1)"
+                      stroke="#bc8cff"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="4"
+                      fill="#bc8cff"
+                      fontSize="9"
+                      fontFamily="monospace"
+                      opacity="0.8"
+                    >
+                      Slot #{nodeIdx}
+                    </text>
+                  </g>
+                )}
+
+                <g
+                  transform={`translate(${node.x}, ${node.y})`}
+                  style={nodeSwapStyle}
+                  onClick={() => setSelectedNodeId(node.id)}
+                  className="cursor-pointer transition-transform duration-200 hover:scale-110"
+                >
                 {/* Outer halo if active */}
                 {isActive && (
                   <circle
@@ -364,8 +413,9 @@ export const TreeVisualizer: React.FC<TreeVisualizerProps> = ({ structure }) => 
                   {node.height !== undefined ? ` (h:${node.height})` : ''}
                 </text>
               </g>
-            );
-          })}
+            </React.Fragment>
+          );
+        })}
           </g>
         </svg>
       </div>

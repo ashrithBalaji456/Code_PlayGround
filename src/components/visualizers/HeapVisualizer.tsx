@@ -47,7 +47,7 @@ export const HeapVisualizer: React.FC<HeapVisualizerProps> = ({ structure }) => 
   const rightChildIdx = 2 * activeIndex + 2 < elements.length ? 2 * activeIndex + 2 : null;
 
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-lg flex flex-col gap-3">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-xl p-4 shadow-lg flex flex-col gap-3">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#30363d]/60 pb-2.5">
         <div className="flex items-center gap-2">
@@ -134,7 +134,7 @@ export const HeapVisualizer: React.FC<HeapVisualizerProps> = ({ structure }) => 
 
               if (isSwapping) {
                 strokeColor = '#f0883e';
-                fillColor = '#f0883e22';
+                fillColor = '#f0883e33';
               } else if (isComparing) {
                 strokeColor = '#58a6ff';
                 fillColor = '#58a6ff22';
@@ -145,56 +145,103 @@ export const HeapVisualizer: React.FC<HeapVisualizerProps> = ({ structure }) => 
                 strokeColor = '#d2a8ff';
               }
 
+              // Compute 2D displacement to other node during swap
+              const otherIdx = swappingIndices && swappingIndices.length === 2
+                ? (swappingIndices[0] === idx ? swappingIndices[1] : swappingIndices[0])
+                : null;
+              const otherNode = otherIdx !== null ? layout.nodes.find((n) => n.id === `heap_${otherIdx}`) : null;
+              const isFirstSwapNode = swappingIndices ? idx === Math.min(swappingIndices[0], swappingIndices[1]) : false;
+              const dx = otherNode ? otherNode.x - node.x : 0;
+              const dy = otherNode ? otherNode.y - node.y : 0;
+
+              const nodeSwapStyle: React.CSSProperties = isSwapping && otherNode
+                ? ({
+                    '--target-dx': `${dx}px`,
+                    '--target-dy': `${dy}px`,
+                    animation: isFirstSwapNode
+                      ? 'treeNodeSwapRight 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                      : 'treeNodeSwapLeft 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                    transformOrigin: `${node.x}px ${node.y}px`,
+                  } as any)
+                : {};
+
               return (
-                <g
-                  key={node.id}
-                  transform={`translate(${node.x}, ${node.y})`}
-                  onClick={() => setSelectedIndex(idx)}
-                  className="cursor-pointer transition-transform duration-200 hover:scale-110"
-                >
-                  {/* Halo ring for compare/swap */}
-                  {(isComparing || isSwapping) && (
-                    <circle
-                      r="25"
-                      fill="none"
-                      stroke={isSwapping ? '#f0883e' : '#58a6ff'}
-                      strokeWidth="2"
-                      strokeDasharray="3 3"
-                      className="animate-spin"
-                    />
+                <React.Fragment key={node.id}>
+                  {/* Ghost Slot Placeholder in origin position when node is airborne */}
+                  {isSwapping && (
+                    <g transform={`translate(${node.x}, ${node.y})`}>
+                      <circle
+                        r="20"
+                        fill="rgba(240, 136, 62, 0.1)"
+                        stroke="#f0883e"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
+                      />
+                      <text
+                        textAnchor="middle"
+                        dy="4"
+                        fill="#f0883e"
+                        fontSize="9"
+                        fontFamily="monospace"
+                        opacity="0.8"
+                      >
+                        Slot #{idx}
+                      </text>
+                    </g>
                   )}
 
-                  <circle
-                    r="20"
-                    fill={fillColor}
-                    stroke={strokeColor}
-                    strokeWidth={isSelected || isComparing || isSwapping ? '3' : '2'}
-                    className="filter drop-shadow-md"
-                  />
-
-                  {/* Node Value */}
-                  <text
-                    textAnchor="middle"
-                    dy="5"
-                    fill="#f0f6fc"
-                    fontSize="13"
-                    fontFamily="monospace"
-                    fontWeight="bold"
+                  {/* Physical Moving Node */}
+                  <g
+                    transform={`translate(${node.x}, ${node.y})`}
+                    style={nodeSwapStyle}
+                    onClick={() => setSelectedIndex(idx)}
+                    className="cursor-pointer transition-transform duration-200 hover:scale-110"
                   >
-                    {node.value}
-                  </text>
+                    {/* Halo ring for compare/swap */}
+                    {(isComparing || isSwapping) && (
+                      <circle
+                        r="26"
+                        fill="none"
+                        stroke={isSwapping ? '#f0883e' : '#58a6ff'}
+                        strokeWidth="2.5"
+                        strokeDasharray={isSwapping ? '4 3' : '3 3'}
+                        className="animate-spin"
+                      />
+                    )}
 
-                  {/* Heap Index Subscript */}
-                  <text
-                    textAnchor="middle"
-                    dy="32"
-                    fill="#8b949e"
-                    fontSize="10"
-                    fontFamily="monospace"
-                  >
-                    [{idx}]
-                  </text>
-                </g>
+                    <circle
+                      r="20"
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth={isSelected || isComparing || isSwapping ? '3' : '2'}
+                      className="filter drop-shadow-md"
+                    />
+
+                    {/* Node Value */}
+                    <text
+                      textAnchor="middle"
+                      dy="5"
+                      fill="#f0f6fc"
+                      fontSize="13"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                    >
+                      {node.value}
+                    </text>
+
+                    {/* Heap Index Subscript */}
+                    <text
+                      textAnchor="middle"
+                      dy="32"
+                      fill={isSwapping ? '#f0883e' : '#8b949e'}
+                      fontSize="10"
+                      fontFamily="monospace"
+                      fontWeight={isSwapping ? 'bold' : 'normal'}
+                    >
+                      [{idx}]
+                    </text>
+                  </g>
+                </React.Fragment>
               );
             })}
           </svg>

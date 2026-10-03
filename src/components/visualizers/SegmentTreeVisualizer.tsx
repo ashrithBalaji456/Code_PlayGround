@@ -12,7 +12,7 @@ export const SegmentTreeVisualizer: React.FC<SegmentTreeVisualizerProps> = ({ st
   const activeRange = segData?.activeRange;
 
   return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 shadow-lg flex flex-col gap-4">
+    <div className="backdrop-blur-xl bg-[#161b22]/70 border border-white/10 rounded-xl p-4 shadow-lg flex flex-col gap-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-[#30363d]/60 pb-3 gap-2">
         <div className="flex items-center gap-2">
