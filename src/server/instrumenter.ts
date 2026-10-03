@@ -1728,7 +1728,29 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Phase 15: Standalone method calls on objects: obj.method();
+    // Phase 16: Collections utility method calls: Collections.sort(list); Collections.reverse(list); etc.
+    const collectionsUtilMatch = trimmed.match(/^Collections\.([a-zA-Z0-9_]+)\(([a-zA-Z_0-9]+)(?:,\s*(.+))?\);$/);
+    if (collectionsUtilMatch) {
+      const utilMethod = collectionsUtilMatch[1];
+      const targetVar = collectionsUtilMatch[2];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.collectionOp(${targetVar}, "${targetVar}", "${utilMethod}", -1, null, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 16: Nested collection chained mutations: nested.get(0).add(100);
+    const chainedMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.get\((.+?)\)\.([a-zA-Z0-9_]+)\((.*)\);$/);
+    if (chainedMatch) {
+      const parentVar = chainedMatch[1];
+      const subMethod = chainedMatch[3];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.collectionOp(${parentVar}, "${parentVar}", "${subMethod}", -1, null, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 15 & 16: Standalone method calls on objects: obj.method();
     const objCallMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.([a-zA-Z0-9_]+)\((.*)\);$/);
     if (objCallMatch && !trimmed.startsWith('System.') && !trimmed.startsWith('Thread.') && !trimmed.startsWith('Arrays.') && !trimmed.startsWith('Collections.') && !trimmed.startsWith('Math.') && !trimmed.startsWith('CodeFlowTracer.')) {
       const objVar = objCallMatch[1];
@@ -1737,6 +1759,11 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    CodeFlowTracer.methodDispatchStep("${objVar}", "${declType}", ${objVar}, "${mName}", "${declType}.${mName}", ${lineNum});`);
       outputLines.push(rawLine);
+      if (/^(add|remove|put|push|poll|offer|clear|set|addFirst|addLast|removeFirst|removeLast|sort|pop)$/.test(mName)) {
+        outputLines.push(`    CodeFlowTracer.collectionOp(${objVar}, "${objVar}", "${mName}", -1, null, ${lineNum});`);
+      } else {
+        outputLines.push(`    CodeFlowTracer.trackMutation(${objVar}, "${objVar}", ${lineNum});`);
+      }
       continue;
     }
 

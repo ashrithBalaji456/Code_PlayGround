@@ -486,6 +486,37 @@ public class CodeFlowTracer {
     }
 
     // ==========================================
+    // PHASE 16: ADVANCED JAVA COLLECTIONS & INTERNAL DATA STRUCTURES
+    // ==========================================
+
+    public static void collectionDeclare(String varName, String collectionType, int line) {
+        recordEvent("{\\\"type\\\":\\\"COLLECTION_DECLARE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + varName + "\\\",\\\"variable\\\":\\\"" + varName + "\\\",\\\"collectionType\\\":\\\"" + collectionType + "\\\"}");
+    }
+
+    public static void collectionConstruct(String varName, String collectionType, Object instance, int line) {
+        if (instance == null) return;
+        String objId = "obj-" + System.identityHashCode(instance);
+        int cap = (instance instanceof Vector) ? ((Vector<?>) instance).capacity() : 10;
+        recordEvent("{\\\"type\\\":\\\"COLLECTION_CONSTRUCT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + varName + "\\\",\\\"variable\\\":\\\"" + varName + "\\\",\\\"collectionType\\\":\\\"" + collectionType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"size\\\":0,\\\"capacity\\\":" + cap + "}");
+        trackVar(varName, collectionType, instance, line);
+    }
+
+    public static void collectionOp(Object col, String varName, String op, int index, Object val, int line) {
+        if (col == null) return;
+        String colType = col.getClass().getSimpleName();
+        int size = (col instanceof Collection) ? ((Collection<?>) col).size() : ((col instanceof Map) ? ((Map<?, ?>) col).size() : 0);
+        int cap = (col instanceof Vector) ? ((Vector<?>) col).capacity() : -1;
+        String objId = "obj-" + System.identityHashCode(col);
+        String valStr = formatValue(val);
+        recordEvent("{\\\"type\\\":\\\"COLLECTION_" + op.toUpperCase() + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + varName + "\\\",\\\"variable\\\":\\\"" + varName + "\\\",\\\"collectionType\\\":\\\"" + colType + "\\\",\\\"operation\\\":\\\"" + op + "\\\",\\\"index\\\":" + index + ",\\\"value\\\":" + valStr + ",\\\"size\\\":" + size + (cap >= 0 ? (",\\\"capacity\\\":" + cap) : "") + ",\\\"objectId\\\":\\\"" + objId + "\\\"}");
+        trackVar(varName, colType, col, line);
+    }
+
+    public static void collectionCompare(Object o1, Object o2, int result, String cmpType, int line) {
+        recordEvent("{\\\"type\\\":\\\"COLLECTION_COMPARE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"operation\\\":\\\"" + cmpType + "\\\",\\\"value\\\":" + result + ",\\\"meta\\\":{\\\"operand1\\\":" + formatValue(o1) + ",\\\"operand2\\\":" + formatValue(o2) + ",\\\"result\\\":" + result + "}}");
+    }
+
+    // ==========================================
     // PHASE 11: CONSTRUCTORS & STRINGBUILDER
     // ==========================================
 
@@ -614,6 +645,19 @@ public class CodeFlowTracer {
             return;
         }
 
+        if (col instanceof Deque && (declaredType.contains("Deque") || col.getClass().getSimpleName().contains("Deque"))) {
+            StringBuilder sb = new StringBuilder("[");
+            int idx = 0;
+            for (Object item : col) {
+                if (idx > 0) sb.append(",");
+                sb.append(formatValue(item));
+                idx++;
+            }
+            sb.append("]");
+            recordEvent("{\\\"type\\\":\\\"DEQUE_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"deque\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"size\\\":" + col.size() + "}");
+            return;
+        }
+
         if (col instanceof Queue) {
             StringBuilder sb = new StringBuilder("[");
             int idx = 0;
@@ -641,7 +685,7 @@ public class CodeFlowTracer {
         }
 
         if (col instanceof Set) {
-            String sType = (col instanceof TreeSet) ? "treeset" : "set";
+            String sType = (col instanceof TreeSet) ? "treeset" : ((col instanceof LinkedHashSet) ? "linkedhashset" : "set");
             StringBuilder sb = new StringBuilder("[");
             int idx = 0;
             for (Object item : col) {
@@ -656,6 +700,11 @@ public class CodeFlowTracer {
 
         if (col instanceof List) {
             List<?> list = (List<?>) col;
+            String lType = (col instanceof LinkedList) ? "linkedlist" : ((col instanceof Vector) ? "vector" : "arraylist");
+            int cap = -1;
+            if (col instanceof Vector) {
+                cap = ((Vector<?>) col).capacity();
+            }
             boolean isNested = false;
             for (Object elem : list) {
                 if (elem instanceof Collection) {
@@ -693,7 +742,7 @@ public class CodeFlowTracer {
                 sb.append(formatValue(list.get(i)));
             }
             sb.append("]");
-            recordEvent("{\\\"type\\\":\\\"ARRAY_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"arrayId\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"array\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + "}");
+            recordEvent("{\\\"type\\\":\\\"ARRAY_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"arrayId\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"" + (lType.equals("linkedlist") ? "linkedlist" : "array") + "\\\",\\\"collectionType\\\":\\\"" + lType + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + (cap >= 0 ? (",\\\"capacity\\\":" + cap) : "") + ",\\\"size\\\":" + list.size() + "}");
             return;
         }
 
@@ -709,13 +758,28 @@ public class CodeFlowTracer {
     }
 
     private static void inspectAndEmitMap(String name, Map<?, ?> map, String declaredType, String objId, int line) {
-        String mType = (map instanceof TreeMap) ? "treemap" : "map";
+        String mType = (map instanceof TreeMap) ? "treemap" : ((map instanceof LinkedHashMap) ? "linkedhashmap" : "map");
         StringBuilder sb = new StringBuilder("[");
         int idx = 0;
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             if (idx > 0) sb.append(",");
             sb.append("{\\\"key\\\":").append(formatValue(entry.getKey()))
-              .append(",\\\"value\\\":").append(formatValue(entry.getValue())).append("}");
+              .append(",\\\"value\\\":");
+            Object val = entry.getValue();
+            if (val instanceof Collection) {
+                Collection<?> sub = (Collection<?>) val;
+                sb.append("[");
+                int si = 0;
+                for (Object sItem : sub) {
+                    if (si > 0) sb.append(",");
+                    sb.append(formatValue(sItem));
+                    si++;
+                }
+                sb.append("]");
+            } else {
+                sb.append(formatValue(val));
+            }
+            sb.append("}");
             idx++;
         }
         sb.append("]");

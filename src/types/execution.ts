@@ -699,7 +699,26 @@ export type EventType =
   | 'NULL_DEREFERENCE_WARNING'
   | 'SUPER_FIELD_ACCESS'
   | 'FINAL_VARIABLE_ASSIGN'
-  | 'FINAL_VIOLATION_ERROR';
+  | 'FINAL_VIOLATION_ERROR'
+  // Phase 16 Java Collections & Internal Data Structures Events
+  | 'COLLECTION_DECLARE'
+  | 'COLLECTION_CONSTRUCT'
+  | 'COLLECTION_ADD'
+  | 'COLLECTION_INSERT'
+  | 'COLLECTION_REMOVE'
+  | 'COLLECTION_GET'
+  | 'COLLECTION_SET'
+  | 'COLLECTION_CONTAINS'
+  | 'COLLECTION_CLEAR'
+  | 'COLLECTION_SIZE'
+  | 'COLLECTION_ITERATOR_CREATE'
+  | 'COLLECTION_ITERATOR_NEXT'
+  | 'COLLECTION_ITERATOR_REMOVE'
+  | 'COLLECTION_RESIZE'
+  | 'COLLECTION_REHASH'
+  | 'COLLECTION_REORDER'
+  | 'COLLECTION_COMPARE'
+  | 'COLLECTION_END';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -727,6 +746,8 @@ export interface ExecutionEvent {
   hash?: number;
   bucket?: number;
   size?: number;
+  operation?: string;
+  collectionType?: string;
   detail?: string;
   meta?: Record<string, any>;
   // Universal Object & Reference Observation
@@ -1717,6 +1738,59 @@ export interface MethodOverloadResolution {
   explanation: string;
 }
 
+// Phase 16 Java Collections & Internal Data Structures
+export interface CollectionOperationInfo {
+  collectionType:
+    | 'ArrayList'
+    | 'LinkedList'
+    | 'Vector'
+    | 'Stack'
+    | 'ArrayDeque'
+    | 'PriorityQueue'
+    | 'HashSet'
+    | 'LinkedHashSet'
+    | 'TreeSet'
+    | 'HashMap'
+    | 'LinkedHashMap'
+    | 'TreeMap'
+    | 'Queue'
+    | 'Deque'
+    | string;
+  variableName: string;
+  operation: string;
+  index?: number;
+  key?: any;
+  value?: any;
+  oldValue?: any;
+  newValue?: any;
+  size: number;
+  capacity?: number;
+  loadFactor?: number;
+  shiftedIndices?: { from: number; to: number }[];
+  linkedOrder?: any[];
+  isCollision?: boolean;
+  bucketIndex?: number;
+  isFailFast?: boolean;
+  comparatorResult?: number;
+  explanation: string;
+  category: 'RUNTIME_STATE' | 'DERIVED_VIEW' | 'CONCEPTUAL_VIEW' | 'IMPLEMENTATION_DETAIL';
+}
+
+export interface CollectionInspectorState {
+  type: string;
+  variableName: string;
+  size: number;
+  elements: any[];
+  capacity?: number;
+  buckets?: { bucketIndex: number; entries: { key: any; value: any }[] }[];
+  head?: any;
+  tail?: any;
+  cursor?: number;
+  ordering?: 'INSERTION' | 'NATURAL' | 'CUSTOM_COMPARATOR' | 'ACCESS_ORDER' | 'UNORDERED';
+  isNested?: boolean;
+  nestedDepth?: number;
+}
+
 export interface ExecutionStep {
   stepIndex: number;
   totalSteps?: number;
@@ -1771,6 +1845,9 @@ export interface ExecutionStep {
   identityComparison?: ObjectIdentityComparison | null;
   methodOverloadResolution?: MethodOverloadResolution | null;
   learningModeExplanation?: { beginner: string; expert: string };
+  // Phase 16 Java Collections & Internal Data Structures
+  collectionOperation?: CollectionOperationInfo | null;
+  collectionInspectors?: Record<string, CollectionInspectorState>;
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1796,6 +1873,7 @@ export interface CodePreset {
     | 'Java OOP & Language Advanced'
     | 'Java Collections & Streams'
     | 'Java OOP, Polymorphism & Type System'
+    | 'Java Collections & Data Structures'
     | 'Custom Code';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;

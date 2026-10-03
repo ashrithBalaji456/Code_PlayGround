@@ -31,6 +31,8 @@ import {
   MethodDispatchInfo,
   ObjectIdentityComparison,
   MethodOverloadResolution,
+  CollectionOperationInfo,
+  CollectionInspectorState,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -894,6 +896,10 @@ export function reconstructExecutionSteps(
   let currentIdentityComparison: ObjectIdentityComparison | null = null;
   let currentMethodOverloadResolution: MethodOverloadResolution | null = null;
 
+  // Phase 16 Java Collections & Internal Data Structures State
+  let currentCollectionOperation: CollectionOperationInfo | null = null;
+  let currentCollectionInspectors: Record<string, CollectionInspectorState> = {};
+
   let currentLine = 1;
 
   for (let i = 0; i < events.length; i++) {
@@ -1258,6 +1264,41 @@ export function reconstructExecutionSteps(
         selectedSignature: currentMethodOverloadResolution.selectedSignature,
         resolutionType: currentMethodOverloadResolution.resolutionType,
         explanation: currentMethodOverloadResolution.explanation,
+      };
+    }
+
+    // Phase 16 clones
+    let nextCollectionOperation: CollectionOperationInfo | null = null;
+    if (currentCollectionOperation) {
+      nextCollectionOperation = {
+        collectionType: currentCollectionOperation.collectionType,
+        variableName: currentCollectionOperation.variableName,
+        operation: currentCollectionOperation.operation,
+        index: currentCollectionOperation.index,
+        key: currentCollectionOperation.key,
+        value: currentCollectionOperation.value,
+        oldValue: currentCollectionOperation.oldValue,
+        newValue: currentCollectionOperation.newValue,
+        size: currentCollectionOperation.size,
+        capacity: currentCollectionOperation.capacity,
+        loadFactor: currentCollectionOperation.loadFactor,
+        shiftedIndices: currentCollectionOperation.shiftedIndices ? [...currentCollectionOperation.shiftedIndices] : undefined,
+        linkedOrder: currentCollectionOperation.linkedOrder ? [...currentCollectionOperation.linkedOrder] : undefined,
+        isCollision: currentCollectionOperation.isCollision,
+        bucketIndex: currentCollectionOperation.bucketIndex,
+        isFailFast: currentCollectionOperation.isFailFast,
+        comparatorResult: currentCollectionOperation.comparatorResult,
+        explanation: currentCollectionOperation.explanation,
+        category: currentCollectionOperation.category,
+      };
+    }
+
+    const nextCollectionInspectors: Record<string, CollectionInspectorState> = {};
+    for (const [k, ci] of Object.entries(currentCollectionInspectors)) {
+      nextCollectionInspectors[k] = {
+        ...ci,
+        elements: [...ci.elements],
+        buckets: ci.buckets ? ci.buckets.map((b: any) => ({ ...b, entries: b.entries.map((e: any) => ({ ...e })) })) : undefined,
       };
     }
 
@@ -2320,6 +2361,213 @@ export function reconstructExecutionSteps(
           details: { signature: sig, argumentTypes: pTypes },
         };
         explanation = `Method overload resolved: ${sig} selected at compile time`;
+        break;
+      }
+
+      // ==========================================
+      // PHASE 16: ADVANCED JAVA COLLECTIONS & INTERNAL DATA STRUCTURES
+      // ==========================================
+
+      case 'COLLECTION_DECLARE':
+      case 'COLLECTION_CONSTRUCT': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'Collection';
+        const cap = ev.capacity;
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'construct',
+          size: 0,
+          capacity: cap,
+          explanation: `Allocated new ${cType} '${vName}' on the heap (initial size = 0${cap !== undefined ? `, capacity = ${cap}` : ''}).`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType} Construction`,
+          category: 'COLLECTIONS',
+          explanation: `New empty ${cType} instance created on the heap.`,
+          badge: `${cType} Init`,
+          details: { variable: vName, collectionType: cType, capacity: cap },
+        };
+        explanation = `Created new empty ${cType} '${vName}'`;
+        break;
+      }
+
+      case 'COLLECTION_ADD': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'Collection';
+        const sz = ev.size !== undefined ? ev.size : 1;
+        const cap = ev.capacity;
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'add',
+          value: ev.value,
+          size: sz,
+          capacity: cap,
+          explanation: `Added element ${JSON.stringify(ev.value)} to ${cType} '${vName}'. Current size is ${sz}.`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType}.add()`,
+          category: 'COLLECTIONS',
+          explanation: `Appended element ${JSON.stringify(ev.value)} to ${vName}.`,
+          badge: `${cType} Add`,
+          details: { variable: vName, value: ev.value, size: sz },
+        };
+        explanation = `${vName}.add(${JSON.stringify(ev.value)}) ➔ size: ${sz}`;
+        break;
+      }
+
+      case 'COLLECTION_INSERT': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'List';
+        const idx = ev.index !== undefined && typeof ev.index === 'number' ? ev.index : 0;
+        const sz = ev.size !== undefined ? ev.size : 1;
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'insert',
+          index: idx,
+          value: ev.value,
+          size: sz,
+          shiftedIndices: [{ from: idx, to: idx + 1 }],
+          explanation: `Inserted element ${JSON.stringify(ev.value)} at index ${idx} in ${cType} '${vName}'. Existing elements shifted right.`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType}.add(index, element)`,
+          category: 'COLLECTIONS',
+          explanation: `Index-based insertion: element inserted at position ${idx}; downstream elements shifted right.`,
+          badge: 'List Insert',
+          details: { variable: vName, index: idx, value: ev.value, size: sz },
+        };
+        explanation = `${vName}.add(${idx}, ${JSON.stringify(ev.value)}) ➔ shifted right`;
+        break;
+      }
+
+      case 'COLLECTION_REMOVE': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'Collection';
+        const idx = ev.index !== undefined && typeof ev.index === 'number' ? ev.index : undefined;
+        const sz = ev.size !== undefined ? ev.size : 0;
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'remove',
+          index: idx,
+          value: ev.value,
+          size: sz,
+          shiftedIndices: idx !== undefined ? [{ from: idx + 1, to: idx }] : undefined,
+          explanation: idx !== undefined
+            ? `Removed element at index ${idx} from ${cType} '${vName}'. Downstream elements shifted left to fill the gap.`
+            : `Removed element ${JSON.stringify(ev.value)} from ${cType} '${vName}'.`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType}.remove()`,
+          category: 'COLLECTIONS',
+          explanation: `Removed element from ${vName}. Collection size reduced to ${sz}.`,
+          badge: `${cType} Remove`,
+          details: { variable: vName, index: idx, value: ev.value, size: sz },
+        };
+        explanation = `${vName}.remove(${idx !== undefined ? idx : JSON.stringify(ev.value)}) ➔ size: ${sz}`;
+        break;
+      }
+
+      case 'COLLECTION_SET': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'List';
+        const idx = ev.index !== undefined && typeof ev.index === 'number' ? ev.index : 0;
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'set',
+          index: idx,
+          value: ev.value,
+          oldValue: ev.oldValue,
+          size: ev.size !== undefined ? ev.size : 1,
+          explanation: `Replaced element at index ${idx} in ${cType} '${vName}' with ${JSON.stringify(ev.value)}.`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType}.set(index, element)`,
+          category: 'COLLECTIONS',
+          explanation: `Direct in-place update at index ${idx}.`,
+          badge: 'List Set',
+          details: { variable: vName, index: idx, newValue: ev.value, oldValue: ev.oldValue },
+        };
+        explanation = `${vName}.set(${idx}, ${JSON.stringify(ev.value)})`;
+        break;
+      }
+
+      case 'COLLECTION_GET': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'List';
+        const idx = ev.index !== undefined && typeof ev.index === 'number' ? ev.index : 0;
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'get',
+          index: idx,
+          value: ev.value,
+          size: ev.size !== undefined ? ev.size : 1,
+          explanation: `Accessed element at index ${idx} from ${cType} '${vName}': ${JSON.stringify(ev.value)}.`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType}.get(index)`,
+          category: 'COLLECTIONS',
+          explanation: `Indexed O(1) random access in ${cType}.`,
+          badge: 'List Get',
+          details: { variable: vName, index: idx, value: ev.value },
+        };
+        explanation = `${vName}.get(${idx}) ➔ ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'COLLECTION_CLEAR': {
+        const vName = ev.variable || 'col';
+        const cType = ev.collectionType || 'Collection';
+        nextCollectionOperation = {
+          collectionType: cType,
+          variableName: vName,
+          operation: 'clear',
+          size: 0,
+          explanation: `Cleared all elements from ${cType} '${vName}'. Size is now 0.`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: `${cType}.clear()`,
+          category: 'COLLECTIONS',
+          explanation: `Removed all elements from collection; backing references reset.`,
+          badge: 'Collection Clear',
+        };
+        explanation = `${vName}.clear() ➔ size: 0`;
+        break;
+      }
+
+      case 'COLLECTION_COMPARE': {
+        const val = ev.value !== undefined ? ev.value : 0;
+        const op1 = ev.meta?.operand1;
+        const op2 = ev.meta?.operand2;
+        nextCollectionOperation = {
+          collectionType: 'Comparator',
+          variableName: ev.operation || 'compare',
+          operation: 'compare',
+          comparatorResult: val,
+          size: 0,
+          explanation: `Comparable / Comparator evaluation: compare(${JSON.stringify(op1)}, ${JSON.stringify(op2)}) returned ${val}. (${val < 0 ? `${JSON.stringify(op1)} precedes ${JSON.stringify(op2)}` : (val > 0 ? `${JSON.stringify(op1)} succeeds ${JSON.stringify(op2)}` : 'equivalent')})`,
+          category: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: 'Comparable / Comparator Ordering',
+          category: 'COLLECTIONS',
+          explanation: `Comparison returned ${val}: ${val < 0 ? 'Negative (A < B)' : (val > 0 ? 'Positive (A > B)' : 'Zero (A == B)')}.`,
+          badge: 'Comparison',
+          details: { operand1: op1, operand2: op2, result: val },
+        };
+        explanation = `Comparison: ${JSON.stringify(op1)} vs ${JSON.stringify(op2)} ➔ ${val}`;
         break;
       }
 
@@ -3998,26 +4246,27 @@ export function reconstructExecutionSteps(
 
       // === DEQUE ===
       case 'DEQUE_CREATE': {
+        const dVals = Array.isArray(ev.values) ? [...ev.values] : [];
         nextStructures[stId] = {
           id: stId,
           name: ev.variable || stId,
           type: 'deque',
           dataType: ev.dataType || 'Deque<Integer>',
-          dequeData: [],
-          queueData: [],
-          size: 0,
-          lastOperation: 'new ArrayDeque<>()',
+          dequeData: dVals,
+          queueData: dVals,
+          size: ev.size ?? dVals.length,
+          lastOperation: dVals.length > 0 ? `Deque (${dVals.length} items)` : 'new ArrayDeque<>()',
         };
         nextVariables[stId] = {
           name: stId,
           type: ev.dataType || 'Deque<Integer>',
-          value: 'size = 0',
+          value: `size = ${dVals.length}`,
           scope: 'main',
           isReference: true,
           refTargetId: stId,
-          estimatedBytes: 32,
+          estimatedBytes: 32 + dVals.length * 8,
         };
-        explanation = `Created new Deque: ${stId}`;
+        explanation = `Deque ${stId}: size = ${dVals.length}`;
         break;
       }
 
@@ -9641,6 +9890,52 @@ export function reconstructExecutionSteps(
     currentMethodDispatchInfo = nextMethodDispatchInfo;
     currentIdentityComparison = nextIdentityComparison;
     currentMethodOverloadResolution = nextMethodOverloadResolution;
+    // Phase 16 Collection synchronization
+    for (const [sId, st] of Object.entries(nextStructures)) {
+      const sType: string = (st.type as string) || (st as any).structureType || 'array';
+      let elements: any[] = [];
+      let colType = 'ArrayList';
+      if (sType === 'array' || sType === 'vector') {
+        elements = st.arrayData ? [...st.arrayData] : [];
+        colType = (st as any).collectionType === 'vector' ? 'Vector' : 'ArrayList';
+      } else if (sType === 'linkedlist') {
+        elements = st.linkedListData && st.linkedListData.nodes
+          ? Object.values(st.linkedListData.nodes).map((n: LinkedListNode) => n.value)
+          : (st.arrayData ? [...st.arrayData] : []);
+        colType = 'LinkedList';
+      } else if (sType === 'stack') {
+        elements = st.stackData ? [...st.stackData] : [];
+        colType = 'Stack';
+      } else if (sType === 'queue') {
+        elements = st.queueData ? [...st.queueData] : [];
+        colType = 'Queue';
+      } else if (sType === 'deque') {
+        elements = st.dequeData ? [...st.dequeData] : [];
+        colType = 'ArrayDeque';
+      } else if (sType === 'priorityqueue') {
+        elements = st.priorityQueueData ? [...st.priorityQueueData] : [];
+        colType = 'PriorityQueue';
+      } else if (sType === 'set' || sType === 'treeset' || sType === 'linkedhashset') {
+        elements = st.setData ? Object.keys(st.setData) : [];
+        colType = sType === 'treeset' ? 'TreeSet' : (sType === 'linkedhashset' ? 'LinkedHashSet' : 'HashSet');
+      } else if (sType === 'map' || sType === 'treemap' || sType === 'linkedhashmap') {
+        elements = st.mapData ? Object.entries(st.mapData).map(([k, v]) => ({ key: k, value: v })) : [];
+        colType = sType === 'treemap' ? 'TreeMap' : (sType === 'linkedhashmap' ? 'LinkedHashMap' : 'HashMap');
+      }
+      nextCollectionInspectors[sId] = {
+        type: colType,
+        variableName: sId,
+        size: elements.length,
+        elements,
+        capacity: (st as any).capacity,
+        head: elements.length > 0 ? elements[0] : undefined,
+        tail: elements.length > 0 ? elements[elements.length - 1] : undefined,
+        ordering: colType === 'TreeSet' || colType === 'TreeMap' ? 'NATURAL' : (colType === 'LinkedHashSet' || colType === 'LinkedHashMap' ? 'INSERTION' : (colType === 'HashSet' || colType === 'HashMap' ? 'UNORDERED' : 'INSERTION')),
+        isNested: Array.isArray(elements) && elements.some(e => Array.isArray(e) || (e && typeof e === 'object' && e.value && Array.isArray(e.value))),
+      };
+    }
+    currentCollectionOperation = nextCollectionOperation;
+    currentCollectionInspectors = nextCollectionInspectors;
 
     const beginnerExp = computeBeginnerExplanation(
       ev,
@@ -9716,6 +10011,11 @@ export function reconstructExecutionSteps(
         beginner: generateBeginnerExplanation(ev, nextTypeSystemInfo, nextMethodDispatchInfo, nextIdentityComparison),
         expert: generateExpertExplanation(ev, nextTypeSystemInfo, nextMethodDispatchInfo, nextIdentityComparison),
       },
+      // Phase 16 Java Collections & Internal Data Structures
+      collectionOperation: nextCollectionOperation ? { ...nextCollectionOperation } : null,
+      collectionInspectors: Object.fromEntries(
+        Object.entries(nextCollectionInspectors).map(([k, v]) => [k, { ...v, elements: [...v.elements] }])
+      ),
     });
   }
 
