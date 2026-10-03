@@ -750,6 +750,8 @@ export interface ExecutionEvent {
   collectionType?: string;
   detail?: string;
   meta?: Record<string, any>;
+  shiftedIndices?: number[];
+  sourceIndex?: number;
   // Universal Object & Reference Observation
   objectId?: string;
   isReference?: boolean;

@@ -130,9 +130,9 @@ export const LinkedListVisualizer: React.FC<LinkedListVisualizerProps> = ({
                 {/* SVG Arrow to Next or NULL endpoint */}
                 <div className="flex items-center justify-center pt-2">
                   {node.nextId ? (
-                    <div className="flex items-center text-[#3fb950]">
-                      <span className="w-4 h-0.5 bg-[#3fb950]" />
-                      <ArrowRight className="w-5 h-5 -ml-1 text-[#3fb950]" />
+                    <div className="flex items-center text-[#3fb950] group relative" title="next pointer link">
+                      <span className="w-6 h-0.5 bg-gradient-to-r from-[#3fb950] to-[#58a6ff]" />
+                      <ArrowRight className="w-5 h-5 -ml-1 text-[#58a6ff] animate-pulse" />
                     </div>
                   ) : (
                     <div className="flex items-center gap-1">
