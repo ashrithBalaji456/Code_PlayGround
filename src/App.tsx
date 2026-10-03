@@ -14,13 +14,14 @@ import { TimelineInspectorPanel } from './components/panels/TimelineInspectorPan
 import { LearningModePanel } from './components/panels/LearningModePanel';
 import { JavaConceptPanel } from './components/panels/JavaConceptPanel';
 import { ThreadsPanel } from './components/panels/ThreadsPanel';
+import { OOPInspectorPanel } from './components/panels/OOPInspectorPanel';
 import { HelpModal } from './components/HelpModal';
 import { PasteCodeModal } from './components/PasteCodeModal';
 import { CODE_PRESETS } from './presets';
 import { CodePreset, SupportedLanguage, ExecutionStep, ExecutionStatus } from './types/execution';
 import { ExecutionEngine } from './engine/interpreter';
 import { reconstructExecutionSteps } from './engine/stateReconstructor';
-import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles, BookOpen, Maximize2, Minimize2 } from 'lucide-react';
+import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles, BookOpen, Maximize2, Minimize2, GitBranch } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export function App() {
@@ -39,7 +40,7 @@ export function App() {
   const [speed, setSpeed] = useState<number>(1);
   const [breakpoints, setBreakpoints] = useState<number[]>([]);
 
-  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline' | 'concept' | 'threads'>('structures');
+  const [activeBottomTab, setActiveBottomTab] = useState<'structures' | 'algorithms' | 'variables' | 'memory' | 'callstack' | 'console' | 'inspector' | 'timeline' | 'concept' | 'threads' | 'oop'>('structures');
   const [isLearningMode, setIsLearningMode] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [isPasteModalOpen, setIsPasteModalOpen] = useState<boolean>(false);
@@ -612,6 +613,21 @@ export function App() {
                         <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
                       )}
                     </button>
+
+                    <button
+                      onClick={() => setActiveBottomTab('oop')}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-t border-b-2 transition-colors ${
+                        activeBottomTab === 'oop'
+                          ? 'border-[#58a6ff] text-[#58a6ff] bg-[#161b22]'
+                          : 'border-transparent text-[#8b949e] hover:text-[#f0f6fc]'
+                      }`}
+                    >
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span>OOP & Language</span>
+                      {(currentStep?.polymorphismInfo || (currentStep?.classMetadata && Object.keys(currentStep.classMetadata).length > 0) || currentStep?.streamPipeline || currentStep?.iteratorState) && (
+                        <span className="w-2 h-2 rounded-full bg-[#3fb950] animate-pulse" />
+                      )}
+                    </button>
                   </div>
 
                   {/* Right side of tab header: Maximize Canvas Height */}
@@ -689,6 +705,9 @@ export function App() {
                   )}
                   {activeBottomTab === 'threads' && (
                     <ThreadsPanel currentStep={currentStep} />
+                  )}
+                  {activeBottomTab === 'oop' && (
+                    <OOPInspectorPanel currentStep={currentStep} />
                   )}
                 </div>
               </div>

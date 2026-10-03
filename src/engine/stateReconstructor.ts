@@ -21,6 +21,12 @@ import {
   RaceConditionInfo,
   DeadlockGraphInfo,
   ConcurrencyStepInfo,
+  PolymorphismInfo,
+  ClassMetadata,
+  OOPRelationship,
+  StreamStage,
+  StreamPipelineState,
+  IteratorState,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -54,6 +60,103 @@ function toNumericIndex(idx: number | [number, number] | undefined, defaultVal =
   if (typeof idx === 'number') return idx;
   if (Array.isArray(idx) && typeof idx[0] === 'number') return idx[0];
   return defaultVal;
+}
+
+// Phase 14: Source Metadata & OOP Relationship Extractors (SOURCE_METADATA vs RUNTIME_STATE)
+function extractClassMetadataFromSource(sourceCode: string): Record<string, ClassMetadata> {
+  const metadata: Record<string, ClassMetadata> = {};
+  if (!sourceCode) return metadata;
+
+  const pkgMatch = sourceCode.match(/package\s+([a-zA-Z0-9_.]+);/);
+  const packageName = pkgMatch ? pkgMatch[1] : undefined;
+
+  const classRegex = /(?:(public|private|protected)\s+)?(?:(static)\s+)?(?:(abstract|final)\s+)?(class|interface|enum)\s+([A-Za-z0-9_]+)(?:<[^>]+>)?(?:\s+extends\s+([A-Za-z0-9_<>,\s]+?))?(?:\s+implements\s+([A-Za-z0-9_<>,\s]+?))?\s*\{/g;
+  let match;
+  while ((match = classRegex.exec(sourceCode)) !== null) {
+    const accessMod = (match[1] as any) || 'package-private';
+    const isStatic = !!match[2];
+    const modifier = match[3];
+    const kind = match[4];
+    const className = match[5];
+    const rawExtends = match[6]?.trim();
+    const rawImplements = match[7]?.trim();
+
+    const isInterface = kind === 'interface';
+    const isEnum = kind === 'enum';
+    const isAbstract = modifier === 'abstract' || isInterface;
+    const isFinal = modifier === 'final';
+    const interfaces = rawImplements ? rawImplements.split(',').map(s => s.trim().split('<')[0]) : (isInterface && rawExtends ? rawExtends.split(',').map(s => s.trim().split('<')[0]) : []);
+    const superClass = (!isInterface && rawExtends) ? rawExtends.split('<')[0].trim() : (isEnum ? 'Enum' : (isInterface ? undefined : 'Object'));
+
+    metadata[className] = {
+      className,
+      packageName,
+      superClass,
+      interfaces,
+      isAbstract,
+      isInterface,
+      isFinal,
+      isEnum,
+      isNested: isStatic,
+      nestedType: isStatic ? 'STATIC_NESTED' : undefined,
+      accessModifier: accessMod,
+      fields: [],
+      methods: [],
+      constructors: [],
+      sourceType: 'SOURCE_METADATA',
+    };
+  }
+
+  // Parse inner class declarations e.g. class Outer { class Inner { ... } }
+  const innerClassRegex = /class\s+([A-Za-z0-9_]+)\s*\{[\s\S]*?class\s+([A-Za-z0-9_]+)\s*\{/g;
+  let innerMatch;
+  while ((innerMatch = innerClassRegex.exec(sourceCode)) !== null) {
+    const outerCls = innerMatch[1];
+    const innerCls = innerMatch[2];
+    if (metadata[innerCls]) {
+      metadata[innerCls].isNested = true;
+      metadata[innerCls].nestedType = metadata[innerCls].nestedType || 'INNER';
+      metadata[innerCls].enclosingClass = outerCls;
+    }
+  }
+
+  return metadata;
+}
+
+function deriveOOPRelationships(meta: Record<string, ClassMetadata>): OOPRelationship[] {
+  const rels: OOPRelationship[] = [];
+  for (const [clsName, info] of Object.entries(meta)) {
+    if (info.superClass && info.superClass !== 'Object' && info.superClass !== 'Enum') {
+      rels.push({
+        type: 'INHERITANCE',
+        from: clsName,
+        to: info.superClass,
+        label: 'extends',
+        nature: 'SOURCE_METADATA',
+      });
+    }
+    if (info.interfaces && info.interfaces.length > 0) {
+      for (const iface of info.interfaces) {
+        rels.push({
+          type: 'IMPLEMENTATION',
+          from: clsName,
+          to: iface,
+          label: 'implements',
+          nature: 'SOURCE_METADATA',
+        });
+      }
+    }
+    if (info.enclosingClass) {
+      rels.push({
+        type: 'NESTED',
+        from: clsName,
+        to: info.enclosingClass,
+        label: info.nestedType || 'nested-in',
+        nature: 'SOURCE_METADATA',
+      });
+    }
+  }
+  return rels;
 }
 
 // Phase 11: Dynamic Beginner Explanation Generator (Show -> Explain -> Animate -> Update)
@@ -478,6 +581,82 @@ function computeBeginnerExplanation(
         actionType: 'STRING_POOL',
       };
 
+    // Phase 14 Java OOP, Collections & Functional
+    case 'CONSTRUCTOR_CHAIN':
+      return {
+        what: `Constructor chaining: ${ev.className} executed ${ev.message}.`,
+        why: `In Java, a constructor can call another overloaded constructor using this(...) or a superclass constructor using super(...) as its very first statement.`,
+        actionType: 'CONSTRUCTOR_CHAIN',
+      };
+
+    case 'DYNAMIC_DISPATCH_RESOLVE':
+      return {
+        what: `Dynamic Method Dispatch: Reference '${ev.refType}' dispatched to '${ev.resolvedMethod}'.`,
+        why: `At runtime, the JVM looks up the method implementation based on the actual object type in the Heap rather than the reference variable's declared type.`,
+        actionType: 'DYNAMIC_DISPATCH',
+      };
+
+    case 'SUPER_METHOD_CALL':
+      return {
+        what: `super keyword invoked parent method ${ev.className}.${ev.methodName}.`,
+        why: `The super keyword bypasses overridden methods in the subclass and directly calls the parent class implementation.`,
+        actionType: 'SUPER_CALL',
+      };
+
+    case 'ABSTRACT_METHOD_CALL':
+      return {
+        what: `Abstract method call: abstract method in ${ev.superClassName} resolved to concrete implementation in ${ev.actualType}.`,
+        why: `Abstract classes declare method signatures that must be implemented by concrete subclasses before instantiation.`,
+        actionType: 'ABSTRACT_METHOD',
+      };
+
+    case 'COMPOSITION_LINK':
+      return {
+        what: `Composition relationship: ${ev.ownerVar} owns child object ${ev.childObjId} via field '${ev.fieldName}'.`,
+        why: `Composition represents a strong 'has-a' relationship where the lifecycle of the part is tied to the whole.`,
+        actionType: 'COMPOSITION',
+      };
+
+    case 'AGGREGATION_LINK':
+      return {
+        what: `Aggregation relationship: ${ev.ownerVar} references independent object ${ev.childObjId}.`,
+        why: `Aggregation represents a 'has-a' relationship where both objects can exist independently.`,
+        actionType: 'AGGREGATION',
+      };
+
+    case 'ENUM_CONSTANT_RESOLVE':
+      return {
+        what: `Enum constant resolved: ${ev.className}.${ev.enumConstant} (ordinal: ${ev.ordinal}).`,
+        why: `Java enums are type-safe singleton constants inheriting from java.lang.Enum with built-in ordinal and name properties.`,
+        actionType: 'ENUM',
+      };
+
+    case 'ITERATOR_INIT':
+    case 'ITERATOR_STEP':
+    case 'LIST_ITERATOR_PREVIOUS':
+      return {
+        what: `Iterator operation on '${ev.structureId || 'collection'}': element = ${JSON.stringify(ev.value)}.`,
+        why: `Iterators provide a standardized cursor to traverse collections sequentially without exposing internal structures.`,
+        actionType: 'ITERATOR',
+      };
+
+    case 'STREAM_PIPELINE_INIT':
+    case 'STREAM_ELEMENT_PASS':
+    case 'STREAM_TERMINAL_OP':
+      return {
+        what: `Stream pipeline stage [${ev.streamOp || 'pipeline'}]: ${ev.passed ? 'element passed' : 'element processed'}.`,
+        why: `Java Streams evaluate lazily: intermediate operations define pipeline transformations, and processing only begins when a terminal operation is executed.`,
+        actionType: 'STREAM',
+      };
+
+    case 'LAMBDA_EXECUTE':
+    case 'METHOD_REF_INVOKE':
+      return {
+        what: `Functional interface executed: ${ev.interfaceName || 'Lambda'} -> ${JSON.stringify(ev.lambdaResult)}.`,
+        why: `Lambdas and method references provide concise implementations for Single Abstract Method (SAM) functional interfaces.`,
+        actionType: 'LAMBDA',
+      };
+
     default:
       return {
         what: explanation,
@@ -597,6 +776,14 @@ export function reconstructExecutionSteps(
   let currentAlgorithmState: AlgorithmState = {
     metrics: { ...currentMetrics },
   };
+
+  // Phase 14 Java OOP, Collections & Functional State
+  let currentPolymorphismInfo: PolymorphismInfo | null = null;
+  const initialClassMetadata = extractClassMetadataFromSource(_sourceCode);
+  let currentClassMetadata: Record<string, ClassMetadata> = { ...initialClassMetadata };
+  let currentOOPRelationships: OOPRelationship[] = deriveOOPRelationships(currentClassMetadata);
+  let currentStreamPipeline: StreamPipelineState | null = null;
+  let currentIteratorState: IteratorState | null = null;
 
   let currentLine = 1;
 
@@ -859,6 +1046,51 @@ export function reconstructExecutionSteps(
       value: sp.value,
       references: [...sp.references],
     }));
+
+    // Phase 14 clones
+    let nextPolymorphismInfo: PolymorphismInfo | null = null;
+    if (currentPolymorphismInfo) {
+      nextPolymorphismInfo = {
+        variableName: currentPolymorphismInfo.variableName,
+        declaredType: currentPolymorphismInfo.declaredType,
+        runtimeType: currentPolymorphismInfo.runtimeType,
+        objectId: currentPolymorphismInfo.objectId,
+        methodName: currentPolymorphismInfo.methodName,
+        resolvedImplementation: currentPolymorphismInfo.resolvedImplementation,
+        dispatchChain: currentPolymorphismInfo.dispatchChain ? [...currentPolymorphismInfo.dispatchChain] : undefined,
+        isOverridden: currentPolymorphismInfo.isOverridden,
+        sourceMetadataNote: currentPolymorphismInfo.sourceMetadataNote,
+      };
+    }
+    const nextClassMetadata: Record<string, ClassMetadata> = { ...currentClassMetadata };
+    const nextOOPRelationships: OOPRelationship[] = currentOOPRelationships.map(r => ({ ...r }));
+    let nextStreamPipeline: StreamPipelineState | null = currentStreamPipeline
+      ? {
+          sourceCollection: currentStreamPipeline.sourceCollection,
+          stages: currentStreamPipeline.stages.map((s: StreamStage) => ({ ...s })),
+          processedElements: [...currentStreamPipeline.processedElements],
+          passedElements: [...currentStreamPipeline.passedElements],
+          terminalOpExecuted: currentStreamPipeline.terminalOpExecuted,
+          isLazy: currentStreamPipeline.isLazy,
+          label: currentStreamPipeline.label,
+          activeStageIndex: currentStreamPipeline.activeStageIndex,
+          currentElement: currentStreamPipeline.currentElement,
+        }
+      : null;
+    let nextIteratorState: IteratorState | null = null;
+    if (currentIteratorState) {
+      nextIteratorState = {
+        iteratorId: currentIteratorState.iteratorId,
+        collectionName: currentIteratorState.collectionName,
+        cursorIndex: currentIteratorState.cursorIndex,
+        currentElement: currentIteratorState.currentElement,
+        hasNext: currentIteratorState.hasNext,
+        isListIterator: currentIteratorState.isListIterator,
+        hasPrevious: currentIteratorState.hasPrevious,
+        direction: currentIteratorState.direction,
+        action: currentIteratorState.action,
+      };
+    }
 
     const nextMetrics: AlgorithmMetrics = { ...currentMetrics };
     const nextAlgorithmState: AlgorithmState = {
@@ -1305,6 +1537,16 @@ export function reconstructExecutionSteps(
         const refType = ev.refType || 'ReferenceType';
         const actualType = ev.actualType || 'ActualClass';
         const method = ev.methodName || ev.resolvedMethod || 'method()';
+        nextPolymorphismInfo = {
+          variableName: ev.variable,
+          declaredType: refType,
+          runtimeType: actualType,
+          objectId: getStableObjectId(ev.objectId),
+          methodName: method,
+          resolvedImplementation: `${actualType}.${method}`,
+          isOverridden: true,
+          dispatchChain: [refType, actualType],
+        };
         nextActiveConcept = {
           name: 'Polymorphism (Dynamic Dispatch)',
           category: 'OOP',
@@ -1322,6 +1564,13 @@ export function reconstructExecutionSteps(
       }
 
       case 'INSTANCEOF_CHECK': {
+        nextPolymorphismInfo = {
+          variableName: ev.variable,
+          declaredType: ev.refType,
+          runtimeType: ev.actualType,
+          methodName: `instanceof ${ev.refType}`,
+          resolvedImplementation: `Result: ${ev.instanceOfResult}`,
+        };
         nextActiveConcept = {
           name: 'instanceof Operator',
           category: 'OOP',
@@ -1334,6 +1583,12 @@ export function reconstructExecutionSteps(
       }
 
       case 'CAST_CHECK': {
+        nextPolymorphismInfo = {
+          declaredType: ev.refType,
+          runtimeType: ev.actualType,
+          methodName: `(${ev.actualType}) cast`,
+          resolvedImplementation: ev.castSuccess ? `Cast successful: ${ev.actualType}` : 'ClassCastException',
+        };
         nextActiveConcept = {
           name: 'Reference Type Casting',
           category: 'OOP',
@@ -1342,6 +1597,344 @@ export function reconstructExecutionSteps(
           details: { fromType: ev.refType, toType: ev.actualType, success: ev.castSuccess },
         };
         explanation = `Cast: (${ev.actualType}) reference of ${ev.refType}`;
+        break;
+      }
+
+      case 'CONSTRUCTOR_CHAIN': {
+        const fromCtor = ev.className || 'Constructor';
+        const msg = ev.message || 'chained constructor';
+        nextActiveConcept = {
+          name: 'Constructor Chaining (this / super)',
+          category: 'OOP',
+          explanation: `Constructor ${fromCtor} chained call to ${msg}.`,
+          badge: 'Chaining',
+          details: { constructor: fromCtor, targetCall: msg },
+        };
+        explanation = `Constructor chaining: ${fromCtor} -> ${msg}`;
+        break;
+      }
+
+      case 'SUPER_METHOD_CALL': {
+        const pClass = ev.className || 'SuperClass';
+        const mName = ev.methodName || 'method()';
+        nextActiveConcept = {
+          name: 'super Keyword Method Access',
+          category: 'OOP',
+          explanation: `super keyword invoked parent method ${pClass}.${mName}.`,
+          badge: 'super Access',
+          details: { parentClass: pClass, methodName: mName },
+        };
+        explanation = `super call: invoked ${pClass}.${mName}`;
+        break;
+      }
+
+      case 'DYNAMIC_DISPATCH_RESOLVE': {
+        const refType = ev.refType || 'Reference';
+        const actType = ev.actualType || 'Object';
+        const mName = ev.methodName || 'method()';
+        const resolved = ev.resolvedMethod || `${actType}.${mName}`;
+        const objId = getStableObjectId(ev.objectId);
+        nextPolymorphismInfo = {
+          variableName: ev.variable,
+          declaredType: refType,
+          runtimeType: actType,
+          objectId: objId,
+          methodName: mName,
+          resolvedImplementation: resolved,
+          isOverridden: true,
+          dispatchChain: [refType, actType],
+        };
+        nextActiveConcept = {
+          name: 'Dynamic Method Dispatch',
+          category: 'OOP',
+          explanation: `Declared type [${refType}] resolved at runtime on Heap [${actType}] to ${resolved}.`,
+          badge: 'Polymorphism',
+          details: { declaredType: refType, runtimeType: actType, resolvedMethod: resolved, objectId: objId },
+        };
+        explanation = `Dynamic method dispatch: ${refType} ref -> ${resolved}`;
+        break;
+      }
+
+      case 'ABSTRACT_METHOD_CALL': {
+        const absClass = ev.superClassName || 'AbstractClass';
+        const implClass = ev.actualType || 'ConcreteClass';
+        const mName = ev.methodName || 'method()';
+        nextPolymorphismInfo = {
+          declaredType: absClass,
+          runtimeType: implClass,
+          methodName: mName,
+          resolvedImplementation: `${implClass}.${mName}`,
+          isOverridden: true,
+          sourceMetadataNote: `Abstract method in ${absClass} dynamically dispatched to ${implClass}`,
+        };
+        nextActiveConcept = {
+          name: 'Abstract Method Execution',
+          category: 'OOP',
+          explanation: `Abstract method in [${absClass}] executed by concrete subclass [${implClass}.${mName}].`,
+          badge: 'Abstract Call',
+          details: { abstractClass: absClass, concreteClass: implClass, method: mName },
+        };
+        explanation = `Abstract method dispatched: ${absClass}.${mName} -> ${implClass}.${mName}`;
+        break;
+      }
+
+      case 'METHOD_OVERLOAD_CALL': {
+        const cls = ev.className || 'Class';
+        const mName = ev.methodName || 'method';
+        const params = ev.dataType || 'params';
+        nextActiveConcept = {
+          name: 'Method Overloading Resolution',
+          category: 'OOP',
+          explanation: `Compile-time method resolution selected signature ${cls}.${mName}(${params}).`,
+          badge: 'Overloading',
+          details: { class: cls, method: mName, parameters: params },
+        };
+        explanation = `Method overload call: ${cls}.${mName}(${params})`;
+        break;
+      }
+
+      case 'COMPOSITION_LINK': {
+        const owner = ev.ownerVar || 'owner';
+        const field = ev.fieldName || 'part';
+        const childId = getStableObjectId(ev.childObjId);
+        nextOOPRelationships.push({
+          type: 'COMPOSITION',
+          from: owner,
+          to: childId,
+          label: field,
+          nature: 'RUNTIME_STATE',
+        });
+        nextActiveConcept = {
+          name: 'Object Composition (has-a)',
+          category: 'OOP',
+          explanation: `Composition: ${owner} has a strong ownership relationship with ${childId} via field '${field}'.`,
+          badge: 'Composition',
+          details: { owner, field, childId },
+        };
+        explanation = `Composition established: ${owner}.${field} -> ${childId}`;
+        break;
+      }
+
+      case 'AGGREGATION_LINK': {
+        const owner = ev.ownerVar || 'owner';
+        const field = ev.fieldName || 'part';
+        const childId = getStableObjectId(ev.childObjId);
+        nextOOPRelationships.push({
+          type: 'AGGREGATION',
+          from: owner,
+          to: childId,
+          label: field,
+          nature: 'RUNTIME_STATE',
+        });
+        nextActiveConcept = {
+          name: 'Object Aggregation (has-a)',
+          category: 'OOP',
+          explanation: `Aggregation: ${owner} references independent object ${childId} via field '${field}'.`,
+          badge: 'Aggregation',
+          details: { owner, field, childId },
+        };
+        explanation = `Aggregation established: ${owner}.${field} -> ${childId}`;
+        break;
+      }
+
+      case 'ENUM_CONSTANT_RESOLVE': {
+        const cls = ev.className || 'Enum';
+        const cName = ev.enumConstant || 'CONSTANT';
+        const ord = ev.ordinal !== undefined ? ev.ordinal : 0;
+        nextActiveConcept = {
+          name: 'Java Enum Type',
+          category: 'OOP',
+          explanation: `Enum constant ${cls}.${cName} resolved (ordinal ${ord}). Type-safe singleton instance.`,
+          badge: 'Enum',
+          details: { enumClass: cls, constant: cName, ordinal: ord },
+        };
+        explanation = `Enum resolved: ${cls}.${cName} (ordinal ${ord})`;
+        break;
+      }
+
+      case 'ITERATOR_INIT': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || 'collection';
+        nextIteratorState = {
+          iteratorId: itVar,
+          collectionName: colName,
+          cursorIndex: 0,
+          hasNext: true,
+          isListIterator: false,
+          hasPrevious: false,
+          direction: 'FORWARD',
+          action: 'next',
+        };
+        nextActiveConcept = {
+          name: 'Iterator Initialization',
+          category: 'COLLECTIONS',
+          explanation: `Iterator '${itVar}' created for '${colName}'. Cursor positioned before first element.`,
+          badge: 'Iterator',
+          details: { iterator: itVar, collection: colName },
+        };
+        explanation = `Iterator initialized: ${itVar} on ${colName}`;
+        break;
+      }
+
+      case 'ITERATOR_STEP': {
+        const itVar: string = ev.variable || (nextIteratorState && nextIteratorState.iteratorId) || 'it';
+        const colName: string = ev.structureId || (nextIteratorState && nextIteratorState.collectionName) || 'collection';
+        const prevIdx: number = nextIteratorState ? nextIteratorState.cursorIndex : 0;
+        const cIdx: number = typeof ev.index === 'number' && ev.index >= 0 ? ev.index : (prevIdx + 1);
+        nextIteratorState = {
+          iteratorId: itVar,
+          collectionName: colName,
+          cursorIndex: cIdx,
+          currentElement: ev.value,
+          hasNext: ev.conditionResult !== undefined ? ev.conditionResult : true,
+          isListIterator: false,
+          hasPrevious: true,
+          direction: 'FORWARD',
+          action: 'next',
+        };
+        nextActiveConcept = {
+          name: 'Iterator Cursor Step',
+          category: 'COLLECTIONS',
+          explanation: `Iterator advanced to element: ${JSON.stringify(ev.value)} (hasNext: ${nextIteratorState.hasNext}).`,
+          badge: 'Iterator Step',
+          details: { iterator: itVar, value: ev.value, hasNext: nextIteratorState.hasNext },
+        };
+        explanation = `Iterator step: next element = ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'LIST_ITERATOR_PREVIOUS': {
+        const itVar: string = ev.variable || (nextIteratorState && nextIteratorState.iteratorId) || 'lit';
+        const colName: string = ev.structureId || (nextIteratorState && nextIteratorState.collectionName) || 'list';
+        const prevIdx: number = nextIteratorState ? nextIteratorState.cursorIndex : 0;
+        const cIdx: number = typeof ev.index === 'number' && ev.index >= 0 ? ev.index : Math.max(0, prevIdx - 1);
+        nextIteratorState = {
+          iteratorId: itVar,
+          collectionName: colName,
+          cursorIndex: cIdx,
+          currentElement: ev.value,
+          hasNext: ev.conditionResult !== undefined ? ev.conditionResult : true,
+          isListIterator: true,
+          hasPrevious: true,
+          direction: ev.concurrencyAction === 'previous' ? 'BACKWARD' : 'FORWARD',
+          action: (ev.concurrencyAction as any) || 'previous',
+        };
+        nextActiveConcept = {
+          name: 'ListIterator Bidirectional Traversal',
+          category: 'COLLECTIONS',
+          explanation: `ListIterator traversed backward using previous(): element = ${JSON.stringify(ev.value)}.`,
+          badge: 'ListIterator',
+          details: { iterator: itVar, value: ev.value, direction: 'BACKWARD' },
+        };
+        explanation = `ListIterator previous(): ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'STREAM_PIPELINE_INIT': {
+        const src = ev.structureId || 'collection';
+        const stagesList: StreamStage[] = Array.isArray(ev.values)
+          ? ev.values.map((s: string) => ({ operation: s as any }))
+          : [{ operation: 'source' }];
+        nextStreamPipeline = {
+          sourceCollection: src,
+          stages: stagesList,
+          activeStageIndex: 0,
+          processedElements: [],
+          passedElements: [],
+          terminalOpExecuted: false,
+          isLazy: true,
+          label: 'RUNTIME_STATE',
+        };
+        nextActiveConcept = {
+          name: 'Stream Pipeline Declaration (Lazy)',
+          category: 'MODERN_JAVA',
+          explanation: `Stream pipeline constructed: ${stagesList.map(s => s.operation).join(' -> ')}. Intermediate operations are lazy and will not execute until a terminal operation is called.`,
+          badge: 'Stream Lazy',
+          details: { source: src, stages: stagesList.map(s => s.operation) },
+        };
+        explanation = `Stream pipeline declared: ${stagesList.map(s => s.operation).join(' -> ')} (lazy)`;
+        break;
+      }
+
+      case 'STREAM_ELEMENT_PASS': {
+        const stage = ev.streamOp || 'stage';
+        if (nextStreamPipeline) {
+          nextStreamPipeline = {
+            ...nextStreamPipeline,
+            currentElement: ev.value,
+            processedElements: [...nextStreamPipeline.processedElements, ev.value],
+            passedElements: ev.passed ? [...nextStreamPipeline.passedElements, ev.newValue ?? ev.value] : nextStreamPipeline.passedElements,
+            stages: nextStreamPipeline.stages.map(s => s.operation === stage ? { ...s, currentInput: ev.value, currentOutput: ev.newValue ?? ev.value, passed: ev.passed } : s),
+          };
+        }
+        nextActiveConcept = {
+          name: `Stream Stage: ${stage}`,
+          category: 'MODERN_JAVA',
+          explanation: `Stream element ${JSON.stringify(ev.value)} evaluated by [${stage}]: ${ev.passed ? 'PASSED -> ' + JSON.stringify(ev.newValue ?? ev.value) : 'FILTERED OUT'}.`,
+          badge: 'Stream Stage',
+          details: { stage, input: ev.value, output: ev.newValue, passed: ev.passed },
+        };
+        explanation = `Stream [${stage}]: ${JSON.stringify(ev.value)} ${ev.passed ? 'PASSED' : 'FILTERED'}`;
+        break;
+      }
+
+      case 'STREAM_TERMINAL_OP': {
+        const op = ev.streamOp || 'terminal';
+        if (nextStreamPipeline) {
+          nextStreamPipeline = {
+            ...nextStreamPipeline,
+            terminalOpExecuted: true,
+            isLazy: false,
+          };
+        }
+        nextActiveConcept = {
+          name: 'Stream Terminal Operation',
+          category: 'MODERN_JAVA',
+          explanation: `Terminal operation [${op}] triggered stream pipeline evaluation.`,
+          badge: 'Terminal Op',
+          details: { terminalOp: op, result: ev.value },
+        };
+        explanation = `Stream terminal op [${op}] completed`;
+        break;
+      }
+
+      case 'LAMBDA_EXECUTE': {
+        const iface = ev.interfaceName || 'FunctionalInterface';
+        const desc = ev.detail || 'lambda';
+        nextActiveConcept = {
+          name: 'Functional Interface (Lambda)',
+          category: 'MODERN_JAVA',
+          explanation: `Lambda [${desc}] executing for functional interface ${iface}. Input: ${JSON.stringify(ev.lambdaParam)} -> Output: ${JSON.stringify(ev.lambdaResult)}.`,
+          badge: 'Lambda',
+          details: { interface: iface, param: ev.lambdaParam, result: ev.lambdaResult },
+        };
+        explanation = `Lambda [${iface}] executed: ${JSON.stringify(ev.lambdaParam)} -> ${JSON.stringify(ev.lambdaResult)}`;
+        break;
+      }
+
+      case 'METHOD_REF_INVOKE': {
+        const refDesc = ev.detail || 'MethodReference';
+        nextActiveConcept = {
+          name: 'Method Reference Invocation',
+          category: 'MODERN_JAVA',
+          explanation: `Method reference [${refDesc}] invoked. Input: ${JSON.stringify(ev.lambdaParam)} -> Output: ${JSON.stringify(ev.lambdaResult)}.`,
+          badge: 'Method Ref',
+          details: { reference: refDesc, param: ev.lambdaParam, result: ev.lambdaResult },
+        };
+        explanation = `Method reference invoked: ${refDesc}`;
+        break;
+      }
+
+      case 'VARARGS_BIND': {
+        const pName = ev.variable || 'args';
+        nextActiveConcept = {
+          name: 'Varargs Parameter Binding',
+          category: 'OOP',
+          explanation: `Varargs parameter '${pName}' bound to array of arguments.`,
+          badge: 'Varargs',
+          details: { parameter: pName, values: ev.values },
+        };
+        explanation = `Varargs parameter '${pName}' bound`;
         break;
       }
 
@@ -3328,53 +3921,61 @@ export function reconstructExecutionSteps(
             bucket,
           };
         });
+        const isTreeMap = (ev.structureType as any) === 'treemap' || !!ev.dataType?.includes('TreeMap');
+        if (isTreeMap) {
+          entries.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+        }
         nextStructures[stId] = {
           id: stId,
           name: ev.variable || stId,
           type: 'map',
-          dataType: ev.dataType || 'HashMap',
+          dataType: ev.dataType || (isTreeMap ? 'TreeMap' : 'HashMap'),
           size: ev.size ?? entries.length,
           mapData: {
             entries,
             bucketCount: 8,
           },
-          lastOperation: `Updated map (size ${entries.length})`,
+          lastOperation: `Updated ${isTreeMap ? 'TreeMap' : 'Map'} (size ${entries.length})`,
         };
         nextVariables[stId] = {
           name: stId,
-          type: ev.dataType || 'HashMap',
+          type: ev.dataType || (isTreeMap ? 'TreeMap' : 'HashMap'),
           value: `size = ${entries.length}`,
           scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
           isReference: true,
           refTargetId: ev.objectId || stId,
           estimatedBytes: 48 + entries.length * 32,
         };
-        explanation = `Updated HashMap ${stId} (${entries.length} entries)`;
+        explanation = `Updated ${isTreeMap ? 'TreeMap' : 'HashMap'} ${stId} (${entries.length} entries)`;
         break;
       }
 
-      // === HASHSET ===
+      // === HASHSET & TREESET ===
       case 'SET_CREATE': {
-        const setVals = Array.isArray(ev.values) ? [...ev.values] : [];
+        const isTreeSet = (ev.structureType as any) === 'treeset' || !!ev.dataType?.includes('TreeSet');
+        let setVals = Array.isArray(ev.values) ? [...ev.values] : [];
+        if (isTreeSet) {
+          setVals.sort((a, b) => typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b)));
+        }
         nextStructures[stId] = {
           id: stId,
           name: ev.variable || stId,
           type: 'set',
-          dataType: ev.dataType || 'HashSet<Integer>',
+          dataType: ev.dataType || (isTreeSet ? 'TreeSet<Integer>' : 'HashSet<Integer>'),
           setData: setVals,
           size: ev.size ?? setVals.length,
-          lastOperation: setVals.length > 0 ? `HashSet (${setVals.length} items)` : 'new HashSet<>()',
+          lastOperation: setVals.length > 0 ? `${isTreeSet ? 'TreeSet' : 'HashSet'} (${setVals.length} items)` : `new ${isTreeSet ? 'TreeSet' : 'HashSet'}<>()`,
         };
         nextVariables[stId] = {
           name: stId,
-          type: ev.dataType || 'HashSet<Integer>',
+          type: ev.dataType || (isTreeSet ? 'TreeSet<Integer>' : 'HashSet<Integer>'),
           value: `size = ${setVals.length}`,
           scope: nextCallStack[nextCallStack.length - 1]?.functionName || 'main',
           isReference: true,
           refTargetId: stId,
           estimatedBytes: 32 + setVals.length * 8,
         };
-        explanation = `HashSet ${stId}: size = ${setVals.length}`;
+        explanation = `${isTreeSet ? 'TreeSet' : 'HashSet'} ${stId}: size = ${setVals.length}`;
         break;
       }
 
@@ -3388,19 +3989,23 @@ export function reconstructExecutionSteps(
             st.lastOperation = `add(${ev.value}) ➔ Duplicate rejected`;
             nextComparison = {
               left: String(ev.value),
-              right: 'HashSet',
+              right: st.dataType?.includes('TreeSet') ? 'TreeSet' : 'HashSet',
               operator: '∈',
               result: false,
-              explanation: `${ev.value} already exists in HashSet! Set size remains ${currentSet.length}.`,
+              explanation: `${ev.value} already exists in Set! Set size remains ${currentSet.length}.`,
             };
           } else {
-            st.setData = [...currentSet, ev.value];
+            let nextS = [...currentSet, ev.value];
+            if (st.dataType?.includes('TreeSet') || (st as any).structureType === 'treeset') {
+              nextS.sort((a, b) => typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b)));
+            }
+            st.setData = nextS;
             st.size = st.setData.length;
             st.lastOperation = `add(${ev.value})`;
             if (nextVariables[stId]) nextVariables[stId].value = `size = ${st.size}`;
           }
         }
-        explanation = `HashSet add(${ev.value}): ${ev.conditionResult === false ? 'Duplicate rejected' : 'Added successfully'}`;
+        explanation = `Set add(${ev.value}): ${ev.conditionResult === false ? 'Duplicate rejected' : 'Added successfully'}`;
         break;
       }
 
@@ -8470,6 +9075,7 @@ export function reconstructExecutionSteps(
         objectId: obj.id,
         type: obj.className,
         className: obj.className,
+        runtimeType: obj.className,
         label: `${obj.className} (${obj.id})`,
         fields: { ...obj.fields },
         estimatedBytes: estBytes,
@@ -8477,11 +9083,15 @@ export function reconstructExecutionSteps(
           .filter(v => typeof v === 'string' && (v.startsWith('object-') || v.startsWith('obj-') || v.startsWith('@obj-') || v.startsWith('obj_') || v.startsWith('raw-') || !!nextCustomObjects[v]))
           .map(v => getStableObjectId(v)),
         referencesFrom: refVars,
+        references: refVars,
         gcEligible: refVars.length === 0,
+        reachable: refVars.length > 0,
         creationStep: obj.creationStep,
+        creationLine: obj.creationStep,
         lifecycle: refVars.length === 0 ? 'GC_ELIGIBLE' : obj.lifecycle,
         aliased: isAliased,
         nestedReferences: Object.keys(nestedRefs).length > 0 ? nestedRefs : undefined,
+        parentRelationships: [],
       });
     }
 
@@ -8635,6 +9245,12 @@ export function reconstructExecutionSteps(
     currentExecutor = nextExecutor;
     currentRaceInfo = nextRaceInfo;
     currentDeadlockInfo = nextDeadlockInfo;
+    // Phase 14 tracking
+    currentPolymorphismInfo = nextPolymorphismInfo;
+    currentClassMetadata = nextClassMetadata;
+    currentOOPRelationships = nextOOPRelationships;
+    currentStreamPipeline = nextStreamPipeline;
+    currentIteratorState = nextIteratorState;
 
     const beginnerExp = computeBeginnerExplanation(
       ev,
@@ -8688,6 +9304,19 @@ export function reconstructExecutionSteps(
       executorState: nextExecutor,
       raceConditionInfo: nextRaceInfo,
       deadlockInfo: nextDeadlockInfo,
+      // Phase 14 Java OOP, Collections & Functional State
+      polymorphismInfo: nextPolymorphismInfo ? { ...nextPolymorphismInfo } : null,
+      classMetadata: { ...nextClassMetadata },
+      oopRelationships: nextOOPRelationships.map(r => ({ ...r })),
+      streamPipeline: nextStreamPipeline
+        ? {
+            ...nextStreamPipeline,
+            stages: nextStreamPipeline.stages.map(s => ({ ...s })),
+            processedElements: [...nextStreamPipeline.processedElements],
+            passedElements: [...nextStreamPipeline.passedElements],
+          }
+        : null,
+      iteratorState: nextIteratorState ? { ...nextIteratorState } : null,
     });
   }
 

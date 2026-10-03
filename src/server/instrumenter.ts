@@ -233,6 +233,28 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
+    // TreeMap<String, Integer> map = new TreeMap<>();
+    const treeMapDeclMatch = trimmed.match(/^(?:TreeMap|java\.util\.TreeMap)<([^,]+),\s*([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:TreeMap|java\.util\.TreeMap)<.*?>\(\);?$/);
+    if (treeMapDeclMatch) {
+      const varName = treeMapDeclMatch[3];
+      varTypes.set(varName, 'TreeMap');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.mapCreate("${varName}", "TreeMap<${treeMapDeclMatch[1]}, ${treeMapDeclMatch[2]}>", ${lineNum});`);
+      continue;
+    }
+
+    // TreeSet<Integer> set = new TreeSet<>();
+    const treeSetDeclMatch = trimmed.match(/^(?:TreeSet|java\.util\.TreeSet)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:TreeSet|java\.util\.TreeSet)<.*?>\(\);?$/);
+    if (treeSetDeclMatch) {
+      const varName = treeSetDeclMatch[2];
+      varTypes.set(varName, 'TreeSet');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.setCreate("${varName}", "TreeSet<${treeSetDeclMatch[1]}>", ${lineNum});`);
+      continue;
+    }
+
     // PriorityQueue<Integer> pq = new PriorityQueue<>();
     const pqDeclMatch = trimmed.match(/^(?:PriorityQueue|java\.util\.PriorityQueue)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:PriorityQueue|java\.util\.PriorityQueue)<.*?>\((.*?)\);?$/);
     if (pqDeclMatch) {
@@ -1200,9 +1222,151 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       if (knownType && !['List', 'ArrayList', 'LinkedList', 'Map', 'HashMap', 'Set', 'HashSet', 'Stack', 'Queue', 'PriorityQueue'].includes(knownType)) {
         outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
         outputLines.push(`    CodeFlowTracer.polymorphicCall(${targetVar}, "${knownType}", "${mName}()", ${lineNum});`);
+        outputLines.push(`    CodeFlowTracer.dynamicDispatchResolve(${targetVar}, "${knownType}", "${mName}()", ${lineNum});`);
         outputLines.push(rawLine);
         continue;
       }
+    }
+
+    // Phase 14: Stream pipelines
+    if (trimmed.includes('.stream()') && !trimmed.startsWith('//')) {
+      const srcMatch = trimmed.match(/([a-zA-Z_0-9]+)\.stream\(\)/);
+      const srcVar = srcMatch ? srcMatch[1] : 'collection';
+      const stages: string[] = ['source'];
+      if (trimmed.includes('.filter(')) stages.push('filter');
+      if (trimmed.includes('.map(')) stages.push('map');
+      if (trimmed.includes('.sorted(')) stages.push('sorted');
+      if (trimmed.includes('.distinct(')) stages.push('distinct');
+      if (trimmed.includes('.limit(')) stages.push('limit');
+      if (trimmed.includes('.forEach(')) stages.push('forEach');
+      else if (trimmed.includes('.collect(')) stages.push('collect');
+      else if (trimmed.includes('.count(')) stages.push('count');
+      else if (trimmed.includes('.reduce(')) stages.push('reduce');
+
+      const stagesArray = stages.map(s => `"${s}"`).join(', ');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.streamPipelineInit("${srcVar}", new String[]{ ${stagesArray} }, ${lineNum});`);
+      outputLines.push(rawLine);
+      if (stages.some(s => ['forEach', 'collect', 'count', 'reduce'].includes(s))) {
+        outputLines.push(`    CodeFlowTracer.streamTerminalOp("${stages[stages.length - 1]}", "Pipeline completed", ${lineNum});`);
+      }
+      continue;
+    }
+
+    // Phase 14: Iterators declaration (Iterator<T> it = col.iterator();)
+    const itDeclMatch = trimmed.match(/^(?:(?:List)?Iterator)(?:<[^>]+>)?\s+([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.(?:iterator|listIterator)\(\);?$/);
+    if (itDeclMatch) {
+      const itVar = itDeclMatch[1];
+      const colVar = itDeclMatch[2];
+      varTypes.set(itVar, 'Iterator');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.iteratorInit("${itVar}", "${colVar}", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${itVar}", "Iterator", ${itVar}, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 14: Iterator it.next() call (Type x = it.next();)
+    const itNextMatch = trimmed.match(/^(?:([A-Za-z0-9_<>\[\]]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.next\(\);?$/);
+    if (itNextMatch && varTypes.get(itNextMatch[3]) === 'Iterator') {
+      const varName = itNextMatch[2];
+      const itVar = itNextMatch[3];
+      const varType = itNextMatch[1] || 'Object';
+      varTypes.set(varName, varType);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.iteratorStep("${itVar}", "${itVar}", ${varName}, -1, ${itVar}.hasNext(), ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${varType}", ${varName}, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 14: ListIterator lit.previous() call (Type x = lit.previous();)
+    const itPrevMatch = trimmed.match(/^(?:([A-Za-z0-9_<>\[\]]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.previous\(\);?$/);
+    if (itPrevMatch && varTypes.get(itPrevMatch[3]) === 'Iterator') {
+      const varName = itPrevMatch[2];
+      const itVar = itPrevMatch[3];
+      const varType = itPrevMatch[1] || 'Object';
+      varTypes.set(varName, varType);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.listIteratorStep("${itVar}", "${itVar}", ${varName}, -1, "previous", ${itVar}.hasNext(), ${itVar}.hasPrevious(), ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${varType}", ${varName}, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 14: Functional Interfaces & Lambdas (Predicate<T> p = x -> ...;)
+    const funcMatch = trimmed.match(/^(Predicate|Function|Consumer|Supplier)(?:<[^>]+>)?\s+([a-zA-Z_0-9]+)\s*=\s*(.+);?$/);
+    if (funcMatch) {
+      const fType = funcMatch[1];
+      const varName = funcMatch[2];
+      const lambdaExpr = funcMatch[3].trim();
+      varTypes.set(varName, fType);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${fType}", "${lambdaExpr.replace(/"/g, '\\"')}", ${lineNum});`);
+      continue;
+    }
+
+    // Phase 14: Functional Interface Invocation (p.test(x), f.apply(x), c.accept(x), s.get())
+    const lambdaInvokeMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(test|apply|accept|get)\((.*)\);?$/);
+    if (lambdaInvokeMatch && ['Predicate', 'Function', 'Consumer', 'Supplier'].includes(varTypes.get(lambdaInvokeMatch[1]) || '')) {
+      const varName = lambdaInvokeMatch[1];
+      const method = lambdaInvokeMatch[2];
+      const arg = lambdaInvokeMatch[3].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    {`);
+      if (method === 'accept') {
+        outputLines.push(`      ${varName}.accept(${arg});`);
+        outputLines.push(`      CodeFlowTracer.lambdaExecute("Consumer", "${varName}.accept", ${arg || 'null'}, null, ${lineNum});`);
+      } else {
+        outputLines.push(`      var _lRes = ${varName}.${method}(${arg});`);
+        outputLines.push(`      CodeFlowTracer.lambdaExecute("${varTypes.get(varName)}", "${varName}.${method}", ${arg || 'null'}, _lRes, ${lineNum});`);
+      }
+      outputLines.push(`    }`);
+      continue;
+    }
+
+    // Phase 14: Enum assignment (Day d = Day.MONDAY;)
+    const enumAssignMatch = trimmed.match(/^([A-Za-z0-9_]+)\s+([a-zA-Z_0-9]+)\s*=\s*([A-Za-z0-9_]+)\.([A-Z0-9_]+);?$/);
+    if (enumAssignMatch && enumAssignMatch[1] === enumAssignMatch[3]) {
+      const enumClass = enumAssignMatch[1];
+      const varName = enumAssignMatch[2];
+      const constName = enumAssignMatch[4];
+      varTypes.set(varName, enumClass);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.enumConstantResolve("${enumClass}", "${constName}", ${varName}.ordinal(), ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${enumClass}", ${varName}, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 14: instanceof assignment (boolean b = animal instanceof Dog;)
+    const ioAssignMatch = trimmed.match(/^(?:boolean\s+)?([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\s+instanceof\s+([A-Za-z0-9_<>]+);$/);
+    if (ioAssignMatch) {
+      const varName = ioAssignMatch[1];
+      const ioVar = ioAssignMatch[2];
+      const ioType = ioAssignMatch[3];
+      varTypes.set(varName, 'boolean');
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.instanceOfCheck(${ioVar}, "${ioType}", ${varName}, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "boolean", ${varName}, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 14: Downcasting (Dog d = (Dog) animal;)
+    const castMatch = trimmed.match(/^(?:([A-Za-z0-9_<>]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*\(([A-Za-z0-9_<>]+)\)\s*([a-zA-Z_0-9]+);$/);
+    if (castMatch && !['int', 'double', 'float', 'long', 'byte', 'short', 'char', 'boolean'].includes(castMatch[3])) {
+      const declType = castMatch[1] || castMatch[3];
+      const varName = castMatch[2];
+      const toType = castMatch[3];
+      const srcVar = castMatch[4];
+      varTypes.set(varName, declType);
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.castCheck(${srcVar}, "${varTypes.get(srcVar) || 'Object'}", "${toType}", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${declType}", ${varName}, ${lineNum});`);
+      continue;
     }
 
     // 4. UNIVERSAL VARIABLE DECLARATION (primitives, arrays, collections, custom objects, nulls)
@@ -1410,6 +1574,10 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    boolean _cond_${lineNum} = (${condExpr});`);
       outputLines.push(`    CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond_${lineNum}, ${lineNum});`);
+      const ioMatch = condExpr.match(/([a-zA-Z_0-9]+)\s+instanceof\s+([A-Za-z0-9_<>]+)/);
+      if (ioMatch) {
+        outputLines.push(`    CodeFlowTracer.instanceOfCheck(${ioMatch[1]}, "${ioMatch[2]}", _cond_${lineNum}, ${lineNum});`);
+      }
       outputLines.push(`    if (_cond_${lineNum}) {`);
       continue;
     }
@@ -1424,16 +1592,33 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Phase 11: super() / this() call in constructor
-    const superCallMatch = trimmed.match(/^(?:super|this)\((.*)\);?$/);
+    // Phase 11 & 14: super() / this() call in constructor
+    const superCallMatch = trimmed.match(/^(super|this)\((.*)\);?$/);
     if (superCallMatch) {
+      const callType = superCallMatch[1];
+      const callArgs = superCallMatch[2].trim().replace(/"/g, "'");
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.superCall("${currentMethod?.name || 'SuperClass'}", ${lineNum});`);
+      if (callType === 'this') {
+        outputLines.push(`    CodeFlowTracer.constructorChain("${currentMethod?.name || 'Constructor'}", "this(${callArgs})", ${lineNum});`);
+      } else {
+        outputLines.push(`    CodeFlowTracer.superCall("${currentMethod?.name || 'SuperClass'}", ${lineNum});`);
+        outputLines.push(`    CodeFlowTracer.constructorChain("${currentMethod?.name || 'Constructor'}", "super(${callArgs})", ${lineNum});`);
+      }
       if (pendingCtorEnter) {
         outputLines.push(pendingCtorEnter);
         pendingCtorEnter = null;
       }
+      continue;
+    }
+
+    // Phase 14: super.method(...)
+    const superMethodMatch = trimmed.match(/^super\.([a-zA-Z0-9_]+)\((.*)\);?$/);
+    if (superMethodMatch) {
+      const mName = superMethodMatch[1];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.superMethodCall("${currentMethod?.name || 'SuperClass'}", "${mName}()", ${lineNum});`);
+      outputLines.push(rawLine);
       continue;
     }
 

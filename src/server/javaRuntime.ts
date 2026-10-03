@@ -352,6 +352,95 @@ public class CodeFlowTracer {
     }
 
     // ==========================================
+    // PHASE 14: ADVANCED OOP, COLLECTIONS & FUNCTIONAL
+    // ==========================================
+
+    public static void constructorChain(String fromCtor, String targetCall, int line) {
+        recordEvent("{\\\"type\\\":\\\"CONSTRUCTOR_CHAIN\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + fromCtor + "\\\",\\\"message\\\":\\\"" + targetCall + "\\\"}");
+    }
+
+    public static void superMethodCall(String parentClass, String methodName, int line) {
+        recordEvent("{\\\"type\\\":\\\"SUPER_METHOD_CALL\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + parentClass + "\\\",\\\"methodName\\\":\\\"" + methodName + "\\\"}");
+    }
+
+    public static void dynamicDispatchResolve(Object target, String declaredType, String methodName, int line) {
+        if (target == null) return;
+        String actualType = target.getClass().getSimpleName();
+        String resolved = actualType + "." + methodName;
+        String objId = "obj-" + System.identityHashCode(target);
+        recordEvent("{\\\"type\\\":\\\"DYNAMIC_DISPATCH_RESOLVE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"refType\\\":\\\"" + declaredType + "\\\",\\\"actualType\\\":\\\"" + actualType + "\\\",\\\"methodName\\\":\\\"" + methodName + "\\\",\\\"resolvedMethod\\\":\\\"" + resolved + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"}");
+    }
+
+    public static void abstractMethodCall(String abstractClass, String implClass, String methodName, int line) {
+        recordEvent("{\\\"type\\\":\\\"ABSTRACT_METHOD_CALL\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"superClassName\\\":\\\"" + abstractClass + "\\\",\\\"actualType\\\":\\\"" + implClass + "\\\",\\\"methodName\\\":\\\"" + methodName + "\\\"}");
+    }
+
+    public static void methodOverloadCall(String className, String methodName, String paramTypes, int line) {
+        recordEvent("{\\\"type\\\":\\\"METHOD_OVERLOAD_CALL\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + className + "\\\",\\\"methodName\\\":\\\"" + methodName + "\\\",\\\"dataType\\\":\\\"" + paramTypes + "\\\"}");
+    }
+
+    public static void compositionLink(String ownerVar, String fieldName, Object childObj, int line) {
+        if (childObj == null) return;
+        String childId = "obj-" + System.identityHashCode(childObj);
+        recordEvent("{\\\"type\\\":\\\"COMPOSITION_LINK\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"ownerVar\\\":\\\"" + ownerVar + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"childObjId\\\":\\\"" + childId + "\\\"}");
+    }
+
+    public static void aggregationLink(String ownerVar, String fieldName, Object childObj, int line) {
+        if (childObj == null) return;
+        String childId = "obj-" + System.identityHashCode(childObj);
+        recordEvent("{\\\"type\\\":\\\"AGGREGATION_LINK\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"ownerVar\\\":\\\"" + ownerVar + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"childObjId\\\":\\\"" + childId + "\\\"}");
+    }
+
+    public static void enumConstantResolve(String enumClass, String constantName, int ordinal, int line) {
+        recordEvent("{\\\"type\\\":\\\"ENUM_CONSTANT_RESOLVE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + enumClass + "\\\",\\\"enumConstant\\\":\\\"" + constantName + "\\\",\\\"ordinal\\\":" + ordinal + "}");
+    }
+
+    public static void iteratorInit(String itVar, String colName, int line) {
+        recordEvent("{\\\"type\\\":\\\"ITERATOR_INIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + itVar + "\\\",\\\"structureId\\\":\\\"" + colName + "\\\"}");
+    }
+
+    public static void iteratorStep(String itVar, String colName, Object elem, int index, boolean hasNext, int line) {
+        recordEvent("{\\\"type\\\":\\\"ITERATOR_STEP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + itVar + "\\\",\\\"structureId\\\":\\\"" + colName + "\\\",\\\"value\\\":" + formatValue(elem) + ",\\\"index\\\":" + index + ",\\\"conditionResult\\\":" + hasNext + "}");
+    }
+
+    public static void listIteratorStep(String itVar, String colName, Object elem, int index, String action, boolean hasNext, boolean hasPrev, int line) {
+        recordEvent("{\\\"type\\\":\\\"LIST_ITERATOR_PREVIOUS\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + itVar + "\\\",\\\"structureId\\\":\\\"" + colName + "\\\",\\\"value\\\":" + formatValue(elem) + ",\\\"index\\\":" + index + ",\\\"concurrencyAction\\\":\\\"" + action + "\\\",\\\"conditionResult\\\":" + hasNext + "}");
+    }
+
+    public static void streamPipelineInit(String sourceName, String[] stages, int line) {
+        StringBuilder sb = new StringBuilder("[");
+        if (stages != null) {
+            for (int i = 0; i < stages.length; i++) {
+                if (i > 0) sb.append(",");
+                sb.append("\\\"").append(stages[i]).append("\\\"");
+            }
+        }
+        sb.append("]");
+        recordEvent("{\\\"type\\\":\\\"STREAM_PIPELINE_INIT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + sourceName + "\\\",\\\"values\\\":" + sb.toString() + "}");
+    }
+
+    public static void streamElementPass(String stage, Object inVal, Object outVal, boolean passed, int line) {
+        recordEvent("{\\\"type\\\":\\\"STREAM_ELEMENT_PASS\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"streamOp\\\":\\\"" + stage + "\\\",\\\"value\\\":" + formatValue(inVal) + ",\\\"newValue\\\":" + formatValue(outVal) + ",\\\"passed\\\":" + passed + "}");
+    }
+
+    public static void streamTerminalOp(String op, Object result, int line) {
+        recordEvent("{\\\"type\\\":\\\"STREAM_TERMINAL_OP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"streamOp\\\":\\\"" + op + "\\\",\\\"value\\\":" + formatValue(result) + "}");
+    }
+
+    public static void lambdaExecute(String interfaceName, String lambdaDesc, Object param, Object result, int line) {
+        recordEvent("{\\\"type\\\":\\\"LAMBDA_EXECUTE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"interfaceName\\\":\\\"" + interfaceName + "\\\",\\\"detail\\\":\\\"" + lambdaDesc + "\\\",\\\"lambdaParam\\\":" + formatValue(param) + ",\\\"lambdaResult\\\":" + formatValue(result) + "}");
+    }
+
+    public static void methodRefInvoke(String refName, Object param, Object result, int line) {
+        recordEvent("{\\\"type\\\":\\\"METHOD_REF_INVOKE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"detail\\\":\\\"" + refName + "\\\",\\\"lambdaParam\\\":" + formatValue(param) + ",\\\"lambdaResult\\\":" + formatValue(result) + "}");
+    }
+
+    public static void varargsBind(String paramName, Object arr, int line) {
+        String arrJson = formatValue(arr);
+        recordEvent("{\\\"type\\\":\\\"VARARGS_BIND\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + paramName + "\\\",\\\"values\\\":" + arrJson + "}");
+    }
+
+    // ==========================================
     // PHASE 11: CONSTRUCTORS & STRINGBUILDER
     // ==========================================
 
@@ -466,6 +555,20 @@ public class CodeFlowTracer {
     }
 
     private static void inspectAndEmitCollection(String name, Collection<?> col, String declaredType, String objId, int line) {
+        if (col instanceof PriorityQueue) {
+            StringBuilder sb = new StringBuilder("[");
+            int idx = 0;
+            for (Object item : col) {
+                if (idx > 0) sb.append(",");
+                sb.append(formatValue(item));
+                idx++;
+            }
+            sb.append("]");
+            recordEvent("{\\\"type\\\":\\\"PRIORITYQUEUE_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"priorityqueue\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"size\\\":" + col.size() + "}");
+            recordEvent("{\\\"type\\\":\\\"HEAP_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"heapId\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"heapType\\\":\\\"MIN\\\"}");
+            return;
+        }
+
         if (col instanceof Queue) {
             StringBuilder sb = new StringBuilder("[");
             int idx = 0;
@@ -475,7 +578,7 @@ public class CodeFlowTracer {
                 idx++;
             }
             sb.append("]");
-            recordEvent("{\\"type\\":\\"QUEUE_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"queue\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"size\\":" + col.size() + "}");
+            recordEvent("{\\\"type\\\":\\\"QUEUE_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"queue\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"size\\\":" + col.size() + "}");
             return;
         }
 
@@ -488,11 +591,12 @@ public class CodeFlowTracer {
                 idx++;
             }
             sb.append("]");
-            recordEvent("{\\"type\\":\\"STACK_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"stack\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"size\\":" + col.size() + "}");
+            recordEvent("{\\\"type\\\":\\\"STACK_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"stack\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"size\\\":" + col.size() + "}");
             return;
         }
 
         if (col instanceof Set) {
+            String sType = (col instanceof TreeSet) ? "treeset" : "set";
             StringBuilder sb = new StringBuilder("[");
             int idx = 0;
             for (Object item : col) {
@@ -501,7 +605,7 @@ public class CodeFlowTracer {
                 idx++;
             }
             sb.append("]");
-            recordEvent("{\\"type\\":\\"SET_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"set\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"size\\":" + col.size() + "}");
+            recordEvent("{\\\"type\\\":\\\"SET_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"" + sType + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"size\\\":" + col.size() + "}");
             return;
         }
 
@@ -534,7 +638,7 @@ public class CodeFlowTracer {
                     }
                 }
                 sb.append("]");
-                recordEvent("{\\"type\\":\\"NESTED_COLLECTION_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + ",\\"isGraph\\":true}");
+                recordEvent("{\\\"type\\\":\\\"NESTED_COLLECTION_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + ",\\\"isGraph\\\":true}");
                 return;
             }
 
@@ -544,7 +648,7 @@ public class CodeFlowTracer {
                 sb.append(formatValue(list.get(i)));
             }
             sb.append("]");
-            recordEvent("{\\"type\\":\\"ARRAY_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"arrayId\\":\\"" + name + "\\",\\"structureType\\":\\"array\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+            recordEvent("{\\\"type\\\":\\\"ARRAY_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"arrayId\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"array\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + "}");
             return;
         }
 
@@ -556,20 +660,21 @@ public class CodeFlowTracer {
             idx++;
         }
         sb.append("]");
-        recordEvent("{\\"type\\":\\"ARRAY_CREATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"arrayId\\":\\"" + name + "\\",\\"structureType\\":\\"array\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"values\\":" + sb.toString() + "}");
+        recordEvent("{\\\"type\\\":\\\"ARRAY_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"arrayId\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"array\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"values\\\":" + sb.toString() + "}");
     }
 
     private static void inspectAndEmitMap(String name, Map<?, ?> map, String declaredType, String objId, int line) {
+        String mType = (map instanceof TreeMap) ? "treemap" : "map";
         StringBuilder sb = new StringBuilder("[");
         int idx = 0;
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             if (idx > 0) sb.append(",");
-            sb.append("{\\"key\\":").append(formatValue(entry.getKey()))
-              .append(",\\"value\\":").append(formatValue(entry.getValue())).append("}");
+            sb.append("{\\\"key\\\":").append(formatValue(entry.getKey()))
+              .append(",\\\"value\\\":").append(formatValue(entry.getValue())).append("}");
             idx++;
         }
         sb.append("]");
-        recordEvent("{\\"type\\":\\"MAP_UPDATE\\",\\"step\\":" + (++stepCounter) + ",\\"line\\":" + line + ",\\"structureId\\":\\"" + name + "\\",\\"variable\\":\\"" + name + "\\",\\"structureType\\":\\"map\\",\\"dataType\\":\\"" + declaredType + "\\",\\"objectId\\":\\"" + objId + "\\",\\"entries\\":" + sb.toString() + ",\\"size\\":" + map.size() + "}");
+        recordEvent("{\\\"type\\\":\\\"MAP_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"structureType\\\":\\\"" + mType + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"entries\\\":" + sb.toString() + ",\\\"size\\\":" + map.size() + "}");
     }
 
     private static void inspectAndEmitCustomObject(String name, Object obj, String declaredType, String objId, int line) {

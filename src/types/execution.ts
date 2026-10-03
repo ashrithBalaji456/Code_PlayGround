@@ -658,7 +658,34 @@ export type EventType =
   | 'FUTURE_GET_START'
   | 'FUTURE_GET_END'
   | 'RACE_CONDITION_OBSERVED'
-  | 'CONCURRENT_COLLECTION_OP';
+  | 'CONCURRENT_COLLECTION_OP'
+  // Phase 14 Java OOP, Collections & Functional Events
+  | 'CONSTRUCTOR_CHAIN'
+  | 'SUPER_CONSTRUCTOR_ENTER'
+  | 'SUPER_CONSTRUCTOR_EXIT'
+  | 'SUPER_METHOD_CALL'
+  | 'DYNAMIC_DISPATCH_RESOLVE'
+  | 'INTERFACE_IMPLEMENTATION_DISPATCH'
+  | 'ABSTRACT_METHOD_CALL'
+  | 'METHOD_OVERLOAD_CALL'
+  | 'COMPOSITION_LINK'
+  | 'AGGREGATION_LINK'
+  | 'ENUM_CONSTANT_RESOLVE'
+  | 'ITERATOR_INIT'
+  | 'ITERATOR_STEP'
+  | 'ITERATOR_HAS_NEXT'
+  | 'LIST_ITERATOR_PREVIOUS'
+  | 'STREAM_PIPELINE_INIT'
+  | 'STREAM_ELEMENT_PASS'
+  | 'STREAM_ELEMENT_FILTER'
+  | 'STREAM_TERMINAL_OP'
+  | 'LAMBDA_EXECUTE'
+  | 'METHOD_REF_INVOKE'
+  | 'ANONYMOUS_CLASS_INIT'
+  | 'INNER_CLASS_INIT'
+  | 'STATIC_NESTED_CLASS_INIT'
+  | 'VARARGS_BIND'
+  | 'GENERIC_TYPE_RESOLVE';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -837,6 +864,18 @@ export interface ExecutionEvent {
   taskStatus?: string;
   concurrencyAction?: string;
   isStartVsRunWarning?: boolean;
+  // Phase 14 Java OOP, Collections & Functional Fields
+  isLazy?: boolean;
+  sourceType?: 'SOURCE_METADATA' | 'RUNTIME_STATE';
+  interfaceName?: string;
+  superClassName?: string;
+  ownerVar?: string;
+  childObjId?: string;
+  enumConstant?: string;
+  ordinal?: number;
+  lambdaParam?: any;
+  lambdaResult?: any;
+  passed?: boolean;
 }
 
 export interface VariableInfo {
@@ -1120,6 +1159,13 @@ export interface HeapObject {
   aliased?: boolean;
   nestedReferences?: Record<string, string>;
   genericType?: string;
+  // Phase 14 Java OOP & Memory Model
+  runtimeType?: string;
+  inheritedFields?: Record<string, any>;
+  references?: string[];
+  creationLine?: number;
+  reachable?: boolean;
+  parentRelationships?: string[];
 }
 
 export interface ThreadState {
@@ -1539,6 +1585,77 @@ export interface AlgorithmState {
   };
 }
 
+export interface PolymorphismInfo {
+  variableName?: string;
+  declaredType?: string;
+  runtimeType?: string;
+  objectId?: string;
+  methodName?: string;
+  resolvedImplementation?: string;
+  isOverridden?: boolean;
+  dispatchChain?: string[];
+  sourceMetadataNote?: string;
+}
+
+export interface ClassMetadata {
+  className: string;
+  packageName?: string;
+  superClass?: string;
+  interfaces?: string[];
+  isAbstract?: boolean;
+  isInterface?: boolean;
+  isFinal?: boolean;
+  isEnum?: boolean;
+  isNested?: boolean;
+  nestedType?: 'STATIC_NESTED' | 'INNER' | 'LOCAL' | 'ANONYMOUS';
+  enclosingClass?: string;
+  accessModifier?: 'public' | 'private' | 'protected' | 'package-private';
+  fields?: Array<{ name: string; type: string; isStatic: boolean; isFinal: boolean; accessModifier: string; initialValue?: any }>;
+  methods?: Array<{ name: string; returnType: string; parameters: Array<{ name: string; type: string }>; isStatic: boolean; isAbstract: boolean; isFinal: boolean; accessModifier: string; isOverridden?: boolean }>;
+  constructors?: Array<{ signature: string; parameters: Array<{ name: string; type: string }>; accessModifier: string }>;
+  sourceType: 'SOURCE_METADATA' | 'RUNTIME_STATE';
+}
+
+export interface OOPRelationship {
+  type: 'INHERITANCE' | 'IMPLEMENTATION' | 'COMPOSITION' | 'AGGREGATION' | 'NESTED';
+  from: string;
+  to: string;
+  label?: string;
+  nature: 'RUNTIME_STATE' | 'SOURCE_METADATA' | 'DERIVED_RELATIONSHIP' | 'CONCEPTUAL_VIEW';
+}
+
+export interface StreamStage {
+  operation: 'source' | 'filter' | 'map' | 'sorted' | 'distinct' | 'limit' | 'forEach' | 'collect';
+  description?: string;
+  currentInput?: any;
+  currentOutput?: any;
+  passed?: boolean;
+}
+
+export interface StreamPipelineState {
+  sourceCollection?: string;
+  stages: StreamStage[];
+  activeStageIndex?: number;
+  currentElement?: any;
+  processedElements: any[];
+  passedElements: any[];
+  terminalOpExecuted: boolean;
+  isLazy: boolean;
+  label: 'RUNTIME_STATE' | 'CONCEPTUAL_VIEW';
+}
+
+export interface IteratorState {
+  iteratorId: string;
+  collectionName?: string;
+  cursorIndex: number;
+  currentElement?: any;
+  hasNext: boolean;
+  isListIterator?: boolean;
+  hasPrevious?: boolean;
+  direction?: 'FORWARD' | 'BACKWARD';
+  action?: 'next' | 'previous' | 'hasNext' | 'hasPrevious';
+}
+
 export interface ExecutionStep {
   stepIndex: number;
   totalSteps?: number;
@@ -1581,6 +1698,12 @@ export interface ExecutionStep {
   executorState?: ExecutorPoolState;
   raceConditionInfo?: RaceConditionInfo;
   deadlockInfo?: DeadlockGraphInfo;
+  // Phase 14 Java OOP & Language Advanced
+  polymorphismInfo?: PolymorphismInfo | null;
+  classMetadata?: Record<string, ClassMetadata>;
+  oopRelationships?: OOPRelationship[];
+  streamPipeline?: StreamPipelineState | null;
+  iteratorState?: IteratorState | null;
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1603,6 +1726,8 @@ export interface CodePreset {
     | 'Java OOP & Language Fundamentals'
     | 'Java Runtime & Memory Execution'
     | 'Java Multithreading & Concurrency'
+    | 'Java OOP & Language Advanced'
+    | 'Java Collections & Streams'
     | 'Custom Code';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;
