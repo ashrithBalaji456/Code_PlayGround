@@ -685,7 +685,7 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
           </div>
         </div>
       ) : viewMode === 'boxes' ? (
-        <div className="overflow-x-auto py-6 relative">
+        <div className="overflow-x-auto py-12 relative">
           <div className="flex items-end justify-center min-w-max gap-2 px-2 relative z-10">
             {arr.map((val, idx) => {
               const activePtrs = pointersByIndex[idx] || [];
@@ -698,6 +698,23 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               const isShifted = effectiveShiftedIndices.includes(idx);
               const isPivot = structure.pivotIndex === idx;
               const isSorted = structure.sortedIndices?.includes(idx);
+
+              // Calculate physical swap lift-and-move properties
+              const idx1 = effectiveSwappingIndices ? Math.min(effectiveSwappingIndices[0], effectiveSwappingIndices[1]) : 0;
+              const idx2 = effectiveSwappingIndices ? Math.max(effectiveSwappingIndices[0], effectiveSwappingIndices[1]) : 0;
+              const isLeftSwap = isSwapping && idx === idx1;
+              const cellPitch = isNestedList ? 80 : 64; // w-14 (56px) + gap-2 (8px) = 64px
+              const swapDeltaX = (idx2 - idx1) * cellPitch;
+
+              const swapStyle: React.CSSProperties = isSwapping
+                ? ({
+                    '--swap-dist': `${swapDeltaX}px`,
+                    animation: isLeftSwap
+                      ? 'swapLiftMoveRight 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                      : 'swapLiftMoveLeft 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                    zIndex: 40,
+                  } as any)
+                : {};
 
               // Check if within search range
               const inSearchRange = !structure.searchRange || (idx >= structure.searchRange[0] && idx <= structure.searchRange[1]);
@@ -726,10 +743,10 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
                 textColor = 'text-[#3fb950]';
                 ringClass = 'ring-2 ring-[#3fb950] ring-offset-2 ring-offset-[#0d1117] animate-pulse';
               } else if (isSwapping) {
-                borderColor = 'border-[#bc8cff]';
-                bgColor = 'bg-[#bc8cff]/25';
-                textColor = 'text-[#bc8cff]';
-                ringClass = 'ring-2 ring-[#bc8cff] shadow-lg shadow-[#bc8cff]/40 animate-pulse';
+                borderColor = isLeftSwap ? 'border-[#bc8cff]' : 'border-[#58a6ff]';
+                bgColor = isLeftSwap ? 'bg-[#bc8cff]/25' : 'bg-[#58a6ff]/25';
+                textColor = isLeftSwap ? 'text-[#bc8cff]' : 'text-[#58a6ff]';
+                ringClass = isLeftSwap ? 'ring-2 ring-[#bc8cff]' : 'ring-2 ring-[#58a6ff]';
               } else if (isShifted) {
                 borderColor = 'border-[#e3b341]';
                 bgColor = 'bg-[#e3b341]/20';
@@ -760,84 +777,118 @@ export const ArrayVisualizer: React.FC<ArrayVisualizerProps> = ({
               return (
                 <div
                   key={idx}
-                  className={`flex flex-col items-center gap-1.5 transition-all duration-300 ${dimClass}`}
+                  className={`flex flex-col items-center gap-1.5 transition-all duration-300 relative ${dimClass}`}
                 >
-                  {/* Pointers & Algorithm Badges above cell */}
-                  <div className="h-6 flex items-center justify-center">
-                    {isComparing ? (
-                      <span className="bg-[#d29922] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5 whitespace-nowrap z-10 animate-pulse">
-                        Selected {idx === effectiveComparingIndices[0] ? 'A' : 'B'}
-                      </span>
-                    ) : allBadges.length > 0 ? (
-                      <div className="flex gap-1 animate-pointer">
-                        {allBadges.map((badge) => {
-                          let badgeBg = 'bg-[#58a6ff] text-[#0d1117]';
-                          if (badge.includes('Pivot')) badgeBg = 'bg-[#f0883e] text-black';
-                          else if (badge.includes('H') || badge.includes('Right') || badge.includes('R')) badgeBg = 'bg-[#bc8cff] text-black';
-                          else if (badge.includes('M') || badge.includes('Mid')) badgeBg = 'bg-[#d29922] text-black';
-                          else if (badge.includes('Win')) badgeBg = 'bg-[#39c5cf] text-black';
-                          else if (badge.includes('Found')) badgeBg = 'bg-[#3fb950] text-black';
+                  {/* Ghost Receptacle Slot underneath when element lifts during swap */}
+                  {isSwapping && (
+                    <div
+                      className={`absolute top-6.5 ${cellWidthClass} rounded-lg border-2 border-dashed ${
+                        isLeftSwap ? 'border-[#bc8cff]/50 bg-[#bc8cff]/10 text-[#bc8cff]' : 'border-[#58a6ff]/50 bg-[#58a6ff]/10 text-[#58a6ff]'
+                      } flex items-center justify-center font-mono text-[10px] font-bold pointer-events-none select-none z-0`}
+                      style={{ height: '3.5rem' }}
+                    >
+                      <span className="opacity-70">Slot #{idx}</span>
+                    </div>
+                  )}
 
-                          return (
-                            <span
-                              key={badge}
-                              className={`${badgeBg} text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap`}
-                            >
-                              {badge} ↓
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="h-4" />
-                    )}
-                  </div>
-
-                  {/* Array Cell */}
+                  {/* Cell Container with Physical Lift-and-Move Animation */}
                   <div
-                    className={`${cellWidthClass} rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105 relative`}
+                    className="flex flex-col items-center gap-1.5 relative"
+                    style={swapStyle}
                   >
-                    {isSorted && (
-                      <span className="absolute top-0.5 right-1 text-[9px] text-[#3fb950] font-bold">
-                        ✓
-                      </span>
-                    )}
-                    {isSwapping && (
-                      <span className="absolute bottom-0.5 text-[8px] font-mono text-[#bc8cff] font-bold tracking-tight animate-pulse">
-                        swap
-                      </span>
-                    )}
-                    {isShifted && !isSwapping && (
-                      <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
-                        shift
-                      </span>
-                    )}
-                    {isComparing && !isSwapping && !isShifted && (
-                      <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
-                        compare
-                      </span>
-                    )}
-                    {isUpdated && lastEvent.oldValue !== undefined ? (
-                      <div className="flex flex-col items-center justify-center leading-none">
-                        <span className="text-[10px] text-[#8b949e] line-through font-mono">
-                          {typeof lastEvent.oldValue === 'boolean'
-                            ? String(lastEvent.oldValue)
-                            : Array.isArray(lastEvent.oldValue)
-                            ? `[${lastEvent.oldValue.join(', ')}]`
-                            : String(lastEvent.oldValue)}
+                    {/* Pointers & Algorithm Badges above cell */}
+                    <div className="h-6 flex items-center justify-center">
+                      {isSwapping ? (
+                        <span
+                          className={`text-black font-extrabold text-[9px] font-mono px-2 py-0.5 rounded shadow-lg whitespace-nowrap z-20 flex items-center gap-1 ${
+                            isLeftSwap ? 'bg-[#bc8cff] shadow-[#bc8cff]/50' : 'bg-[#58a6ff] shadow-[#58a6ff]/50'
+                          }`}
+                        >
+                          {isLeftSwap ? `▲ LIFT ➔ #${idx2}` : `▼ LIFT ⬅ #${idx1}`}
                         </span>
-                        <div className="flex items-center gap-0.5 text-xs text-[#3fb950] font-mono font-bold mt-0.5 animate-bounce">
-                          <span>↓</span>
-                          <span>{renderCellContent(val)}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      renderCellContent(val)
-                    )}
-                  </div>
+                      ) : isComparing ? (
+                        <span className="bg-[#d29922] text-black font-extrabold text-[9px] font-mono px-1.5 py-0.5 rounded shadow-lg flex items-center gap-0.5 whitespace-nowrap z-10 animate-pulse">
+                          Selected {idx === effectiveComparingIndices[0] ? 'A' : 'B'}
+                        </span>
+                      ) : allBadges.length > 0 ? (
+                        <div className="flex gap-1 animate-pointer">
+                          {allBadges.map((badge) => {
+                            let badgeBg = 'bg-[#58a6ff] text-[#0d1117]';
+                            if (badge.includes('Pivot')) badgeBg = 'bg-[#f0883e] text-black';
+                            else if (badge.includes('H') || badge.includes('Right') || badge.includes('R')) badgeBg = 'bg-[#bc8cff] text-black';
+                            else if (badge.includes('M') || badge.includes('Mid')) badgeBg = 'bg-[#d29922] text-black';
+                            else if (badge.includes('Win')) badgeBg = 'bg-[#39c5cf] text-black';
+                            else if (badge.includes('Found')) badgeBg = 'bg-[#3fb950] text-black';
 
-                  {/* Index below cell */}
-                  <span className="font-mono text-xs text-[#8b949e] font-semibold">{idx}</span>
+                            return (
+                              <span
+                                key={badge}
+                                className={`${badgeBg} text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap`}
+                              >
+                                {badge} ↓
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="h-4" />
+                      )}
+                    </div>
+
+                    {/* Array Cell */}
+                    <div
+                      className={`${cellWidthClass} rounded-lg flex items-center justify-center font-mono text-base font-bold border ${borderColor} ${bgColor} ${textColor} ${ringClass} shadow-md transition-all duration-300 transform hover:scale-105 relative ${
+                        isSwapping
+                          ? isLeftSwap
+                            ? 'shadow-[0_20px_35px_rgba(188,140,255,0.45)]'
+                            : 'shadow-[0_20px_35px_rgba(88,166,255,0.45)]'
+                          : ''
+                      }`}
+                    >
+                      {isSorted && (
+                        <span className="absolute top-0.5 right-1 text-[9px] text-[#3fb950] font-bold">
+                          ✓
+                        </span>
+                      )}
+                      {isSwapping && (
+                        <span className={`absolute bottom-0.5 text-[8px] font-mono font-bold tracking-tight animate-pulse ${
+                          isLeftSwap ? 'text-[#bc8cff]' : 'text-[#58a6ff]'
+                        }`}>
+                          swap
+                        </span>
+                      )}
+                      {isShifted && !isSwapping && (
+                        <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
+                          shift
+                        </span>
+                      )}
+                      {isComparing && !isSwapping && !isShifted && (
+                        <span className="absolute bottom-0.5 text-[8px] font-mono text-[#e3b341] font-bold tracking-tight">
+                          compare
+                        </span>
+                      )}
+                      {isUpdated && lastEvent.oldValue !== undefined ? (
+                        <div className="flex flex-col items-center justify-center leading-none">
+                          <span className="text-[10px] text-[#8b949e] line-through font-mono">
+                            {typeof lastEvent.oldValue === 'boolean'
+                              ? String(lastEvent.oldValue)
+                              : Array.isArray(lastEvent.oldValue)
+                              ? `[${lastEvent.oldValue.join(', ')}]`
+                              : String(lastEvent.oldValue)}
+                          </span>
+                          <div className="flex items-center gap-0.5 text-xs text-[#3fb950] font-mono font-bold mt-0.5 animate-bounce">
+                            <span>↓</span>
+                            <span>{renderCellContent(val)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        renderCellContent(val)
+                      )}
+                    </div>
+
+                    {/* Index below cell */}
+                    <span className="font-mono text-xs text-[#8b949e] font-semibold">{idx}</span>
+                  </div>
                 </div>
               );
             })}

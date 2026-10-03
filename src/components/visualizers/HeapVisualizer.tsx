@@ -208,39 +208,66 @@ export const HeapVisualizer: React.FC<HeapVisualizerProps> = ({ structure }) => 
           <span className="text-[10px] text-[#3fb950] font-bold">Linear Storage [0 .. {elements.length - 1}]</span>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto py-1">
+        <div className="flex gap-2 overflow-x-auto py-8 px-2 relative min-h-[90px]">
           {elements.map((val, idx) => {
             const isComparing = comparingIndices && comparingIndices.includes(idx);
             const isSwapping = swappingIndices && swappingIndices.includes(idx);
             const isSelected = activeIndex === idx;
 
+            // Lift and move calculation
+            const idx1 = swappingIndices && swappingIndices.length === 2 ? Math.min(swappingIndices[0], swappingIndices[1]) : 0;
+            const idx2 = swappingIndices && swappingIndices.length === 2 ? Math.max(swappingIndices[0], swappingIndices[1]) : 0;
+            const isLeftSwap = isSwapping && idx === idx1;
+            const cellPitch = 58; // min-w-[50px] + gap-2 (8px) = 58px
+            const swapDeltaX = (idx2 - idx1) * cellPitch;
+
+            const swapStyle: React.CSSProperties = isSwapping
+              ? ({
+                  '--swap-dist': `${swapDeltaX}px`,
+                  animation: isLeftSwap
+                    ? 'swapLiftMoveRight 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite'
+                    : 'swapLiftMoveLeft 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) infinite',
+                  zIndex: 40,
+                } as any)
+              : {};
+
             return (
-              <div
-                key={idx}
-                onClick={() => setSelectedIndex(idx)}
-                style={{
-                  transform: isSwapping && swappingIndices && swappingIndices.length === 2
-                    ? (idx === Math.min(swappingIndices[0], swappingIndices[1]) ? 'translateX(8px) translateY(-3px) scale(1.05)' : 'translateX(-8px) translateY(3px) scale(1.05)')
-                    : undefined,
-                  transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-                }}
-                className={`flex flex-col items-center p-2 rounded-lg border font-mono transition-all duration-200 cursor-pointer min-w-[50px] ${
-                  isSwapping
-                    ? 'bg-[#f0883e]/20 border-[#f0883e] shadow-lg ring-1 ring-[#f0883e]'
-                    : isComparing
-                    ? 'bg-[#58a6ff]/20 border-[#58a6ff] ring-1 ring-[#58a6ff]'
-                    : isSelected
-                    ? 'bg-[#3fb950]/20 border-[#3fb950] ring-1 ring-[#3fb950]'
-                    : 'bg-[#0d1117] border-[#30363d] hover:border-[#3fb950]/60 hover:bg-[#161b22]'
-                }`}
-              >
-                <span className="text-[10px] text-[#8b949e]">[{idx}]</span>
-                <span className="text-sm font-bold text-[#f0f6fc] mt-0.5">{String(val)}</span>
-                {idx === 0 && (
-                  <span className="text-[9px] font-bold text-[#d2a8ff] mt-1 bg-[#d2a8ff]/10 px-1 rounded">
-                    ROOT
-                  </span>
+              <div key={idx} className="relative flex flex-col items-center">
+                {/* Ghost receptacle slot */}
+                {isSwapping && (
+                  <div
+                    className="absolute inset-0 min-w-[50px] rounded-lg border-2 border-dashed border-[#f0883e]/50 bg-[#f0883e]/10 flex items-center justify-center font-mono text-[9px] font-bold text-[#f0883e] pointer-events-none select-none z-0"
+                  >
+                    Slot #{idx}
+                  </div>
                 )}
+
+                <div
+                  onClick={() => setSelectedIndex(idx)}
+                  style={swapStyle}
+                  className={`flex flex-col items-center p-2 rounded-lg border font-mono transition-all duration-200 cursor-pointer min-w-[50px] relative z-10 ${
+                    isSwapping
+                      ? 'bg-[#f0883e]/25 border-[#f0883e] shadow-[0_15px_30px_rgba(240,136,62,0.45)] ring-2 ring-[#f0883e]'
+                      : isComparing
+                      ? 'bg-[#58a6ff]/20 border-[#58a6ff] ring-1 ring-[#58a6ff]'
+                      : isSelected
+                      ? 'bg-[#3fb950]/20 border-[#3fb950] ring-1 ring-[#3fb950]'
+                      : 'bg-[#0d1117] border-[#30363d] hover:border-[#3fb950]/60 hover:bg-[#161b22]'
+                  }`}
+                >
+                  <span className="text-[10px] text-[#8b949e]">[{idx}]</span>
+                  <span className="text-sm font-bold text-[#f0f6fc] mt-0.5">{String(val)}</span>
+                  {idx === 0 && (
+                    <span className="text-[9px] font-bold text-[#d2a8ff] mt-1 bg-[#d2a8ff]/10 px-1 rounded">
+                      ROOT
+                    </span>
+                  )}
+                  {isSwapping && (
+                    <span className="text-[8px] font-bold text-[#f0883e] mt-0.5 animate-pulse">
+                      {isLeftSwap ? `➔ #${idx2}` : `⬅ #${idx1}`}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}

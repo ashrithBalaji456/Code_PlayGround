@@ -127,3 +127,41 @@
 .animate-pulse-glow {
   animation: pulseGlow 1.2s ease-in-out infinite;
 }
+
+/* Swapping Element Physical Lift-and-Move Keyframes */
+@keyframes swapLiftMoveRight {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(0, -42px) scale(1.12);
+  }
+  70% {
+    transform: translate(var(--swap-dist, 64px), -42px) scale(1.12);
+  }
+  90% {
+    transform: translate(var(--swap-dist, 64px), 0) scale(1.04);
+  }
+  100% {
+    transform: translate(var(--swap-dist, 64px), 0) scale(1);
+  }
+}
+
+@keyframes swapLiftMoveLeft {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(0, 42px) scale(1.12);
+  }
+  70% {
+    transform: translate(calc(-1 * var(--swap-dist, 64px)), 42px) scale(1.12);
+  }
+  90% {
+    transform: translate(calc(-1 * var(--swap-dist, 64px)), 0) scale(1.04);
+  }
+  100% {
+    transform: translate(calc(-1 * var(--swap-dist, 64px)), 0) scale(1);
+  }
+}
+
