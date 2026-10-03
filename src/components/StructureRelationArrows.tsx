@@ -164,6 +164,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
 }) => {
   const [lightningActiveRelId, setLightningActiveRelId] = useState<string | null>(null);
   const [transferredValue, setTransferredValue] = useState<any>(null);
+  const [transferEpoch, setTransferEpoch] = useState<number>(0);
   const [jitterCount, setJitterCount] = useState<number>(0);
   const animRef = useRef<number | null>(null);
 
@@ -199,22 +200,20 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
       });
     }
 
-    // B. Entity / Foreign Key style matching (e.g. Map/Array containing IDs or keys of another)
+    // B. Entity / Foreign Key & Algorithmic pipeline matching
     for (let i = 0; i < structList.length; i++) {
       const s1 = structList[i];
       for (let j = 0; j < structList.length; j++) {
         if (i === j) continue;
         const s2 = structList[j];
 
-        // Check if s1 contains elements or keys referencing s2
         let matched = false;
         let relationLabel = '';
-        let cardinality = '1:N';
+        let cardinality = '1:1';
 
         const s1Name = s1.name.toLowerCase();
         const s2Name = s2.name.toLowerCase();
 
-        // 1. Common relational entity patterns (users <-> orders, employees <-> departments, graph <-> queue/set)
         if (
           (s1Name.includes('order') && s2Name.includes('user')) ||
           (s1Name.includes('emp') && s2Name.includes('dep')) ||
@@ -226,7 +225,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
         } else if (
           (s1Name.includes('graph') && (s2Name.includes('queue') || s2Name.includes('visited') || s2Name.includes('stack'))) ||
           (s1Name.includes('queue') && s2Name.includes('visited')) ||
-          (s1Name.includes('tree') && s2Name.includes('queue'))
+          (s1Name.includes('tree') && (s2Name.includes('queue') || s2Name.includes('visited') || s2Name.includes('stack')))
         ) {
           matched = true;
           relationLabel = `Pipeline: ${s1.name} ➔ ${s2.name}`;
@@ -238,6 +237,13 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
         ) {
           matched = true;
           relationLabel = `Transfer: ${s1.name} ⇄ ${s2.name}`;
+          cardinality = '1:1';
+        } else if (
+          (s1Name.includes('arr') || s1Name.includes('num') || s1Name.includes('list') || s1Name.includes('data')) &&
+          (s2Name.includes('set') || s2Name.includes('seen') || s2Name.includes('visited') || s2Name.includes('map') || s2Name.includes('freq') || s2Name.includes('queue') || s2Name.includes('stack') || s2Name.includes('heap') || s2Name.includes('pq') || s2Name.includes('res') || s2Name.includes('ans'))
+        ) {
+          matched = true;
+          relationLabel = `Flow: ${s1.name} ➔ ${s2.name}`;
           cardinality = '1:1';
         }
 
@@ -256,11 +262,11 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
       }
     }
 
-    // C. If multiple structures exist and no specific relation was detected, link sequential structures as algorithm data flow pipeline
-    if (rels.length === 0 && structList.length >= 2) {
-      for (let i = 0; i < structList.length - 1; i++) {
-        const s1 = structList[i];
-        const s2 = structList[i + 1];
+    // C. Ensure all structures in multi-structure algorithms are connected in a data flow pipeline
+    for (let i = 0; i < structList.length - 1; i++) {
+      const s1 = structList[i];
+      const s2 = structList[i + 1];
+      if (!rels.some((r) => (r.sourceId === s1.id && r.targetId === s2.id) || (r.sourceId === s2.id && r.targetId === s1.id))) {
         rels.push({
           id: `flow-${s1.id}-${s2.id}`,
           sourceId: s1.id,
@@ -269,7 +275,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
           targetName: s2.name,
           type: 'data_flow',
           label: `Data Flow: ${s1.name} ➔ ${s2.name}`,
-          cardinality: '1:N',
+          cardinality: '1:1',
         });
       }
     }
@@ -291,7 +297,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
     return rels;
   }, [currentStep]);
 
-  // 2. Value Transfer & Lightning Detection
+  // 2. Real-time Data Passage & Transfer Detection
   useEffect(() => {
     if (!currentStep) return;
 
@@ -299,71 +305,100 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
     let detectedTarget: string | null = null;
     let val: any = null;
 
-    // Check explanation text for transfer / pass keywords
-    const exp = currentStep.explanation.toLowerCase();
-    const isTransferAction =
-      exp.includes('pop') ||
-      exp.includes('poll') ||
-      exp.includes('dequeue') ||
-      exp.includes('push') ||
-      exp.includes('enqueue') ||
-      exp.includes('add') ||
-      exp.includes('transfer') ||
-      exp.includes('moved') ||
-      exp.includes('passed');
+    const currStructs = currentStep.structures;
+    const prevStructs = previousStep ? previousStep.structures : {};
 
-    // Compare with previousStep to find exact value moving between structures
-    if (previousStep && isTransferAction) {
-      const prevStructs = previousStep.structures;
-      const currStructs = currentStep.structures;
+    // A. Element growth detection in target structure
+    for (const [tgtId, targetCurrSt] of Object.entries(currStructs)) {
+      const targetPrevSt = prevStructs[tgtId];
+      const targetPrevSize = targetPrevSt
+        ? (targetPrevSt.elements?.length || targetPrevSt.size || targetPrevSt.stackData?.length || targetPrevSt.queueData?.length || 0)
+        : 0;
+      const targetCurrSize =
+        targetCurrSt.elements?.length || targetCurrSt.size || targetCurrSt.stackData?.length || targetCurrSt.queueData?.length || 0;
 
-      for (const [srcId, prevSt] of Object.entries(prevStructs)) {
-        const currSt = currStructs[srcId];
-        if (!currSt) continue;
+      if (targetCurrSize > targetPrevSize) {
+        // Find added element
+        const addedVal =
+          (targetCurrSt.stackData && targetCurrSt.stackData[targetCurrSt.stackData.length - 1]) ??
+          (targetCurrSt.queueData && targetCurrSt.queueData[targetCurrSt.queueData.length - 1]) ??
+          (targetCurrSt.elements && targetCurrSt.elements[targetCurrSt.elements.length - 1]) ??
+          currentStep.event?.value ??
+          currentStep.event?.newValue;
 
-        // Check if srcId lost an element
-        const prevSize = prevSt.elements?.length || prevSt.size || (prevSt.stackData?.length) || (prevSt.queueData?.length) || 0;
-        const currSize = currSt.elements?.length || currSt.size || (currSt.stackData?.length) || (currSt.queueData?.length) || 0;
+        // Find source structure
+        // 1. Shrinking structure (pop/poll)
+        for (const [srcId, prevSt] of Object.entries(prevStructs)) {
+          if (srcId === tgtId) continue;
+          const currSt = currStructs[srcId];
+          const prevSize = prevSt.elements?.length || prevSt.size || prevSt.stackData?.length || prevSt.queueData?.length || 0;
+          const currSize = currSt ? (currSt.elements?.length || currSt.size || currSt.stackData?.length || currSt.queueData?.length || 0) : 0;
+          if (prevSize > currSize) {
+            detectedSource = srcId;
+            detectedTarget = tgtId;
+            val = addedVal;
+            break;
+          }
+        }
 
-        if (prevSize > currSize) {
-          // Found shrinking structure (source)
-          const lostVal =
-            (prevSt.stackData && prevSt.stackData[prevSt.stackData.length - 1]) ||
-            (prevSt.queueData && prevSt.queueData[0]) ||
-            (prevSt.elements && prevSt.elements[prevSt.elements.length - 1]);
-
-          // Now find growing structure (target)
-          for (const [tgtId, targetCurrSt] of Object.entries(currStructs)) {
-            if (tgtId === srcId) continue;
-            const targetPrevSt = prevStructs[tgtId];
-            const targetPrevSize = targetPrevSt ? (targetPrevSt.elements?.length || targetPrevSt.size || (targetPrevSt.stackData?.length) || (targetPrevSt.queueData?.length) || 0) : 0;
-            const targetCurrSize = targetCurrSt.elements?.length || targetCurrSt.size || (targetCurrSt.stackData?.length) || (targetCurrSt.queueData?.length) || 0;
-
-            if (targetCurrSize > targetPrevSize) {
+        // 2. Reading/source structure containing this value
+        if (!detectedSource) {
+          for (const [srcId, currSt] of Object.entries(currStructs)) {
+            if (srcId === tgtId) continue;
+            const hasVal =
+              currSt.elements?.includes(addedVal) ||
+              currSt.arrayData?.includes(addedVal) ||
+              (currSt.activeIndices && currSt.activeIndices.length > 0) ||
+              (currentStep.event?.structureId === srcId);
+            if (hasVal) {
               detectedSource = srcId;
               detectedTarget = tgtId;
-              val = lostVal;
+              val = addedVal;
               break;
             }
+          }
+        }
+
+        // 3. Known incoming pipeline relation
+        if (!detectedSource && relations.length > 0) {
+          const incomingRel = relations.find((r) => r.targetId === tgtId);
+          if (incomingRel) {
+            detectedSource = incomingRel.sourceId;
+            detectedTarget = tgtId;
+            val = addedVal;
           }
         }
       }
     }
 
-    // Fallback: If explanation mentions specific structure names
+    // B. Fallback: Explanation text or event-based transfer keywords
     if (!detectedSource && relations.length > 0) {
-      const activeRel = relations.find(
-        (r) =>
-          exp.includes(r.sourceName.toLowerCase()) ||
-          exp.includes(r.targetName.toLowerCase()) ||
-          exp.includes('enqueue') ||
-          exp.includes('dequeue') ||
-          exp.includes('poll')
-      );
-      if (activeRel && isTransferAction) {
-        detectedSource = activeRel.sourceId;
-        detectedTarget = activeRel.targetId;
-        val = currentStep.algorithmState?.target || '⚡';
+      const exp = currentStep.explanation.toLowerCase();
+      const isTransferAction =
+        exp.includes('pop') ||
+        exp.includes('poll') ||
+        exp.includes('dequeue') ||
+        exp.includes('push') ||
+        exp.includes('enqueue') ||
+        exp.includes('add') ||
+        exp.includes('transfer') ||
+        exp.includes('moved') ||
+        exp.includes('passed') ||
+        exp.includes('offer') ||
+        exp.includes('visited');
+
+      if (isTransferAction) {
+        const activeRel = relations.find(
+          (r) =>
+            exp.includes(r.sourceName.toLowerCase()) ||
+            exp.includes(r.targetName.toLowerCase())
+        ) || relations[0];
+
+        if (activeRel) {
+          detectedSource = activeRel.sourceId;
+          detectedTarget = activeRel.targetId;
+          val = currentStep.event?.value ?? currentStep.algorithmState?.target ?? 'data';
+        }
       }
     }
 
@@ -377,12 +412,13 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
 
       if (matchedRel) {
         setLightningActiveRelId(matchedRel.id);
-        setTransferredValue(val);
+        setTransferredValue(val !== null && val !== undefined ? String(val) : 'data');
+        setTransferEpoch((prev) => prev + 1);
 
         const timer = setTimeout(() => {
           setLightningActiveRelId(null);
           setTransferredValue(null);
-        }, 1600);
+        }, 1800);
 
         return () => clearTimeout(timer);
       }
@@ -395,6 +431,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
       const relToShock = relations[manualLightningTrigger % relations.length];
       setLightningActiveRelId(relToShock.id);
       setTransferredValue('⚡ Pass');
+      setTransferEpoch((prev) => prev + 1);
       const timer = setTimeout(() => {
         setLightningActiveRelId(null);
         setTransferredValue(null);
@@ -510,7 +547,21 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
               className="transition-all duration-200"
             />
 
-            {/* 2. Pulsing Data Flow Glow Thread */}
+            {/* 2. Ambient Continuous Flowing Data Photons along the Arrow (living conduit) */}
+            {[0, 0.33, 0.66].map((offset, pIdx) => (
+              <g key={`ambient-stream-${rel.id}-${pIdx}`}>
+                <animateMotion
+                  path={smoothPath}
+                  dur="2.8s"
+                  repeatCount="indefinite"
+                  begin={`${offset * 2.8}s`}
+                />
+                <circle r="4.5" fill="#58a6ff" opacity="0.8" filter="url(#electric-glow)" />
+                <circle r="2" fill="#ffffff" />
+              </g>
+            ))}
+
+            {/* 3. Pulsing Data Flow Glow Thread */}
             {!isLightning && (
               <path
                 d={smoothPath}
@@ -525,10 +576,10 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
               />
             )}
 
-            {/* ─── 3. HIGH-VOLTAGE LIGHTNING STRIKE EFFECT ─── */}
+            {/* ─── 4. HIGH-VOLTAGE LIGHTNING STRIKE EFFECT & IMPACT RIPPLES ─── */}
             {isLightning && lightningPath && (
               <>
-                {/* A. Thick Outer Electric Aura */}
+                {/* Thick Outer Electric Aura */}
                 <path
                   d={lightningPath}
                   fill="none"
@@ -538,7 +589,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
                   filter="url(#electric-glow)"
                 />
 
-                {/* B. Jagged Electric Bolt Branch */}
+                {/* Jagged Electric Bolt Branch */}
                 <path
                   d={lightningPath}
                   fill="none"
@@ -548,7 +599,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
                   filter="url(#electric-glow)"
                 />
 
-                {/* C. Ultra-Hot Lightning Core (Pure White) */}
+                {/* Ultra-Hot Lightning Core (Pure White) */}
                 <path
                   d={lightningPath}
                   fill="none"
@@ -557,7 +608,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
                   opacity="1"
                 />
 
-                {/* D. Additional Secondary Fractal Spark Fork */}
+                {/* Additional Secondary Fractal Spark Fork */}
                 <path
                   d={generateJaggedLightning(start, cp1, cp2, end, jitterCount + 7, 8)}
                   fill="none"
@@ -566,37 +617,107 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
                   opacity="0.8"
                 />
 
-                {/* E. Impact Shockwave Ripple at Target */}
+                {/* Source Structure Emission Pulse */}
                 <circle
-                  cx={end.x}
-                  cy={end.y}
-                  r="14"
+                  cx={start.x}
+                  cy={start.y}
+                  r="16"
                   fill="none"
-                  stroke="#00f0ff"
+                  stroke="#58a6ff"
                   strokeWidth="2.5"
                   className="animate-ping"
                   opacity="0.8"
                 />
                 <circle
-                  cx={end.x}
-                  cy={end.y}
-                  r="6"
-                  fill="#ffe600"
+                  cx={start.x}
+                  cy={start.y}
+                  r="7"
+                  fill="#58a6ff"
                   filter="url(#electric-glow)"
                 />
 
-                {/* F. Source Discharge Pulse */}
+                {/* Target Structure Impact Arrival Burst */}
                 <circle
-                  cx={start.x}
-                  cy={start.y}
+                  cx={end.x}
+                  cy={end.y}
+                  r="20"
+                  fill="none"
+                  stroke="#00f0ff"
+                  strokeWidth="3"
+                  className="animate-ping"
+                  opacity="0.8"
+                  style={{ animationDelay: '0.8s' }}
+                />
+                <circle
+                  cx={end.x}
+                  cy={end.y}
                   r="8"
-                  fill="#58a6ff"
+                  fill="#ffe600"
                   filter="url(#electric-glow)"
                 />
               </>
             )}
 
-            {/* ─── 4. ENTITY RELATION BADGE & VALUE TRANSFER CHIP ─── */}
+            {/* ─── 5. ACTIVE TRAVELING DATA PACKET (PASSING THROUGH THE CONNECTED ARROW) ─── */}
+            {isLightning && (
+              <>
+                {/* Comet Trailing Sparks along the connected arrow */}
+                {[0.05, 0.1, 0.15].map((delay, tIdx) => (
+                  <g key={`comet-${rel.id}-${transferEpoch}-${tIdx}`}>
+                    <animateMotion
+                      path={smoothPath}
+                      dur="1.4s"
+                      repeatCount="1"
+                      fill="freeze"
+                      begin={`${delay}s`}
+                    />
+                    <circle
+                      r={7 - tIdx * 1.5}
+                      fill="#ffe600"
+                      opacity={0.7 - tIdx * 0.2}
+                      filter="url(#electric-glow)"
+                    />
+                  </g>
+                ))}
+
+                {/* Main Glowing Data Capsule traveling along smoothPath */}
+                <g key={`data-packet-${rel.id}-${transferEpoch}`}>
+                  <animateMotion
+                    path={smoothPath}
+                    dur="1.4s"
+                    repeatCount="1"
+                    fill="freeze"
+                  />
+                  {/* Outer Energy Field */}
+                  <circle r="22" fill="#00f0ff" opacity="0.35" filter="url(#electric-glow)" />
+                  {/* Capsule Chassis */}
+                  <rect
+                    x="-32"
+                    y="-14"
+                    width="64"
+                    height="28"
+                    rx="14"
+                    fill="#0d1117"
+                    stroke="#00f0ff"
+                    strokeWidth="2.5"
+                    filter="url(#electric-glow)"
+                  />
+                  {/* Data Value Text Label */}
+                  <text
+                    textAnchor="middle"
+                    dy="4.5"
+                    fill="#ffffff"
+                    fontSize="11"
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                  >
+                    {String(transferredValue !== null && transferredValue !== undefined ? transferredValue : 'pass')}
+                  </text>
+                </g>
+              </>
+            )}
+
+            {/* ─── 6. ENTITY RELATION BADGE & VALUE TRANSFER CHIP ─── */}
             <foreignObject
               x={midPoint.x - 90}
               y={midPoint.y - 18}
@@ -606,19 +727,20 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
             >
               <div className="flex items-center justify-center">
                 {isLightning ? (
-                  // Active Lightning Transfer Floating Pill
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-[#ffe600] to-[#00f0ff] text-black font-extrabold text-[11px] shadow-[0_0_18px_rgba(0,240,255,0.8)] border border-white animate-bounce">
-                    <Zap className="w-3.5 h-3.5 fill-black stroke-black animate-pulse" />
-                    <span>Pass: {transferredValue !== null && transferredValue !== undefined ? String(transferredValue) : 'Value'}</span>
+                  // Active Data Passage Floating Pill
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0d1117]/95 border-2 border-[#00f0ff] text-[#00f0ff] font-extrabold text-[11px] shadow-[0_0_18px_rgba(0,240,255,0.8)] backdrop-blur-md animate-pulse">
+                    <Zap className="w-3.5 h-3.5 fill-[#00f0ff] stroke-[#00f0ff] animate-bounce" />
+                    <span>Passing: {transferredValue !== null && transferredValue !== undefined ? String(transferredValue) : 'Data'}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#00f0ff]" />
                   </div>
                 ) : (
-                  // Normal Entity Relationship Pill (like SQL Foreign Key)
+                  // Normal Entity Relationship Pill (with cardinality e.g. 1:1, 1:N)
                   <div
                     className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#161b22]/95 border border-[#30363d] hover:border-[#58a6ff] text-[#8b949e] hover:text-[#f0f6fc] text-[10px] font-mono shadow-md backdrop-blur-md transition-all cursor-help"
-                    title={`Relation: ${rel.label} (${rel.cardinality || '1:N'})`}
+                    title={`Relation: ${rel.label} (${rel.cardinality || '1:1'})`}
                   >
                     <Link2 className="w-3 h-3 text-[#58a6ff]" />
-                    <span className="font-semibold text-[#58a6ff]">{rel.cardinality || '1:N'}</span>
+                    <span className="font-semibold text-[#58a6ff]">{rel.cardinality || '1:1'}</span>
                     <span className="truncate max-w-[100px]">{rel.label.split(':')[0]}</span>
                   </div>
                 )}
@@ -638,6 +760,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
           }
         }
       `}</style>
+
     </svg>
   );
 };
