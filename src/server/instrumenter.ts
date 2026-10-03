@@ -1365,6 +1365,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.castCheck(${srcVar}, "${varTypes.get(srcVar) || 'Object'}", "${toType}", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.downcastEvent("${srcVar}", "${varTypes.get(srcVar) || 'Object'}", "${varName}", "${toType}", ${varName}, true, ${lineNum});`);
       outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${declType}", ${varName}, ${lineNum});`);
       continue;
     }
@@ -1385,6 +1386,26 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
 
       if (rhsExpr.startsWith('new ') && !rhsExpr.includes('[') && !rhsExpr.includes('List') && !rhsExpr.includes('Map') && !rhsExpr.includes('Set') && !rhsExpr.includes('Stack') && !rhsExpr.includes('Queue')) {
         outputLines.push(`    CodeFlowTracer.objectCreate("${varName}", "${declaredType}", ${varName}, ${lineNum});`);
+        outputLines.push(`    CodeFlowTracer.typeSystemBind("${varName}", "${declaredType}", ${varName}, ${lineNum});`);
+      } else if (varTypes.has(rhsExpr)) {
+        const srcType = varTypes.get(rhsExpr);
+        if (srcType !== declaredType) {
+          outputLines.push(`    CodeFlowTracer.upcastEvent("${rhsExpr}", "${srcType}", "${varName}", "${declaredType}", ${varName}, ${lineNum});`);
+        } else {
+          outputLines.push(`    CodeFlowTracer.objectIdentityCompare("${rhsExpr}", ${rhsExpr}, "${varName}", ${varName}, true, ${lineNum});`);
+        }
+      }
+      const eqCmpMatch = rhsExpr.match(/^\(?\s*([a-zA-Z_0-9]+)\s*==\s*([a-zA-Z_0-9]+)\s*\)?$/);
+      if (eqCmpMatch && varTypes.has(eqCmpMatch[1]) && varTypes.has(eqCmpMatch[2])) {
+        const leftV = eqCmpMatch[1];
+        const rightV = eqCmpMatch[2];
+        outputLines.push(`    CodeFlowTracer.objectIdentityCompare("${leftV}", ${leftV}, "${rightV}", ${rightV}, ${varName}, ${lineNum});`);
+      }
+      const equalsMethodMatch = rhsExpr.match(/^([a-zA-Z_0-9]+)\.equals\(([a-zA-Z_0-9]+)\)$/);
+      if (equalsMethodMatch && varTypes.has(equalsMethodMatch[1])) {
+        const leftV = equalsMethodMatch[1];
+        const rightV = equalsMethodMatch[2];
+        outputLines.push(`    CodeFlowTracer.equalityCompare("${leftV}", ${leftV}, "${rightV}", ${rightV}, ${varName}, ${lineNum});`);
       }
       if (declaredType === 'Thread' || rhsExpr.startsWith('new Thread(') || declaredType.endsWith('Thread')) {
         outputLines.push(`    CodeFlowTracer.threadCreate(${varName}, ${lineNum});`);
@@ -1703,6 +1724,18 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     // 8. PRINT STATEMENTS
     if (trimmed.startsWith('System.out.print')) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      continue;
+    }
+
+    // Phase 15: Standalone method calls on objects: obj.method();
+    const objCallMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.([a-zA-Z0-9_]+)\((.*)\);$/);
+    if (objCallMatch && !trimmed.startsWith('System.') && !trimmed.startsWith('Thread.') && !trimmed.startsWith('Arrays.') && !trimmed.startsWith('Collections.') && !trimmed.startsWith('Math.') && !trimmed.startsWith('CodeFlowTracer.')) {
+      const objVar = objCallMatch[1];
+      const mName = objCallMatch[2];
+      const declType = varTypes.get(objVar) || 'Object';
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.methodDispatchStep("${objVar}", "${declType}", ${objVar}, "${mName}", "${declType}.${mName}", ${lineNum});`);
       outputLines.push(rawLine);
       continue;
     }

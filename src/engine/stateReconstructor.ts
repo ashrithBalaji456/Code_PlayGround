@@ -27,6 +27,10 @@ import {
   StreamStage,
   StreamPipelineState,
   IteratorState,
+  TypeSystemInfo,
+  MethodDispatchInfo,
+  ObjectIdentityComparison,
+  MethodOverloadResolution,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -657,13 +661,112 @@ function computeBeginnerExplanation(
         actionType: 'LAMBDA',
       };
 
+    // Phase 15: Java OOP, Polymorphism & Type System
+    case 'OBJECT_IDENTITY_COMPARE':
+      return {
+        what: `Reference identity comparison '${ev.variable} == ${ev.structureId}' evaluated to ${ev.conditionResult ? 'TRUE' : 'FALSE'}.`,
+        why: `'==' checks whether both references hold the identical memory address on the Heap. ${ev.conditionResult ? 'Both variables point to the same object.' : 'The variables point to distinct objects in memory.'}`,
+        actionType: 'IDENTITY_COMPARE',
+      };
+
+    case 'EQUALITY_COMPARE':
+      return {
+        what: `Logical equality '${ev.variable}.equals(${ev.structureId})' evaluated to ${ev.conditionResult ? 'TRUE' : 'FALSE'}.`,
+        why: `The .equals() method tests logical equivalence as defined by the class, independent of reference address equality.`,
+        actionType: 'EQUALITY_COMPARE',
+      };
+
+    case 'TYPE_SYSTEM_BIND':
+      return {
+        what: `Type binding: variable '${ev.variable}' declared as '${ev.dataType}' points to instance of '${ev.actualType}'.`,
+        why: `In Java, the reference type determines which methods are visible at compile time, while the actual runtime object determines which implementation executes.`,
+        actionType: 'TYPE_BIND',
+      };
+
+    case 'UPCAST_EVENT':
+      return {
+        what: `Upcasting: reference '${ev.variable}' widened to supertype '${ev.dataType}'.`,
+        why: `Upcasting is always safe and implicit in Java. No new object is allocated on the heap; only the reference perspective widens.`,
+        actionType: 'UPCAST',
+      };
+
+    case 'DOWNCAST_EVENT':
+      return {
+        what: `Downcasting: reference '${ev.variable}' narrowed to '${ev.dataType}' (${ev.castSuccess !== false ? 'SUCCESS' : 'FAILED'}).`,
+        why: ev.castSuccess !== false
+          ? `Downcasting narrows the reference so subclass-specific methods can be invoked. It succeeds because the underlying heap object is compatible.`
+          : `Downcasting failed with ClassCastException because the runtime heap object is incompatible with '${ev.dataType}'.`,
+        actionType: 'DOWNCAST',
+      };
+
+    case 'METHOD_DISPATCH_STEP':
+      return {
+        what: `Dynamic Method Dispatch: call to '${ev.variable}.${ev.methodName}()' resolved to '${ev.resolvedMethod}()'.`,
+        why: `Dynamic dispatch looks up the method implementation based on the runtime type of the object on the Heap rather than the declared type of the reference.`,
+        actionType: 'DYNAMIC_DISPATCH',
+      };
+
+    case 'SUPER_FIELD_ACCESS':
+      return {
+        what: `super.${ev.fieldName} accessed parent class field in '${ev.superClassName}'.`,
+        why: `The 'super' keyword allows a subclass to bypass field shadowing and directly read its parent class's field.`,
+        actionType: 'SUPER_ACCESS',
+      };
+
+    case 'METHOD_OVERLOAD_CALL':
+    case 'METHOD_OVERLOAD_RESOLVE':
+      return {
+        what: `Method overload resolved: selected signature '${ev.className}.${ev.methodName}(${ev.dataType || ''})'.`,
+        why: `Method overloading is resolved statically at compile time by matching argument types against available method parameter signatures.`,
+        actionType: 'METHOD_OVERLOAD',
+      };
+
     default:
       return {
         what: explanation,
-        why: `Java executed step ${stepIndex + 1} following the standard Java language and JVM execution rules.`,
+        why: `Java executed step ${stepIndex + 1} following standard Java language and JVM execution rules.`,
         actionType: ev.type,
       };
   }
+}
+
+function generateBeginnerExplanation(
+  ev: ExecutionEvent,
+  typeSys: TypeSystemInfo | null,
+  dispatch: MethodDispatchInfo | null,
+  identity: ObjectIdentityComparison | null
+): string {
+  if (dispatch) {
+    return dispatch.whyExplanation;
+  }
+  if (identity) {
+    return identity.explanation;
+  }
+  if (typeSys) {
+    return typeSys.explanation;
+  }
+  if (ev.type === 'OBJECT_CREATE') {
+    return `A new '${ev.dataType || 'Object'}' was allocated on the Java Heap. The reference variable '${ev.variable}' holds its address.`;
+  }
+  return `Executing line ${ev.line}: ${ev.type.replace(/_/g, ' ').toLowerCase()}`;
+}
+
+function generateExpertExplanation(
+  ev: ExecutionEvent,
+  typeSys: TypeSystemInfo | null,
+  dispatch: MethodDispatchInfo | null,
+  identity: ObjectIdentityComparison | null
+): string {
+  if (dispatch) {
+    return `[INVOKEVIRTUAL] CallSite: ${dispatch.callSite} | Reference Type: ${dispatch.referenceType} | Runtime Object Type: ${dispatch.runtimeType} | Target vtable: ${dispatch.selectedImplementation} | Dispatch: Dynamic Virtual Dispatch.`;
+  }
+  if (identity) {
+    return `[REF_CMP] Comparison: ${identity.comparisonType} | Operand L: ${identity.leftOperand} (${identity.leftObjectId || 'ptr'}) | Operand R: ${identity.rightOperand} (${identity.rightObjectId || 'ptr'}) | Result: ${identity.isIdentical ? 'EQUAL_POINTER' : 'DISTINCT_OBJECTS'}.`;
+  }
+  if (typeSys) {
+    return `[TYPE_SYSTEM] Declared Type: ${typeSys.declaredType} | Reference Type: ${typeSys.referenceType} | Dynamic Heap Type: ${typeSys.runtimeType} | Upcast: ${!!typeSys.isUpcast} | Downcast: ${!!typeSys.isDowncast} | Heap Object ID: ${typeSys.objectId || 'N/A'}.`;
+  }
+  return `[JVM_TRACE] Opcode: ${ev.type} | Line: ${ev.line} | Thread: ${ev.threadName || 'main'}`;
 }
 
 export function reconstructExecutionSteps(
@@ -784,6 +887,12 @@ export function reconstructExecutionSteps(
   let currentOOPRelationships: OOPRelationship[] = deriveOOPRelationships(currentClassMetadata);
   let currentStreamPipeline: StreamPipelineState | null = null;
   let currentIteratorState: IteratorState | null = null;
+
+  // Phase 15 Java OOP, Polymorphism & Type System State
+  let currentTypeSystemInfo: TypeSystemInfo | null = null;
+  let currentMethodDispatchInfo: MethodDispatchInfo | null = null;
+  let currentIdentityComparison: ObjectIdentityComparison | null = null;
+  let currentMethodOverloadResolution: MethodOverloadResolution | null = null;
 
   let currentLine = 1;
 
@@ -1089,6 +1198,66 @@ export function reconstructExecutionSteps(
         hasPrevious: currentIteratorState.hasPrevious,
         direction: currentIteratorState.direction,
         action: currentIteratorState.action,
+      };
+    }
+
+    // Phase 15 clones
+    let nextTypeSystemInfo: TypeSystemInfo | null = null;
+    if (currentTypeSystemInfo) {
+      nextTypeSystemInfo = {
+        variableName: currentTypeSystemInfo.variableName,
+        declaredType: currentTypeSystemInfo.declaredType,
+        referenceType: currentTypeSystemInfo.referenceType,
+        runtimeType: currentTypeSystemInfo.runtimeType,
+        genericTypeMetadata: currentTypeSystemInfo.genericTypeMetadata,
+        typeBounds: currentTypeSystemInfo.typeBounds,
+        objectId: currentTypeSystemInfo.objectId,
+        isUpcast: currentTypeSystemInfo.isUpcast,
+        isDowncast: currentTypeSystemInfo.isDowncast,
+        castSuccess: currentTypeSystemInfo.castSuccess,
+        instanceofChecks: currentTypeSystemInfo.instanceofChecks ? [...currentTypeSystemInfo.instanceofChecks] : undefined,
+        explanation: currentTypeSystemInfo.explanation,
+      };
+    }
+
+    let nextMethodDispatchInfo: MethodDispatchInfo | null = null;
+    if (currentMethodDispatchInfo) {
+      nextMethodDispatchInfo = {
+        callSite: currentMethodDispatchInfo.callSite,
+        invokingVariable: currentMethodDispatchInfo.invokingVariable,
+        referenceType: currentMethodDispatchInfo.referenceType,
+        runtimeType: currentMethodDispatchInfo.runtimeType,
+        methodName: currentMethodDispatchInfo.methodName,
+        candidateMethods: [...currentMethodDispatchInfo.candidateMethods],
+        overrideFound: currentMethodDispatchInfo.overrideFound,
+        selectedImplementation: currentMethodDispatchInfo.selectedImplementation,
+        dispatchType: currentMethodDispatchInfo.dispatchType,
+        whyExplanation: currentMethodDispatchInfo.whyExplanation,
+      };
+    }
+
+    let nextIdentityComparison: ObjectIdentityComparison | null = null;
+    if (currentIdentityComparison) {
+      nextIdentityComparison = {
+        leftOperand: currentIdentityComparison.leftOperand,
+        rightOperand: currentIdentityComparison.rightOperand,
+        leftObjectId: currentIdentityComparison.leftObjectId,
+        rightObjectId: currentIdentityComparison.rightObjectId,
+        comparisonType: currentIdentityComparison.comparisonType,
+        isIdentical: currentIdentityComparison.isIdentical,
+        explanation: currentIdentityComparison.explanation,
+      };
+    }
+
+    let nextMethodOverloadResolution: MethodOverloadResolution | null = null;
+    if (currentMethodOverloadResolution) {
+      nextMethodOverloadResolution = {
+        methodName: currentMethodOverloadResolution.methodName,
+        argumentTypes: [...currentMethodOverloadResolution.argumentTypes],
+        candidateSignatures: [...currentMethodOverloadResolution.candidateSignatures],
+        selectedSignature: currentMethodOverloadResolution.selectedSignature,
+        resolutionType: currentMethodOverloadResolution.resolutionType,
+        explanation: currentMethodOverloadResolution.explanation,
       };
     }
 
@@ -1935,6 +2104,222 @@ export function reconstructExecutionSteps(
           details: { parameter: pName, values: ev.values },
         };
         explanation = `Varargs parameter '${pName}' bound`;
+        break;
+      }
+
+      // ==========================================
+      // PHASE 15: COMPLETE JAVA OOP, POLYMORPHISM & TYPE SYSTEM
+      // ==========================================
+
+      case 'OBJECT_IDENTITY_COMPARE': {
+        const left = ev.variable || 'ref1';
+        const right = ev.structureId || 'ref2';
+        const isIdentical = !!ev.conditionResult;
+        const lId = ev.objectId ? getStableObjectId(ev.objectId) : 'null';
+        const rId = ev.refType ? getStableObjectId(ev.refType) : 'null';
+        nextIdentityComparison = {
+          leftOperand: left,
+          rightOperand: right,
+          leftObjectId: lId,
+          rightObjectId: rId,
+          comparisonType: 'IDENTITY_EQ',
+          isIdentical,
+          explanation: isIdentical
+            ? `Reference identity test: '${left} == ${right}' is TRUE. Both references point to the exact same heap memory address (${lId}).`
+            : `Reference identity test: '${left} == ${right}' is FALSE. References point to different heap objects (${lId} vs ${rId}).`,
+        };
+        nextActiveConcept = {
+          name: 'Object Reference Identity (==)',
+          category: 'OOP',
+          explanation: isIdentical
+            ? `References '${left}' and '${right}' are ALIASES pointing to the exact same instance ${lId}.`
+            : `References '${left}' and '${right}' point to distinct memory addresses.`,
+          badge: 'Identity (==)',
+          details: { left, right, isIdentical, leftId: lId, rightId: rId },
+        };
+        explanation = `Reference identity test '${left} == ${right}': ${isIdentical ? 'TRUE (Same Object)' : 'FALSE (Distinct Objects)'}`;
+        break;
+      }
+
+      case 'EQUALITY_COMPARE': {
+        const left = ev.variable || 'obj1';
+        const right = ev.structureId || 'obj2';
+        const isEqual = !!ev.conditionResult;
+        const lId = ev.objectId ? getStableObjectId(ev.objectId) : 'null';
+        const rId = ev.refType ? getStableObjectId(ev.refType) : 'null';
+        nextIdentityComparison = {
+          leftOperand: left,
+          rightOperand: right,
+          leftObjectId: lId,
+          rightObjectId: rId,
+          comparisonType: 'EQUALS_METHOD',
+          isIdentical: isEqual,
+          explanation: `Logical value comparison: '${left}.equals(${right})' evaluated to ${isEqual ? 'TRUE' : 'FALSE'}.`,
+        };
+        nextActiveConcept = {
+          name: 'Logical Equality (.equals)',
+          category: 'OOP',
+          explanation: `Overridden .equals() checks semantic equivalence, distinct from reference identity (==).`,
+          badge: '.equals()',
+          details: { left, right, isEqual },
+        };
+        explanation = `Logical equality '${left}.equals(${right})': ${isEqual ? 'TRUE' : 'FALSE'}`;
+        break;
+      }
+
+      case 'TYPE_SYSTEM_BIND': {
+        const vName = ev.variable || 'var';
+        const decl = ev.dataType || 'Object';
+        const runtime = ev.actualType || 'Object';
+        const objId = ev.objectId ? getStableObjectId(ev.objectId) : undefined;
+        nextTypeSystemInfo = {
+          variableName: vName,
+          declaredType: decl,
+          referenceType: decl,
+          runtimeType: runtime,
+          objectId: objId,
+          isUpcast: decl !== runtime,
+          explanation: decl === runtime
+            ? `Direct type binding: Reference variable '${vName}' of type '${decl}' assigned to instance of '${runtime}'.`
+            : `Polymorphic type binding: Reference '${vName}' has declared reference type '${decl}', but points to runtime instance '${runtime}'.`,
+        };
+        nextActiveConcept = {
+          name: 'Type System Binding',
+          category: 'OOP',
+          explanation: `Variable '${vName}' holds reference of type '${decl}' pointing to runtime type '${runtime}'.`,
+          badge: 'Type Binding',
+          details: { variable: vName, declaredType: decl, runtimeType: runtime, objectId: objId },
+        };
+        explanation = `Type binding: ${decl} ${vName} points to runtime instance ${runtime}`;
+        break;
+      }
+
+      case 'UPCAST_EVENT': {
+        const vName = ev.variable || 'upcastVar';
+        const decl = ev.dataType || 'SuperClass';
+        const runtime = ev.actualType || 'SubClass';
+        const objId = ev.objectId ? getStableObjectId(ev.objectId) : undefined;
+        nextTypeSystemInfo = {
+          variableName: vName,
+          declaredType: decl,
+          referenceType: decl,
+          runtimeType: runtime,
+          objectId: objId,
+          isUpcast: true,
+          explanation: `Upcasting: reference variable '${vName}' declared as supertype '${decl}' references subclass object '${runtime}' in the heap. Same object identity, widened reference perspective.`,
+        };
+        nextActiveConcept = {
+          name: 'Implicit Upcasting',
+          category: 'OOP',
+          explanation: `Widening reference from subclass to superclass is always safe and implicit in Java. No new object is allocated.`,
+          badge: 'Upcasting',
+          details: { variable: vName, referenceType: decl, runtimeType: runtime },
+        };
+        explanation = `Upcasted reference: ${decl} ${vName} references ${runtime} object in heap`;
+        break;
+      }
+
+      case 'DOWNCAST_EVENT': {
+        const vName = ev.variable || 'downcastVar';
+        const toType = ev.dataType || 'SubClass';
+        const runtime = ev.actualType || 'Object';
+        const success = ev.castSuccess !== false;
+        const objId = ev.objectId ? getStableObjectId(ev.objectId) : undefined;
+        nextTypeSystemInfo = {
+          variableName: vName,
+          declaredType: toType,
+          referenceType: toType,
+          runtimeType: runtime,
+          objectId: objId,
+          isDowncast: true,
+          castSuccess: success,
+          explanation: success
+            ? `Explicit Downcasting: narrowing reference from supertype to '${toType}'. Validated because runtime heap object is '${runtime}'. Subclass methods now accessible.`
+            : `Downcasting Failure: attempt to cast runtime object of type '${runtime}' to '${toType}' failed with ClassCastException.`,
+        };
+        nextActiveConcept = {
+          name: 'Explicit Downcasting',
+          category: 'OOP',
+          explanation: success
+            ? `Downcasting succeeded: '${vName}' narrowed to '${toType}'.`
+            : `ClassCastException: cannot cast instance of '${runtime}' to '${toType}'.`,
+          badge: success ? 'Downcast Success' : 'ClassCastException',
+          details: { variable: vName, targetType: toType, runtimeType: runtime, success },
+        };
+        explanation = success
+          ? `Downcasting succeeded: (${toType}) reference created for ${runtime} object`
+          : `Downcasting failed: ClassCastException (${runtime} cannot be cast to ${toType})`;
+        break;
+      }
+
+      case 'METHOD_DISPATCH_STEP': {
+        const vName = ev.variable || 'var';
+        const refType = ev.refType || 'DeclaredClass';
+        const runtime = ev.actualType || 'RuntimeClass';
+        const mName = ev.methodName || 'method';
+        const resolved = ev.resolvedMethod || `${runtime}.${mName}`;
+        const isOverridden = runtime !== refType;
+        nextMethodDispatchInfo = {
+          callSite: `${vName}.${mName}()`,
+          invokingVariable: vName,
+          referenceType: refType,
+          runtimeType: runtime,
+          methodName: mName,
+          candidateMethods: [`${refType}.${mName}()`],
+          overrideFound: isOverridden,
+          selectedImplementation: resolved,
+          dispatchType: 'DYNAMIC_DISPATCH',
+          whyExplanation: isOverridden
+            ? `Dynamic Method Dispatch: at compile time, Java verifies '${refType}.${mName}()' exists on reference type. At runtime, the JVM inspects the object header on the heap, discovers the runtime type is '${runtime}', and invokes overridden implementation '${resolved}()'.`
+            : `Direct Method Invocation: runtime type matches reference type '${refType}', invoking '${resolved}()'.`,
+        };
+        nextActiveConcept = {
+          name: 'Dynamic Method Dispatch',
+          category: 'OOP',
+          explanation: `Runtime JVM inspected heap object (${runtime}) and selected overridden implementation '${resolved}()'.`,
+          badge: 'Virtual Dispatch',
+          details: { callSite: `${vName}.${mName}()`, referenceType: refType, runtimeType: runtime, resolved },
+        };
+        explanation = `Dynamic dispatch: ${vName}.${mName}() [ref: ${refType}] ➔ dispatched to ${resolved}()`;
+        break;
+      }
+
+      case 'SUPER_FIELD_ACCESS': {
+        const cClass = ev.className || 'Child';
+        const pClass = ev.superClassName || 'Parent';
+        const fName = ev.fieldName || 'field';
+        nextActiveConcept = {
+          name: 'Super Keyword Field Resolution',
+          category: 'OOP',
+          explanation: `'super.${fName}' explicitly bypasses '${cClass}' shadowing to read '${pClass}.${fName}' = ${JSON.stringify(ev.value)}.`,
+          badge: 'super.field',
+          details: { childClass: cClass, parentClass: pClass, field: fName, value: ev.value },
+        };
+        explanation = `Accessed super.${fName}: resolved to parent ${pClass}.${fName} (${JSON.stringify(ev.value)})`;
+        break;
+      }
+
+      case 'METHOD_OVERLOAD_RESOLVE': {
+        const cClass = ev.className || 'Class';
+        const mName = ev.methodName || 'method';
+        const pTypes = ev.dataType ? [ev.dataType] : ['int'];
+        const sig = `${cClass}.${mName}(${pTypes.join(', ')})`;
+        nextMethodOverloadResolution = {
+          methodName: mName,
+          argumentTypes: pTypes,
+          candidateSignatures: [sig],
+          selectedSignature: sig,
+          resolutionType: 'COMPILE_TIME_STATIC_BINDING',
+          explanation: `Compile-time method overload resolution: the Java compiler determined the exact signature '${sig}' based on the static compile-time argument types, prior to execution.`,
+        };
+        nextActiveConcept = {
+          name: 'Compile-Time Method Overloading',
+          category: 'OOP',
+          explanation: `Static early binding selected signature '${sig}' based on argument types (${pTypes.join(', ')}).`,
+          badge: 'Overload Resolution',
+          details: { signature: sig, argumentTypes: pTypes },
+        };
+        explanation = `Method overload resolved: ${sig} selected at compile time`;
         break;
       }
 
@@ -9251,6 +9636,11 @@ export function reconstructExecutionSteps(
     currentOOPRelationships = nextOOPRelationships;
     currentStreamPipeline = nextStreamPipeline;
     currentIteratorState = nextIteratorState;
+    // Phase 15 tracking
+    currentTypeSystemInfo = nextTypeSystemInfo;
+    currentMethodDispatchInfo = nextMethodDispatchInfo;
+    currentIdentityComparison = nextIdentityComparison;
+    currentMethodOverloadResolution = nextMethodOverloadResolution;
 
     const beginnerExp = computeBeginnerExplanation(
       ev,
@@ -9317,6 +9707,15 @@ export function reconstructExecutionSteps(
           }
         : null,
       iteratorState: nextIteratorState ? { ...nextIteratorState } : null,
+      // Phase 15 Java OOP, Polymorphism & Type System
+      typeSystemInfo: nextTypeSystemInfo ? { ...nextTypeSystemInfo } : null,
+      methodDispatchInfo: nextMethodDispatchInfo ? { ...nextMethodDispatchInfo, candidateMethods: [...nextMethodDispatchInfo.candidateMethods] } : null,
+      identityComparison: nextIdentityComparison ? { ...nextIdentityComparison } : null,
+      methodOverloadResolution: nextMethodOverloadResolution ? { ...nextMethodOverloadResolution, argumentTypes: [...nextMethodOverloadResolution.argumentTypes], candidateSignatures: [...nextMethodOverloadResolution.candidateSignatures] } : null,
+      learningModeExplanation: {
+        beginner: generateBeginnerExplanation(ev, nextTypeSystemInfo, nextMethodDispatchInfo, nextIdentityComparison),
+        expert: generateExpertExplanation(ev, nextTypeSystemInfo, nextMethodDispatchInfo, nextIdentityComparison),
+      },
     });
   }
 

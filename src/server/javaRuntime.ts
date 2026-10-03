@@ -441,6 +441,51 @@ public class CodeFlowTracer {
     }
 
     // ==========================================
+    // PHASE 15: COMPLETE JAVA OOP & TYPE SYSTEM
+    // ==========================================
+
+    public static void objectIdentityCompare(String leftName, Object leftObj, String rightName, Object rightObj, boolean isIdentical, int line) {
+        String lId = leftObj == null ? "null" : ("obj-" + System.identityHashCode(leftObj));
+        String rId = rightObj == null ? "null" : ("obj-" + System.identityHashCode(rightObj));
+        recordEvent("{\\\"type\\\":\\\"OBJECT_IDENTITY_COMPARE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + leftName + "\\\",\\\"structureId\\\":\\\"" + rightName + "\\\",\\\"objectId\\\":\\\"" + lId + "\\\",\\\"refType\\\":\\\"" + rId + "\\\",\\\"conditionResult\\\":" + isIdentical + "}");
+    }
+
+    public static void equalityCompare(String leftName, Object leftObj, String rightName, Object rightObj, boolean isEqual, int line) {
+        String lId = leftObj == null ? "null" : ("obj-" + System.identityHashCode(leftObj));
+        String rId = rightObj == null ? "null" : ("obj-" + System.identityHashCode(rightObj));
+        recordEvent("{\\\"type\\\":\\\"EQUALITY_COMPARE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + leftName + "\\\",\\\"structureId\\\":\\\"" + rightName + "\\\",\\\"objectId\\\":\\\"" + lId + "\\\",\\\"refType\\\":\\\"" + rId + "\\\",\\\"conditionResult\\\":" + isEqual + "}");
+    }
+
+    public static void typeSystemBind(String varName, String declaredType, Object obj, int line) {
+        String runtimeType = obj == null ? "null" : obj.getClass().getSimpleName();
+        String objId = obj == null ? "null" : ("obj-" + System.identityHashCode(obj));
+        recordEvent("{\\\"type\\\":\\\"TYPE_SYSTEM_BIND\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"actualType\\\":\\\"" + runtimeType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"}");
+    }
+
+    public static void upcastEvent(String fromVar, String fromType, String toVar, String toType, Object obj, int line) {
+        String runtimeType = obj == null ? "null" : obj.getClass().getSimpleName();
+        String objId = obj == null ? "null" : ("obj-" + System.identityHashCode(obj));
+        recordEvent("{\\\"type\\\":\\\"UPCAST_EVENT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + toVar + "\\\",\\\"dataType\\\":\\\"" + toType + "\\\",\\\"actualType\\\":\\\"" + runtimeType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"detail\\\":\\\"Upcast from " + fromType + " to " + toType + "\\\"}");
+    }
+
+    public static void downcastEvent(String fromVar, String fromType, String toVar, String toType, Object obj, boolean success, int line) {
+        String runtimeType = obj == null ? "null" : obj.getClass().getSimpleName();
+        String objId = obj == null ? "null" : ("obj-" + System.identityHashCode(obj));
+        recordEvent("{\\\"type\\\":\\\"DOWNCAST_EVENT\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + toVar + "\\\",\\\"dataType\\\":\\\"" + toType + "\\\",\\\"actualType\\\":\\\"" + runtimeType + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"castSuccess\\\":" + success + ",\\\"detail\\\":\\\"Downcast from " + fromType + " to " + toType + "\\\"}");
+    }
+
+    public static void superFieldAccess(String childClass, String parentClass, String fieldName, Object val, int line) {
+        recordEvent("{\\\"type\\\":\\\"SUPER_FIELD_ACCESS\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"className\\\":\\\"" + childClass + "\\\",\\\"superClassName\\\":\\\"" + parentClass + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"value\\\":" + formatValue(val) + "}");
+    }
+
+    public static void methodDispatchStep(String varName, String refType, Object targetObj, String methodName, String resolvedMethod, int line) {
+        if (targetObj == null) return;
+        String runtimeType = targetObj.getClass().getSimpleName();
+        String objId = "obj-" + System.identityHashCode(targetObj);
+        recordEvent("{\\\"type\\\":\\\"METHOD_DISPATCH_STEP\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"refType\\\":\\\"" + refType + "\\\",\\\"actualType\\\":\\\"" + runtimeType + "\\\",\\\"methodName\\\":\\\"" + methodName + "\\\",\\\"resolvedMethod\\\":\\\"" + resolvedMethod + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"}");
+    }
+
+    // ==========================================
     // PHASE 11: CONSTRUCTORS & STRINGBUILDER
     // ==========================================
 

@@ -685,7 +685,21 @@ export type EventType =
   | 'INNER_CLASS_INIT'
   | 'STATIC_NESTED_CLASS_INIT'
   | 'VARARGS_BIND'
-  | 'GENERIC_TYPE_RESOLVE';
+  | 'GENERIC_TYPE_RESOLVE'
+  // Phase 15 Java OOP, Polymorphism & Type System Events
+  | 'OBJECT_IDENTITY_COMPARE'
+  | 'EQUALITY_COMPARE'
+  | 'METHOD_DISPATCH_STEP'
+  | 'METHOD_OVERLOAD_RESOLVE'
+  | 'TYPE_SYSTEM_BIND'
+  | 'UPCAST_EVENT'
+  | 'DOWNCAST_EVENT'
+  | 'DOWNCAST_FAILED'
+  | 'INSTANCEOF_EVAL'
+  | 'NULL_DEREFERENCE_WARNING'
+  | 'SUPER_FIELD_ACCESS'
+  | 'FINAL_VARIABLE_ASSIGN'
+  | 'FINAL_VIOLATION_ERROR';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -1656,6 +1670,53 @@ export interface IteratorState {
   action?: 'next' | 'previous' | 'hasNext' | 'hasPrevious';
 }
 
+export interface TypeSystemInfo {
+  variableName: string;
+  declaredType: string;
+  referenceType: string;
+  runtimeType: string;
+  genericTypeMetadata?: string;
+  typeBounds?: string;
+  objectId?: string;
+  isUpcast?: boolean;
+  isDowncast?: boolean;
+  castSuccess?: boolean;
+  instanceofChecks?: Array<{ targetType: string; result: boolean }>;
+  explanation: string;
+}
+
+export interface MethodDispatchInfo {
+  callSite: string;
+  invokingVariable: string;
+  referenceType: string;
+  runtimeType: string;
+  methodName: string;
+  candidateMethods: string[];
+  overrideFound: boolean;
+  selectedImplementation: string;
+  dispatchType: 'DYNAMIC_DISPATCH' | 'STATIC_METHOD' | 'SUPER_METHOD' | 'INTERFACE_DISPATCH';
+  whyExplanation: string;
+}
+
+export interface ObjectIdentityComparison {
+  leftOperand: string;
+  rightOperand: string;
+  leftObjectId?: string;
+  rightObjectId?: string;
+  comparisonType: 'IDENTITY_EQ' | 'EQUALS_METHOD';
+  isIdentical: boolean;
+  explanation: string;
+}
+
+export interface MethodOverloadResolution {
+  methodName: string;
+  argumentTypes: string[];
+  candidateSignatures: string[];
+  selectedSignature: string;
+  resolutionType: 'COMPILE_TIME_STATIC_BINDING';
+  explanation: string;
+}
+
 export interface ExecutionStep {
   stepIndex: number;
   totalSteps?: number;
@@ -1704,6 +1765,12 @@ export interface ExecutionStep {
   oopRelationships?: OOPRelationship[];
   streamPipeline?: StreamPipelineState | null;
   iteratorState?: IteratorState | null;
+  // Phase 15 Java OOP, Polymorphism & Type System
+  typeSystemInfo?: TypeSystemInfo | null;
+  methodDispatchInfo?: MethodDispatchInfo | null;
+  identityComparison?: ObjectIdentityComparison | null;
+  methodOverloadResolution?: MethodOverloadResolution | null;
+  learningModeExplanation?: { beginner: string; expert: string };
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1728,6 +1795,7 @@ export interface CodePreset {
     | 'Java Multithreading & Concurrency'
     | 'Java OOP & Language Advanced'
     | 'Java Collections & Streams'
+    | 'Java OOP, Polymorphism & Type System'
     | 'Custom Code';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;

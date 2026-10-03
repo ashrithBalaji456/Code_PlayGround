@@ -1,17 +1,55 @@
 import React, { useState } from 'react';
-import { ExecutionStep, HeapObject, ClassMetadata, OOPRelationship, PolymorphismInfo, StreamPipelineState, IteratorState } from '../../types/execution';
-import { GitBranch, Layers, Box, Cpu, ArrowRight, CheckCircle, XCircle, Clock, Shield, Compass, Sparkles } from 'lucide-react';
+import {
+  ExecutionStep,
+  HeapObject,
+  ClassMetadata,
+  OOPRelationship,
+  PolymorphismInfo,
+  StreamPipelineState,
+  IteratorState,
+  TypeSystemInfo,
+  MethodDispatchInfo,
+  ObjectIdentityComparison,
+  MethodOverloadResolution,
+} from '../../types/execution';
+import {
+  GitBranch,
+  Layers,
+  Box,
+  Cpu,
+  ArrowRight,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Shield,
+  Compass,
+  Sparkles,
+  Scale,
+  BookOpen,
+  Binary,
+  Link2,
+  Lock,
+  Eye,
+  AlertTriangle,
+} from 'lucide-react';
 
 interface OOPInspectorPanelProps {
   currentStep: ExecutionStep | null;
 }
 
 export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentStep }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'polymorphism' | 'object' | 'class' | 'relationships' | 'streams'>('polymorphism');
+  const [activeSubTab, setActiveSubTab] = useState<
+    'polymorphism' | 'typesystem' | 'identity' | 'object' | 'class' | 'relationships' | 'streams'
+  >('polymorphism');
+  const [isExpertMode, setIsExpertMode] = useState<boolean>(false);
   const [selectedObjectId, setSelectedObjectId] = useState<string>('');
   const [selectedClassName, setSelectedClassName] = useState<string>('');
 
   const polyInfo: PolymorphismInfo | null = currentStep?.polymorphismInfo || null;
+  const typeSys: TypeSystemInfo | null = currentStep?.typeSystemInfo || null;
+  const dispatchInfo: MethodDispatchInfo | null = currentStep?.methodDispatchInfo || null;
+  const identityCmp: ObjectIdentityComparison | null = currentStep?.identityComparison || null;
+  const overloadRes: MethodOverloadResolution | null = currentStep?.methodOverloadResolution || null;
   const heap: HeapObject[] = currentStep?.heap || [];
   const classMeta: Record<string, ClassMetadata> = currentStep?.classMetadata || {};
   const relationships: OOPRelationship[] = currentStep?.oopRelationships || [];
@@ -20,12 +58,20 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
 
   // Active object for Object Inspector
   const activeObjId = selectedObjectId || (heap.length > 0 ? heap[heap.length - 1].id : '');
-  const activeObj = heap.find((o) => o.id === activeObjId || o.objectId === activeObjId) || (heap.length > 0 ? heap[heap.length - 1] : null);
+  const activeObj =
+    heap.find((o) => o.id === activeObjId || o.objectId === activeObjId) ||
+    (heap.length > 0 ? heap[heap.length - 1] : null);
 
   // Active class for Class Inspector
   const classNames = Object.keys(classMeta);
   const activeClsName = selectedClassName || (classNames.length > 0 ? classNames[0] : '');
-  const activeCls = classMeta[activeClsName] || (classNames.length > 0 ? classMeta[classNames[0]] : null);
+  const activeCls =
+    classMeta[activeClsName] || (classNames.length > 0 ? classMeta[classNames[0]] : null);
+
+  // Aliased objects on heap (objects with multiple references pointing to them)
+  const aliasedObjects = heap.filter(
+    (h) => (h.referencesFrom && h.referencesFrom.length > 1) || (h as any).aliases?.length > 1
+  );
 
   return (
     <div className="h-full flex flex-col bg-[#0d1117] text-[#f0f6fc] font-sans overflow-hidden border border-[#30363d] rounded-lg">
@@ -41,8 +87,34 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
             }`}
           >
             <GitBranch className="w-3.5 h-3.5" />
-            <span>Polymorphism & Dispatch</span>
-            {polyInfo && <span className="w-2 h-2 rounded-full bg-[#3fb950] animate-pulse" />}
+            <span>Dispatch & Overrides</span>
+            {(polyInfo || dispatchInfo) && <span className="w-2 h-2 rounded-full bg-[#3fb950] animate-pulse" />}
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('typesystem')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+              activeSubTab === 'typesystem'
+                ? 'bg-[#1f6feb] text-white shadow-sm'
+                : 'text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d]'
+            }`}
+          >
+            <Binary className="w-3.5 h-3.5" />
+            <span>Type System & Casts</span>
+            {typeSys && <span className="w-2 h-2 rounded-full bg-[#58a6ff] animate-pulse" />}
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('identity')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+              activeSubTab === 'identity'
+                ? 'bg-[#1f6feb] text-white shadow-sm'
+                : 'text-[#8b949e] hover:text-[#f0f6fc] hover:bg-[#21262d]'
+            }`}
+          >
+            <Scale className="w-3.5 h-3.5" />
+            <span>Identity & Aliasing</span>
+            {identityCmp && <span className="w-2 h-2 rounded-full bg-[#d29922] animate-pulse" />}
           </button>
 
           <button
@@ -54,7 +126,7 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
             }`}
           >
             <Box className="w-3.5 h-3.5" />
-            <span>Object Inspector</span>
+            <span>Objects</span>
             <span className="text-[10px] bg-[#30363d] px-1.5 rounded-full">{heap.length}</span>
           </button>
 
@@ -67,7 +139,7 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Class Inspector</span>
+            <span>Class Hierarchy</span>
             <span className="text-[10px] bg-[#30363d] px-1.5 rounded-full">{classNames.length}</span>
           </button>
 
@@ -80,7 +152,7 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
             }`}
           >
             <Compass className="w-3.5 h-3.5" />
-            <span>OOP Relationships</span>
+            <span>OOP Map</span>
             <span className="text-[10px] bg-[#30363d] px-1.5 rounded-full">{relationships.length}</span>
           </button>
 
@@ -94,19 +166,48 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Streams & Iterators</span>
-            {(streamPipeline || iteratorState) && <span className="w-2 h-2 rounded-full bg-[#d29922] animate-pulse" />}
           </button>
         </div>
 
-        <div className="text-[11px] font-mono text-[#8b949e] hidden sm:block">
-          Step {currentStep ? currentStep.stepIndex + 1 : 0} of {currentStep ? currentStep.totalSteps : 0}
+        {/* Mode Toggle & Step Counter */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsExpertMode(!isExpertMode)}
+            className={`px-2 py-0.5 text-[11px] font-semibold rounded border transition-all ${
+              isExpertMode
+                ? 'bg-[#6e40c9]/30 text-[#d2a8ff] border-[#8957e5]'
+                : 'bg-[#21262d] text-[#8b949e] border-[#30363d] hover:text-[#f0f6fc]'
+            }`}
+            title="Toggle between Beginner and Expert Educational Mode"
+          >
+            {isExpertMode ? '🎓 Expert Mode' : '🌱 Beginner Mode'}
+          </button>
+          <div className="text-[11px] font-mono text-[#8b949e] hidden sm:block">
+            Step {currentStep ? currentStep.stepIndex + 1 : 0} of {currentStep ? currentStep.totalSteps : 0}
+          </div>
         </div>
       </div>
+
+      {/* Mode Explanation Banner */}
+      {currentStep?.learningModeExplanation && (
+        <div className="px-3 py-1.5 bg-[#161b22]/70 border-b border-[#30363d] text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
+            <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-[#388bfd]/20 text-[#58a6ff]">
+              {isExpertMode ? 'JVM Execution Trace' : 'Concept Explanation'}
+            </span>
+            <span className="text-[#c9d1d9] truncate">
+              {isExpertMode
+                ? currentStep.learningModeExplanation.expert
+                : currentStep.learningModeExplanation.beginner}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Sub-Tab Content View */}
       <div className="flex-1 overflow-y-auto p-3">
         {/* ======================================================== */}
-        {/* 1. POLYMORPHISM INSPECTOR (Section 65)                    */}
+        {/* 1. POLYMORPHISM & METHOD DISPATCH                        */}
         {/* ======================================================== */}
         {activeSubTab === 'polymorphism' && (
           <div className="space-y-3">
@@ -114,10 +215,10 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
               <div>
                 <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
                   <GitBranch className="w-4 h-4 text-[#58a6ff]" />
-                  Polymorphism & Dynamic Dispatch Inspector
+                  Dynamic Method Dispatch & Overloading
                 </h3>
                 <p className="text-xs text-[#8b949e]">
-                  Visualizes declared reference types vs actual runtime heap types and virtual method resolution.
+                  Dynamic dispatch resolves overridden methods at runtime via actual heap instance headers.
                 </p>
               </div>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30">
@@ -125,25 +226,26 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
               </span>
             </div>
 
-            {polyInfo ? (
+            {/* Dynamic Dispatch Details */}
+            {dispatchInfo || polyInfo ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Declared vs Runtime Card */}
                 <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
                   <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
-                    Type Comparison
+                    Type Comparison (Reference vs Heap)
                   </div>
                   <div className="flex items-center justify-between bg-[#0d1117] p-2.5 rounded border border-[#21262d]">
                     <div>
                       <div className="text-[11px] text-[#8b949e]">Declared Reference Type</div>
                       <div className="text-sm font-bold font-mono text-[#58a6ff]">
-                        {polyInfo.declaredType || 'Object'}
+                        {dispatchInfo?.referenceType || polyInfo?.declaredType || 'Object'}
                       </div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-[#8b949e]" />
                     <div className="text-right">
                       <div className="text-[11px] text-[#8b949e]">Actual Runtime Heap Type</div>
                       <div className="text-sm font-bold font-mono text-[#3fb950]">
-                        {polyInfo.runtimeType || 'Unknown'}
+                        {dispatchInfo?.runtimeType || polyInfo?.runtimeType || 'Unknown'}
                       </div>
                     </div>
                   </div>
@@ -152,13 +254,13 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
                     <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
                       <span className="text-[#8b949e]">Variable:</span>{' '}
                       <span className="font-mono font-semibold text-[#e3b341]">
-                        {polyInfo.variableName || 'reference'}
+                        {dispatchInfo?.invokingVariable || polyInfo?.variableName || 'reference'}
                       </span>
                     </div>
                     <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <span className="text-[#8b949e]">Heap Object:</span>{' '}
+                      <span className="text-[#8b949e]">Dispatch Strategy:</span>{' '}
                       <span className="font-mono font-semibold text-[#a371f7]">
-                        {polyInfo.objectId || 'object-1'}
+                        {dispatchInfo?.dispatchType || 'DYNAMIC_DISPATCH'}
                       </span>
                     </div>
                   </div>
@@ -172,33 +274,68 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
                   <div className="bg-[#0d1117] p-2.5 rounded border border-[#21262d] space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[#8b949e]">Method Invoked:</span>
-                      <span className="font-mono text-[#f0f6fc]">{polyInfo.methodName || 'method()'}</span>
+                      <span className="font-mono text-[#f0f6fc]">
+                        {dispatchInfo?.methodName || polyInfo?.methodName || 'method()'}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#8b949e]">Resolved Implementation:</span>
+                      <span className="text-[#8b949e]">Resolved Target:</span>
                       <span className="font-mono font-bold text-[#3fb950]">
-                        {polyInfo.resolvedImplementation || `${polyInfo.runtimeType}.${polyInfo.methodName}`}
+                        {dispatchInfo?.selectedImplementation ||
+                          polyInfo?.resolvedImplementation ||
+                          `${polyInfo?.runtimeType}.${polyInfo?.methodName}`}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[#8b949e]">Overridden:</span>
-                      <span className="font-semibold text-[#58a6ff]">YES (Dynamic Dispatch)</span>
+                      <span className="font-semibold text-[#58a6ff]">
+                        {dispatchInfo?.overrideFound !== false ? 'YES (Dynamic Dispatch)' : 'DIRECT CALL'}
+                      </span>
                     </div>
                   </div>
 
                   <div className="text-[11px] bg-[#388bfd]/10 text-[#58a6ff] p-2 rounded border border-[#388bfd]/20">
-                    <strong>Why this resolved:</strong> The JVM virtual method table (vtable) looked up the implementation on the actual heap object (<span className="font-mono">{polyInfo.runtimeType}</span>) rather than the declared reference (<span className="font-mono">{polyInfo.declaredType}</span>).
+                    <strong>Why this resolved:</strong>{' '}
+                    {dispatchInfo?.whyExplanation ||
+                      'The JVM inspects the object header on the heap at runtime and dynamically dispatches to the subclass implementation.'}
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : null}
+
+            {/* Overload Resolution Card */}
+            {overloadRes && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                    Compile-Time Method Overloading
+                  </div>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#8957e5]/20 text-[#d2a8ff] border border-[#8957e5]/30">
+                    STATIC EARLY BINDING
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <span className="text-[#8b949e]">Selected Signature:</span>{' '}
+                    <span className="font-mono font-bold text-[#f0f6fc]">{overloadRes.selectedSignature}</span>
+                  </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <span className="text-[#8b949e]">Argument Types:</span>{' '}
+                    <span className="font-mono text-[#58a6ff]">{overloadRes.argumentTypes.join(', ')}</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#8b949e] bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                  {overloadRes.explanation}
+                </p>
+              </div>
+            )}
+
+            {!dispatchInfo && !polyInfo && !overloadRes && (
               <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] space-y-2">
                 <GitBranch className="w-8 h-8 mx-auto text-[#484f58]" />
-                <p className="text-xs">
-                  No polymorphic method dispatch on the current execution step.
-                </p>
+                <p className="text-xs">No polymorphic method dispatch on the current execution step.</p>
                 <p className="text-[11px] text-[#6e7681]">
-                  Step through your program to see declared reference types dispatch dynamically to runtime subclasses.
+                  Step through your program to observe declared reference types dispatch dynamically to runtime subclasses.
                 </p>
               </div>
             )}
@@ -206,7 +343,241 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
         )}
 
         {/* ======================================================== */}
-        {/* 2. OBJECT INSPECTOR (Section 64)                         */}
+        {/* 2. TYPE SYSTEM & CASTING                                 */}
+        {/* ======================================================== */}
+        {activeSubTab === 'typesystem' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
+                  <Binary className="w-4 h-4 text-[#58a6ff]" />
+                  Java Type System, Upcasting, Downcasting & instanceof
+                </h3>
+                <p className="text-xs text-[#8b949e]">
+                  Visualizes reference widening (upcasting), narrowing (downcasting), and instanceof type checks.
+                </p>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#388bfd]/20 text-[#58a6ff] border border-[#388bfd]/30">
+                TYPE VERIFIED
+              </span>
+            </div>
+
+            {typeSys ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+                    <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                      Reference Binding
+                    </div>
+                    <div className="bg-[#0d1117] p-2.5 rounded border border-[#21262d] space-y-1 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#8b949e]">Variable Name:</span>
+                        <span className="font-mono font-bold text-[#e3b341]">{typeSys.variableName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#8b949e]">Declared / Reference Type:</span>
+                        <span className="font-mono text-[#58a6ff]">{typeSys.declaredType}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#8b949e]">Runtime Object Type:</span>
+                        <span className="font-mono text-[#3fb950]">{typeSys.runtimeType}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#8b949e]">Target Object ID:</span>
+                        <span className="font-mono text-[#a371f7]">{typeSys.objectId || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+                    <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                      Casting Operations
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#8b949e]">Classification:</span>
+                        {typeSys.isUpcast ? (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#3fb950]/20 text-[#3fb950] border border-[#3fb950]/30">
+                            UPCASTING (Widening, Safe)
+                          </span>
+                        ) : typeSys.isDowncast ? (
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                              typeSys.castSuccess !== false
+                                ? 'bg-[#58a6ff]/20 text-[#58a6ff] border border-[#58a6ff]/30'
+                                : 'bg-[#f85149]/20 text-[#f85149] border border-[#f85149]/30'
+                            }`}
+                          >
+                            {typeSys.castSuccess !== false ? 'DOWNCASTING (Narrowing, Succeeded)' : 'DOWNCAST FAILED'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#30363d] text-[#8b949e]">
+                            DIRECT ASSIGNMENT
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-[#8b949e] bg-[#0d1117] p-2 rounded border border-[#21262d] mt-2">
+                        {typeSys.explanation}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* instanceof checks */}
+                {typeSys.instanceofChecks && typeSys.instanceofChecks.length > 0 && (
+                  <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+                    <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                      instanceof Type Evaluations
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {typeSys.instanceofChecks.map((check, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-[#0d1117] p-2 rounded border border-[#21262d] flex items-center justify-between text-xs"
+                        >
+                          <span className="font-mono text-[#f0f6fc]">
+                            {typeSys.variableName} instanceof {check.targetType}
+                          </span>
+                          <span
+                            className={`font-bold px-2 py-0.5 rounded text-[10px] ${
+                              check.result
+                                ? 'bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30'
+                                : 'bg-[#da3633]/20 text-[#f85149] border border-[#da3633]/30'
+                            }`}
+                          >
+                            {check.result ? 'TRUE' : 'FALSE'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Generics & Erasure Note */}
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-1.5">
+                  <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-[#a371f7]" />
+                    <span>Java Generics & Type Erasure Principle</span>
+                  </div>
+                  <p className="text-[11px] text-[#8b949e]">
+                    Compile-time generic types (e.g. <span className="font-mono text-[#f0f6fc]">List&lt;T&gt;</span>,{' '}
+                    <span className="font-mono text-[#f0f6fc]">&lt;T extends Number&gt;</span>) are verified by javac and
+                    erased at runtime to their bounds (<span className="font-mono text-[#f0f6fc]">Object</span> or upper
+                    bound). No generic metadata remains on raw heap allocations.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] space-y-2">
+                <Binary className="w-8 h-8 mx-auto text-[#484f58]" />
+                <p className="text-xs">No active type system or casting event on this step.</p>
+                <p className="text-[11px] text-[#6e7681]">
+                  Step through your code to inspect reference types, runtime heap classes, and instanceof evaluations.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* 3. IDENTITY & ALIASING                                   */}
+        {/* ======================================================== */}
+        {activeSubTab === 'identity' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-[#d29922]" />
+                  Object Identity (==) vs Logical Equality (.equals)
+                </h3>
+                <p className="text-xs text-[#8b949e]">
+                  Compares raw memory address references vs semantic object equivalence, and tracks variable aliases.
+                </p>
+              </div>
+            </div>
+
+            {/* Active Identity Comparison */}
+            {identityCmp ? (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+                <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                  Active Comparison: {identityCmp.comparisonType === 'IDENTITY_EQ' ? '== (Pointer Identity)' : '.equals() (Logical Equivalence)'}
+                </div>
+                <div className="bg-[#0d1117] p-2.5 rounded border border-[#21262d] flex items-center justify-between text-xs">
+                  <div className="font-mono text-sm font-bold text-[#f0f6fc]">
+                    {identityCmp.leftOperand} {identityCmp.comparisonType === 'IDENTITY_EQ' ? '==' : '.equals('}{' '}
+                    {identityCmp.rightOperand}
+                    {identityCmp.comparisonType === 'EQUALS_METHOD' ? ')' : ''}
+                  </div>
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded text-xs ${
+                      identityCmp.isIdentical
+                        ? 'bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30'
+                        : 'bg-[#da3633]/20 text-[#f85149] border border-[#da3633]/30'
+                    }`}
+                  >
+                    {identityCmp.isIdentical ? 'TRUE (EQUAL)' : 'FALSE (NOT EQUAL)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <span className="text-[#8b949e]">Left Target Address:</span>{' '}
+                    <span className="font-mono text-[#58a6ff]">{identityCmp.leftObjectId || 'ptr-left'}</span>
+                  </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <span className="text-[#8b949e]">Right Target Address:</span>{' '}
+                    <span className="font-mono text-[#3fb950]">{identityCmp.rightObjectId || 'ptr-right'}</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#8b949e] bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                  {identityCmp.explanation}
+                </p>
+              </div>
+            ) : null}
+
+            {/* Aliasing Cards */}
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+              <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider flex items-center justify-between">
+                <span>Active Variable Aliasing on Heap</span>
+                <span className="text-[10px] text-[#8b949e] font-mono">{aliasedObjects.length} aliased object(s)</span>
+              </div>
+              {aliasedObjects.length > 0 ? (
+                <div className="space-y-2">
+                  {aliasedObjects.map((obj) => (
+                    <div
+                      key={obj.id}
+                      className="bg-[#0d1117] p-2.5 rounded border border-[#21262d] text-xs space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-[#f0f6fc]">
+                          {obj.type} (#{obj.id})
+                        </span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/30">
+                          SHARED INSTANCE
+                        </span>
+                      </div>
+                      <div className="text-[#8b949e]">
+                        Referenced by variables:{' '}
+                        <span className="font-mono font-bold text-[#58a6ff]">
+                          {obj.referencesFrom ? obj.referencesFrom.join(', ') : 'multiple variables'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#8b949e] italic">
+                        Mutating a field via any reference immediately affects all aliases because they share this exact heap memory instance.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#8b949e] bg-[#0d1117] p-2.5 rounded border border-[#21262d]">
+                  No multiple-reference aliases detected on the active heap step.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* 4. OBJECT INSPECTOR                                      */}
         {/* ======================================================== */}
         {activeSubTab === 'object' && (
           <div className="space-y-3">
@@ -220,118 +591,120 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
                   Inspects heap objects, instance fields, nested references, and garbage collector reachability.
                 </p>
               </div>
-
-              {/* Object Selector */}
-              {heap.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#8b949e]">Object:</span>
-                  <select
-                    value={activeObj?.id || ''}
-                    onChange={(e) => setSelectedObjectId(e.target.value)}
-                    className="bg-[#161b22] border border-[#30363d] text-xs rounded px-2 py-1 text-[#f0f6fc] font-mono focus:outline-none focus:border-[#58a6ff]"
-                  >
-                    {heap.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.className} ({o.id})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <span className="text-[10px] font-mono text-[#8b949e]">Total Heap: {heap.length}</span>
             </div>
 
-            {activeObj ? (
-              <div className="space-y-3">
-                {/* Object Metadata Bar */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-[#161b22] border border-[#30363d] p-2.5 rounded-lg">
-                    <div className="text-[10px] text-[#8b949e] uppercase font-semibold">Object ID</div>
-                    <div className="text-xs font-mono font-bold text-[#a371f7]">{activeObj.id}</div>
+            {heap.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Object Selector Column */}
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-2.5 space-y-1.5">
+                  <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-2">
+                    Heap Instances
                   </div>
-                  <div className="bg-[#161b22] border border-[#30363d] p-2.5 rounded-lg">
-                    <div className="text-[10px] text-[#8b949e] uppercase font-semibold">Runtime Class</div>
-                    <div className="text-xs font-mono font-bold text-[#3fb950]">{activeObj.className}</div>
-                  </div>
-                  <div className="bg-[#161b22] border border-[#30363d] p-2.5 rounded-lg">
-                    <div className="text-[10px] text-[#8b949e] uppercase font-semibold">Reachability</div>
-                    <div className="text-xs font-bold flex items-center gap-1">
-                      {activeObj.reachable !== false ? (
-                        <>
-                          <CheckCircle className="w-3 h-3 text-[#3fb950]" />
-                          <span className="text-[#3fb950]">Reachable</span>
-                        </>
+                  {heap.map((obj) => (
+                    <button
+                      key={obj.id}
+                      onClick={() => setSelectedObjectId(obj.id)}
+                      className={`w-full text-left p-2 rounded text-xs transition-all flex items-center justify-between ${
+                        obj.id === activeObjId
+                          ? 'bg-[#1f6feb] text-white font-semibold'
+                          : 'bg-[#0d1117] text-[#c9d1d9] hover:bg-[#21262d]'
+                      }`}
+                    >
+                      <div className="truncate">
+                        <div className="font-mono">{obj.type}</div>
+                        <div className="text-[10px] opacity-75">{obj.id}</div>
+                      </div>
+                      {obj.gcEligible ? (
+                        <span className="text-[9px] px-1 rounded bg-[#f85149]/20 text-[#f85149]">GC</span>
                       ) : (
-                        <>
-                          <XCircle className="w-3 h-3 text-[#f85149]" />
-                          <span className="text-[#f85149]">GC Eligible</span>
-                        </>
+                        <span className="text-[9px] px-1 rounded bg-[#3fb950]/20 text-[#3fb950]">Live</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Object Detail Card */}
+                {activeObj ? (
+                  <div className="md:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#21262d] pb-2">
+                      <div>
+                        <div className="text-sm font-bold font-mono text-[#58a6ff]">{activeObj.type}</div>
+                        <div className="text-[11px] text-[#8b949e] font-mono">ID: {activeObj.id}</div>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          activeObj.gcEligible
+                            ? 'bg-[#da3633]/20 text-[#f85149] border border-[#da3633]/30'
+                            : 'bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30'
+                        }`}
+                      >
+                        {activeObj.gcEligible ? 'REACHABILITY: GC ELIGIBLE' : 'REACHABILITY: ROOT REACHABLE'}
+                      </span>
+                    </div>
+
+                    {/* Instance Fields */}
+                    <div>
+                      <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5">
+                        Instance Fields
+                      </div>
+                      {activeObj.fields && Object.keys(activeObj.fields).length > 0 ? (
+                        <div className="bg-[#0d1117] rounded border border-[#21262d] divide-y divide-[#21262d]">
+                          {Object.entries(activeObj.fields).map(([fKey, fVal]) => (
+                            <div key={fKey} className="p-2 text-xs flex items-center justify-between">
+                              <span className="font-mono text-[#8b949e]">{fKey}</span>
+                              <span className="font-mono font-semibold text-[#f0f6fc]">
+                                {JSON.stringify(fVal)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] text-xs text-[#8b949e]">
+                          No instance fields defined.
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="bg-[#161b22] border border-[#30363d] p-2.5 rounded-lg">
-                    <div className="text-[10px] text-[#8b949e] uppercase font-semibold">Memory Size</div>
-                    <div className="text-xs font-mono text-[#8b949e]">
-                      {activeObj.estimatedBytes || 24} bytes (typical)
-                    </div>
-                  </div>
-                </div>
 
-                {/* References pointing to this object */}
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-2.5 text-xs">
-                  <span className="text-[#8b949e]">Pointing References:</span>{' '}
-                  {activeObj.referencesFrom && activeObj.referencesFrom.length > 0 ? (
-                    activeObj.referencesFrom.map((r, i) => (
-                      <span
-                        key={i}
-                        className="inline-block bg-[#0d1117] border border-[#30363d] px-1.5 py-0.5 rounded font-mono text-[#e3b341] mr-1"
-                      >
-                        {r}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-[#8b949e] italic">No active stack references</span>
-                  )}
-                </div>
-
-                {/* Fields Table */}
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg overflow-hidden">
-                  <div className="px-3 py-2 bg-[#21262d] text-xs font-semibold text-[#8b949e] border-b border-[#30363d] flex items-center justify-between">
-                    <span>Instance Fields</span>
-                    <span className="text-[10px] text-[#8b949e]">
-                      {Object.keys(activeObj.fields || {}).length} field(s)
-                    </span>
-                  </div>
-                  {Object.keys(activeObj.fields || {}).length > 0 ? (
-                    <div className="divide-y divide-[#30363d]/50 font-mono text-xs">
-                      {Object.entries(activeObj.fields).map(([fKey, fVal]) => {
-                        const isObjRef = typeof fVal === 'string' && fVal.startsWith('object-');
-                        return (
-                          <div key={fKey} className="px-3 py-2 flex items-center justify-between hover:bg-[#0d1117]/40">
-                            <span className="text-[#79c0ff]">{fKey}</span>
-                            <span className={isObjRef ? 'text-[#a371f7] font-bold' : 'text-[#f0f6fc]'}>
-                              {JSON.stringify(fVal)}
-                            </span>
+                    {/* References pointing to this object */}
+                    <div>
+                      <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5">
+                        Pointing References (Aliases)
+                      </div>
+                      <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] text-xs font-mono">
+                        {activeObj.referencesFrom && activeObj.referencesFrom.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {activeObj.referencesFrom.map((ref) => (
+                              <span
+                                key={ref}
+                                className="px-2 py-0.5 rounded bg-[#388bfd]/20 text-[#58a6ff] border border-[#388bfd]/30 font-semibold"
+                              >
+                                {ref}
+                              </span>
+                            ))}
                           </div>
-                        );
-                      })}
+                        ) : (
+                          <span className="text-[#8b949e]">No named local variables currently pointing to this object.</span>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="p-3 text-xs text-[#8b949e] text-center italic">
-                      No instance fields recorded.
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e]">
-                No heap objects instantiated yet.
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] space-y-2">
+                <Box className="w-8 h-8 mx-auto text-[#484f58]" />
+                <p className="text-xs">The Java Heap is currently empty.</p>
+                <p className="text-[11px] text-[#6e7681]">
+                  Objects allocated using the <span className="font-mono">new</span> keyword will appear here.
+                </p>
               </div>
             )}
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* 3. CLASS INSPECTOR (Section 66)                          */}
+        {/* 5. CLASS INSPECTOR                                       */}
         {/* ======================================================== */}
         {activeSubTab === 'class' && (
           <div className="space-y-3">
@@ -339,262 +712,265 @@ export const OOPInspectorPanel: React.FC<OOPInspectorPanelProps> = ({ currentSte
               <div>
                 <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
                   <Layers className="w-4 h-4 text-[#58a6ff]" />
-                  Class Metadata Inspector
+                  Class & Interface Metadata Inspector
                 </h3>
                 <p className="text-xs text-[#8b949e]">
-                  Inspects declared classes, superclasses, interfaces, and modifiers.
+                  Parsed declarations, modifiers, inheritance trees, and interfaces.
                 </p>
               </div>
-
-              {/* Class Selector */}
-              {classNames.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#8b949e]">Class:</span>
-                  <select
-                    value={activeCls?.className || ''}
-                    onChange={(e) => setSelectedClassName(e.target.value)}
-                    className="bg-[#161b22] border border-[#30363d] text-xs rounded px-2 py-1 text-[#f0f6fc] font-mono focus:outline-none focus:border-[#58a6ff]"
-                  >
-                    {classNames.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <span className="text-[10px] font-mono text-[#8b949e]">Classes: {classNames.length}</span>
             </div>
 
-            {activeCls ? (
-              <div className="space-y-3">
-                {/* Source Metadata Warning Badge (Section 66 & 78) */}
-                <div className="flex items-center justify-between bg-[#1f6feb]/10 border border-[#1f6feb]/30 px-3 py-1.5 rounded-lg text-xs">
-                  <div className="flex items-center gap-2 text-[#58a6ff]">
-                    <Shield className="w-3.5 h-3.5" />
-                    <span className="font-semibold">SOURCE METADATA</span>
+            {classNames.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* Class List Column */}
+                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-2.5 space-y-1.5">
+                  <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-2">
+                    Class Registry
                   </div>
-                  <span className="text-[11px] text-[#8b949e]">
-                    Parsed directly from Java declarations (static structure)
-                  </span>
+                  {classNames.map((name) => {
+                    const c = classMeta[name];
+                    return (
+                      <button
+                        key={name}
+                        onClick={() => setSelectedClassName(name)}
+                        className={`w-full text-left p-2 rounded text-xs transition-all flex items-center justify-between ${
+                          name === activeClsName
+                            ? 'bg-[#1f6feb] text-white font-semibold'
+                            : 'bg-[#0d1117] text-[#c9d1d9] hover:bg-[#21262d]'
+                        }`}
+                      >
+                        <span className="font-mono">{name}</span>
+                        {c.isInterface ? (
+                          <span className="text-[9px] px-1 rounded bg-[#a371f7]/20 text-[#a371f7]">interface</span>
+                        ) : c.isAbstract ? (
+                          <span className="text-[9px] px-1 rounded bg-[#e3b341]/20 text-[#e3b341]">abstract</span>
+                        ) : (
+                          <span className="text-[9px] px-1 rounded bg-[#3fb950]/20 text-[#3fb950]">class</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Class Details Card */}
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-mono font-bold text-[#f0f6fc]">
-                      {activeCls.accessModifier} {activeCls.isAbstract ? 'abstract ' : ''}
-                      {activeCls.isFinal ? 'final ' : ''}
-                      {activeCls.isInterface ? 'interface ' : activeCls.isEnum ? 'enum ' : 'class '}
-                      <span className="text-[#3fb950]">{activeCls.className}</span>
-                    </span>
-                    <span className="text-[10px] bg-[#30363d] px-2 py-0.5 rounded font-mono text-[#8b949e]">
-                      {activeCls.packageName || 'default package'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <span className="text-[#8b949e]">Superclass:</span>{' '}
-                      <span className="font-mono text-[#58a6ff] font-semibold">
-                        {activeCls.superClass || 'java.lang.Object'}
+                {/* Class Detail View */}
+                {activeCls ? (
+                  <div className="md:col-span-2 bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#21262d] pb-2">
+                      <div>
+                        <div className="text-sm font-bold font-mono text-[#58a6ff]">{activeCls.className}</div>
+                        <div className="text-[11px] text-[#8b949e]">
+                          {activeCls.superClass && (
+                            <span>
+                              extends <span className="font-mono text-[#f0f6fc]">{activeCls.superClass}</span>{' '}
+                            </span>
+                          )}
+                          {activeCls.interfaces && activeCls.interfaces.length > 0 && (
+                            <span>
+                              implements{' '}
+                              <span className="font-mono text-[#a371f7]">{activeCls.interfaces.join(', ')}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#30363d] text-[#8b949e]">
+                        {activeCls.sourceType}
                       </span>
                     </div>
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <span className="text-[#8b949e]">Interfaces:</span>{' '}
-                      {activeCls.interfaces && activeCls.interfaces.length > 0 ? (
-                        activeCls.interfaces.map((iface, i) => (
-                          <span
-                            key={i}
-                            className="inline-block bg-[#161b22] border border-[#30363d] px-1.5 py-0.5 rounded font-mono text-[#e3b341] mr-1"
-                          >
-                            {iface}
-                          </span>
-                        ))
+
+                    {/* Methods */}
+                    <div>
+                      <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider mb-1.5">
+                        Declared Methods
+                      </div>
+                      {activeCls.methods && activeCls.methods.length > 0 ? (
+                        <div className="bg-[#0d1117] rounded border border-[#21262d] divide-y divide-[#21262d]">
+                          {activeCls.methods.map((m, idx) => (
+                            <div key={idx} className="p-2 text-xs flex items-center justify-between">
+                              <span className="font-mono text-[#f0f6fc]">
+                                {m.accessModifier} {m.returnType} {m.name}()
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {m.isStatic && (
+                                  <span className="text-[9px] px-1 rounded bg-[#388bfd]/20 text-[#58a6ff]">
+                                    static
+                                  </span>
+                                )}
+                                {m.isOverridden && (
+                                  <span className="text-[9px] px-1 rounded bg-[#3fb950]/20 text-[#3fb950]">
+                                    @Override
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
-                        <span className="text-[#8b949e] italic">None</span>
+                        <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] text-xs text-[#8b949e]">
+                          No explicit methods found.
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
+                ) : null}
               </div>
             ) : (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e]">
-                No class metadata available.
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] space-y-2">
+                <Layers className="w-8 h-8 mx-auto text-[#484f58]" />
+                <p className="text-xs">No class metadata found.</p>
               </div>
             )}
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* 4. OOP RELATIONSHIPS (Section 67)                        */}
+        {/* 6. OOP RELATIONSHIPS MAP                                 */}
         {/* ======================================================== */}
         {activeSubTab === 'relationships' && (
           <div className="space-y-3">
-            <div className="border-b border-[#30363d] pb-2">
-              <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
-                <Compass className="w-4 h-4 text-[#58a6ff]" />
-                OOP Relationships (Inheritance, Implementation, Composition, Aggregation)
-              </h3>
-              <p className="text-xs text-[#8b949e]">
-                Structural relationships between Java types and runtime objects.
-              </p>
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-[#58a6ff]" />
+                  OOP Structural Relationships
+                </h3>
+                <p className="text-xs text-[#8b949e]">
+                  Inheritance (is-a), Implementation, Composition, and Aggregation.
+                </p>
+              </div>
+              <span className="text-[10px] font-mono text-[#8b949e]">Edges: {relationships.length}</span>
             </div>
 
             {relationships.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                 {relationships.map((rel, idx) => (
                   <div
                     key={idx}
-                    className="bg-[#161b22] border border-[#30363d] p-2.5 rounded-lg flex items-center justify-between text-xs"
+                    className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2 flex flex-col justify-between"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-[#f0f6fc]">{rel.from}</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-[#8b949e]" />
-                      <span className="font-mono font-bold text-[#58a6ff]">{rel.to}</span>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          rel.type === 'INHERITANCE'
+                            ? 'bg-[#388bfd]/20 text-[#58a6ff]'
+                            : rel.type === 'IMPLEMENTATION'
+                            ? 'bg-[#a371f7]/20 text-[#a371f7]'
+                            : rel.type === 'COMPOSITION'
+                            ? 'bg-[#e3b341]/20 text-[#e3b341]'
+                            : 'bg-[#3fb950]/20 text-[#3fb950]'
+                        }`}
+                      >
+                        {rel.type}
+                      </span>
+                      <span className="text-[9px] text-[#8b949e]">{rel.nature}</span>
                     </div>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                        rel.type === 'INHERITANCE'
-                          ? 'bg-[#388bfd]/20 text-[#58a6ff] border border-[#388bfd]/30'
-                          : rel.type === 'IMPLEMENTATION'
-                          ? 'bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30'
-                          : rel.type === 'COMPOSITION'
-                          ? 'bg-[#a371f7]/20 text-[#d2a8ff] border border-[#a371f7]/30'
-                          : 'bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/30'
-                      }`}
-                    >
-                      {rel.label || rel.type}
-                    </span>
+                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] flex items-center justify-between text-xs font-mono">
+                      <span className="font-bold text-[#f0f6fc]">{rel.from}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#8b949e]" />
+                      <span className="font-bold text-[#58a6ff]">{rel.to}</span>
+                    </div>
+                    {rel.label && (
+                      <div className="text-[10px] text-[#8b949e]">
+                        Field/Role: <span className="font-mono text-[#f0f6fc]">{rel.label}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e]">
-                No OOP relationships detected in the current code snippet.
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] space-y-2">
+                <Compass className="w-8 h-8 mx-auto text-[#484f58]" />
+                <p className="text-xs">No explicit OOP relationships declared.</p>
               </div>
             )}
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* 5. STREAMS & ITERATORS (Section 68 & 69)                  */}
+        {/* 7. STREAMS & ITERATORS                                   */}
         {/* ======================================================== */}
         {activeSubTab === 'streams' && (
-          <div className="space-y-4">
-            {/* Stream Pipeline Section */}
-            <div>
-              <div className="border-b border-[#30363d] pb-2 mb-3">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-[#30363d] pb-2">
+              <div>
                 <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#e3b341]" />
-                  Java Stream Pipeline Flow
+                  <Sparkles className="w-4 h-4 text-[#d29922]" />
+                  Java Streams & Iterator Cursor View
                 </h3>
                 <p className="text-xs text-[#8b949e]">
-                  Step-by-step element evaluation across intermediate and terminal operations with laziness visualization.
+                  Flowing pipeline stages, lazy evaluation states, and active iterator pointers.
                 </p>
               </div>
-
-              {streamPipeline ? (
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[#8b949e]">
-                      Source Collection: <span className="font-mono text-[#58a6ff]">{streamPipeline.sourceCollection}</span>
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                        streamPipeline.isLazy
-                          ? 'bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/30'
-                          : 'bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30'
-                      }`}
-                    >
-                      {streamPipeline.isLazy ? 'LAZY (Deferred Execution)' : 'TERMINAL EVALUATED'}
-                    </span>
-                  </div>
-
-                  {/* Pipeline Flow Stages */}
-                  <div className="flex items-center gap-2 overflow-x-auto py-2">
-                    {streamPipeline.stages.map((stg, i) => (
-                      <React.Fragment key={i}>
-                        <div className="bg-[#0d1117] border border-[#30363d] rounded-lg p-2.5 text-center min-w-[100px] flex-shrink-0">
-                          <div className="text-[10px] text-[#8b949e] uppercase font-semibold">Stage {i + 1}</div>
-                          <div className="text-xs font-mono font-bold text-[#f0f6fc] mt-0.5">
-                            {stg.operation}()
-                          </div>
-                        </div>
-                        {i < streamPipeline.stages.length - 1 && (
-                          <ArrowRight className="w-4 h-4 text-[#8b949e] flex-shrink-0" />
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </div>
-
-                  {streamPipeline.currentElement !== undefined && (
-                    <div className="bg-[#0d1117] border border-[#21262d] p-2.5 rounded text-xs flex items-center justify-between">
-                      <span className="text-[#8b949e]">Current Element Evaluated:</span>
-                      <span className="font-mono font-bold text-[#3fb950]">
-                        {JSON.stringify(streamPipeline.currentElement)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 text-center text-xs text-[#8b949e]">
-                  No active Stream pipeline on this step.
-                </div>
-              )}
             </div>
+
+            {/* Stream Pipeline Section */}
+            {streamPipeline ? (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                    Pipeline Stages ({streamPipeline.sourceCollection || 'source'})
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                      streamPipeline.terminalOpExecuted
+                        ? 'bg-[#238636]/20 text-[#3fb950] border border-[#238636]/30'
+                        : 'bg-[#d29922]/20 text-[#e3b341] border border-[#d29922]/30'
+                    }`}
+                  >
+                    {streamPipeline.terminalOpExecuted ? 'TERMINAL OP EXECUTED' : 'LAZY / INTERMEDIATE'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto py-2">
+                  {streamPipeline.stages.map((stg, sIdx) => (
+                    <div key={sIdx} className="flex items-center gap-2 flex-shrink-0">
+                      <div className="bg-[#0d1117] border border-[#30363d] rounded p-2 text-center min-w-[90px]">
+                        <div className="text-[10px] text-[#8b949e] uppercase">{stg.operation}</div>
+                        <div className="text-xs font-mono font-bold text-[#58a6ff]">
+                          {stg.description || stg.operation}
+                        </div>
+                      </div>
+                      {sIdx < streamPipeline.stages.length - 1 && (
+                        <ArrowRight className="w-3.5 h-3.5 text-[#8b949e]" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {/* Iterator Cursor Section */}
-            <div>
-              <div className="border-b border-[#30363d] pb-2 mb-3">
-                <h3 className="text-sm font-bold text-[#f0f6fc] flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-[#58a6ff]" />
-                  Iterator Cursor Visualizer
-                </h3>
-                <p className="text-xs text-[#8b949e]">
-                  Tracks Iterator and ListIterator cursor index, direction, and hasNext state.
-                </p>
-              </div>
-
-              {iteratorState ? (
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <div className="text-[10px] text-[#8b949e]">Iterator ID</div>
-                      <div className="font-mono font-bold text-[#58a6ff]">{iteratorState.iteratorId}</div>
-                    </div>
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <div className="text-[10px] text-[#8b949e]">Cursor Index</div>
-                      <div className="font-mono font-bold text-[#e3b341]">{iteratorState.cursorIndex}</div>
-                    </div>
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <div className="text-[10px] text-[#8b949e]">hasNext()</div>
-                      <div className={`font-bold ${iteratorState.hasNext ? 'text-[#3fb950]' : 'text-[#f85149]'}`}>
-                        {iteratorState.hasNext ? 'true' : 'false'}
-                      </div>
-                    </div>
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
-                      <div className="text-[10px] text-[#8b949e]">Direction</div>
-                      <div className="font-bold text-[#a371f7]">
-                        {iteratorState.direction || 'FORWARD'}
-                      </div>
+            {iteratorState ? (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 space-y-2">
+                <div className="text-xs font-semibold text-[#8b949e] uppercase tracking-wider">
+                  Iterator Cursor State
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <div className="text-[10px] text-[#8b949e]">Index</div>
+                    <div className="font-mono font-bold text-[#58a6ff]">{iteratorState.cursorIndex}</div>
+                  </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <div className="text-[10px] text-[#8b949e]">hasNext()</div>
+                    <div
+                      className={`font-bold ${iteratorState.hasNext ? 'text-[#3fb950]' : 'text-[#f85149]'}`}
+                    >
+                      {iteratorState.hasNext ? 'true' : 'false'}
                     </div>
                   </div>
+                  <div className="bg-[#0d1117] p-2 rounded border border-[#21262d]">
+                    <div className="text-[10px] text-[#8b949e]">Direction</div>
+                    <div className="font-bold text-[#a371f7]">{iteratorState.direction || 'FORWARD'}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
-                  {iteratorState.currentElement !== undefined && (
-                    <div className="bg-[#0d1117] p-2 rounded border border-[#21262d] text-xs flex items-center justify-between">
-                      <span className="text-[#8b949e]">Last Visited Element:</span>
-                      <span className="font-mono font-bold text-[#3fb950]">
-                        {JSON.stringify(iteratorState.currentElement)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4 text-center text-xs text-[#8b949e]">
-                  No active Iterator on this step.
-                </div>
-              )}
-            </div>
+            {!streamPipeline && !iteratorState && (
+              <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-6 text-center text-[#8b949e] space-y-2">
+                <Sparkles className="w-8 h-8 mx-auto text-[#484f58]" />
+                <p className="text-xs">No active Stream pipeline or Iterator on this step.</p>
+              </div>
+            )}
           </div>
         )}
       </div>
