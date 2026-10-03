@@ -245,8 +245,12 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Smooth dragging of cards on canvas — catch ANYWHERE on the structure
-  const handleMouseDown = (id: string, e: React.MouseEvent) => {
+  // Smooth, high-performance dragging of cards on canvas with RAF throttling and instant zero-latency tracking
+  const handleMouseDown = (
+    id: string,
+    currentPos: { x: number; y: number },
+    e: React.MouseEvent
+  ) => {
     if (e.button !== 0 || layoutMode === 'grid') return;
     const target = e.target as HTMLElement;
 
@@ -263,33 +267,60 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
     }
 
     e.preventDefault();
+    e.stopPropagation();
+
     const startX = e.clientX;
     const startY = e.clientY;
-    const currentPos = positions[id] || getDefaultPosition(id);
     const startPosX = currentPos.x;
     const startPosY = currentPos.y;
 
     setDraggingId(id);
 
+    // Set global cursor & prevent accidental text selection while dragging
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'grabbing';
+
+    let rafId: number | null = null;
+    let latestPos = { x: startPosX, y: startPosY };
+
     const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = (moveEvent.clientX - startX) / zoom;
-      const deltaY = (moveEvent.clientY - startY) / zoom;
-      setPositions((prev) => ({
-        ...prev,
-        [id]: {
-          x: Math.max(12, Math.round(startPosX + deltaX)),
-          y: Math.max(12, Math.round(startPosY + deltaY)),
-        },
-      }));
+      moveEvent.preventDefault();
+      const currentZoom = zoom || 1.0;
+      const deltaX = (moveEvent.clientX - startX) / currentZoom;
+      const deltaY = (moveEvent.clientY - startY) / currentZoom;
+      latestPos = {
+        x: Math.max(12, Math.round(startPosX + deltaX)),
+        y: Math.max(12, Math.round(startPosY + deltaY)),
+      };
+
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          setPositions((prev) => ({
+            ...prev,
+            [id]: latestPos,
+          }));
+          rafId = null;
+        });
+      }
     };
 
     const onMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      setPositions((prev) => ({
+        ...prev,
+        [id]: latestPos,
+      }));
       setDraggingId(null);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
 
-    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousemove', onMouseMove, { passive: false });
     window.addEventListener('mouseup', onMouseUp);
   };
 
@@ -734,7 +765,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
           <div
             className={
               layoutMode === 'freeform'
-                ? 'relative min-w-[2200px] min-h-[1600px] transition-transform duration-75 origin-top-left'
+                ? 'relative min-w-[3400px] min-h-[2400px] transition-transform duration-75 origin-top-left'
                 : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-12'
             }
             style={layoutMode === 'freeform' ? { transform: `scale(${zoom})` } : undefined}
@@ -763,13 +794,17 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                 <div
                   key={st.id}
                   id={`dsa-struct-${st.id}`}
-                  onMouseDown={(e) => handleMouseDown(cardId, e)}
-                  className={`backdrop-blur-xl bg-[#161b22]/75 border rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.55)] transition-all duration-200 select-none relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent before:opacity-100 ${
-                    layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
+                  onMouseDown={(e) => handleMouseDown(cardId, pos, e)}
+                  className={`backdrop-blur-xl bg-[#161b22]/75 border rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.55)] select-none relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent before:opacity-100 ${
+                    layoutMode === 'freeform'
+                      ? isDragging
+                        ? 'cursor-grabbing'
+                        : 'cursor-grab'
+                      : ''
                   } ${
                     isDragging
-                      ? 'border-[#58a6ff] shadow-[0_20px_60px_rgba(88,166,255,0.35)] ring-2 ring-[#58a6ff]/50 z-40 scale-[1.01]'
-                      : 'border-white/10 hover:border-white/20 hover:shadow-[0_16px_45px_rgba(0,0,0,0.65)] hover:bg-[#161b22]/85'
+                      ? 'transition-none border-[#58a6ff] shadow-[0_20px_60px_rgba(88,166,255,0.35)] ring-2 ring-[#58a6ff]/50 z-40 scale-[1.01]'
+                      : 'transition-[border-color,box-shadow,background-color] duration-150 border-white/10 hover:border-white/20 hover:shadow-[0_16px_45px_rgba(0,0,0,0.65)] hover:bg-[#161b22]/85'
                   } ${
                     layoutMode === 'freeform'
                       ? `absolute ${dim.widthClass}`
@@ -785,14 +820,27 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                       : undefined
                   }
                 >
-                  {/* Header */}
+                  {/* Header (Primary Drag Handle) */}
                   <div
-                    className={`px-3.5 py-2.5 bg-[#0d1117]/80 backdrop-blur-md border-b border-white/10 rounded-t-2xl flex items-center justify-between gap-2 relative z-10`}
+                    onMouseDown={(e) => handleMouseDown(cardId, pos, e)}
+                    className={`px-3.5 py-2.5 bg-[#0d1117]/80 backdrop-blur-md border-b border-white/10 rounded-t-2xl flex items-center justify-between gap-2 relative z-10 transition-colors ${
+                      layoutMode === 'freeform'
+                        ? isDragging
+                          ? 'cursor-grabbing bg-[#161b22]'
+                          : 'cursor-grab hover:bg-[#161b22]/90'
+                        : ''
+                    }`}
+                    title={layoutMode === 'freeform' ? 'Click and drag anywhere on this header to move structure freely' : undefined}
                   >
                     {/* Left: Icon, Name & Type */}
-                    <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="flex items-center gap-2 overflow-hidden pointer-events-none select-none">
                       {layoutMode === 'freeform' && (
-                        <Move className="w-3.5 h-3.5 text-[#8b949e] opacity-60 flex-shrink-0" />
+                        <div
+                          className="p-1 rounded bg-[#58a6ff]/15 border border-[#58a6ff]/30 text-[#58a6ff] flex-shrink-0"
+                          title="Drag Handle"
+                        >
+                          <Move className="w-3.5 h-3.5" />
+                        </div>
                       )}
                       {getStructureIcon(st.type)}
                       <span className="text-xs font-bold text-[#f0f6fc] truncate">{st.name || st.id}</span>
@@ -807,7 +855,10 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                     </div>
 
                     {/* Right: Card Actions (Size options: 0.25x, 0.5x, 1x, 1.5x, 2x, Maximize, Collapse) */}
-                    <div className="flex items-center gap-1.5 no-drag flex-shrink-0">
+                    <div
+                      className="flex items-center gap-1.5 no-drag flex-shrink-0 pointer-events-auto"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
                       {/* Direct Size Selector Pill */}
                       <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 text-[10px] font-mono">
                         {(['0.25x', '0.5x', '1x', '1.5x', '2x'] as CardSize[]).map((sz) => (
@@ -858,6 +909,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   {/* Card Content Area with Proportional Scaling for 0.25x and 0.5x */}
                   {!isCol && (
                     <div
+                      onMouseDown={(e) => e.stopPropagation()}
                       className={`p-3 overflow-auto ${dim.maxHeight} bg-[#0d1117]/30 backdrop-blur-sm rounded-b-2xl relative z-10`}
                       style={
                         dim.scale < 1.0
@@ -890,13 +942,17 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                   <div
                     key={jvmId}
                     id={`dsa-struct-${jvmId}`}
-                    onMouseDown={(e) => handleMouseDown(jvmId, e)}
-                    className={`backdrop-blur-xl bg-[#161b22]/75 border rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.55)] transition-all duration-200 select-none relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent before:opacity-100 ${
-                      layoutMode === 'freeform' ? 'cursor-grab active:cursor-grabbing' : ''
+                    onMouseDown={(e) => handleMouseDown(jvmId, pos, e)}
+                    className={`backdrop-blur-xl bg-[#161b22]/75 border rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.55)] select-none relative overflow-hidden before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none before:bg-gradient-to-b before:from-white/[0.08] before:to-transparent before:opacity-100 ${
+                      layoutMode === 'freeform'
+                        ? isDragging
+                          ? 'cursor-grabbing'
+                          : 'cursor-grab'
+                        : ''
                     } ${
                       isDragging
-                        ? 'border-[#3fb950] shadow-[0_20px_60px_rgba(63,185,80,0.35)] ring-2 ring-[#3fb950]/50 z-40 scale-[1.01]'
-                        : 'border-white/10 hover:border-white/20 hover:shadow-[0_16px_45px_rgba(0,0,0,0.65)] hover:bg-[#161b22]/85'
+                        ? 'transition-none border-[#3fb950] shadow-[0_20px_60px_rgba(63,185,80,0.35)] ring-2 ring-[#3fb950]/50 z-40 scale-[1.01]'
+                        : 'transition-[border-color,box-shadow,background-color] duration-150 border-white/10 hover:border-white/20 hover:shadow-[0_16px_45px_rgba(0,0,0,0.65)] hover:bg-[#161b22]/85'
                     } ${
                       layoutMode === 'freeform'
                         ? `absolute ${dim.widthClass}`
@@ -912,13 +968,26 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                         : undefined
                     }
                   >
-                    {/* Header */}
+                    {/* Header (Primary Drag Handle) */}
                     <div
-                      className={`px-3.5 py-2.5 bg-[#0d1117]/80 backdrop-blur-md border-b border-white/10 rounded-t-2xl flex items-center justify-between gap-2 relative z-10`}
+                      onMouseDown={(e) => handleMouseDown(jvmId, pos, e)}
+                      className={`px-3.5 py-2.5 bg-[#0d1117]/80 backdrop-blur-md border-b border-white/10 rounded-t-2xl flex items-center justify-between gap-2 relative z-10 transition-colors ${
+                        layoutMode === 'freeform'
+                          ? isDragging
+                            ? 'cursor-grabbing bg-[#161b22]'
+                            : 'cursor-grab hover:bg-[#161b22]/90'
+                          : ''
+                      }`}
+                      title={layoutMode === 'freeform' ? 'Click and drag anywhere on this header to move JVM Memory Card' : undefined}
                     >
-                      <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="flex items-center gap-2 overflow-hidden pointer-events-none select-none">
                         {layoutMode === 'freeform' && (
-                          <Move className="w-3.5 h-3.5 text-[#8b949e] opacity-60 flex-shrink-0" />
+                          <div
+                            className="p-1 rounded bg-[#3fb950]/15 border border-[#3fb950]/30 text-[#3fb950] flex-shrink-0"
+                            title="Drag Handle"
+                          >
+                            <Move className="w-3.5 h-3.5" />
+                          </div>
                         )}
                         <Database className="w-4 h-4 text-[#3fb950]" />
                         <span className="text-xs font-bold text-[#f0f6fc] truncate">JVM Heap & Objects</span>
@@ -927,7 +996,10 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-1.5 no-drag flex-shrink-0">
+                      <div
+                        className="flex items-center gap-1.5 no-drag flex-shrink-0 pointer-events-auto"
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
                         {/* Direct Size Selector Pill */}
                         <div className="flex items-center bg-[#0d1117] border border-[#30363d] rounded-lg p-0.5 text-[10px] font-mono">
                           {(['0.25x', '0.5x', '1x', '1.5x', '2x'] as CardSize[]).map((sz) => (
@@ -974,6 +1046,7 @@ export const VisualizationCanvas: React.FC<VisualizationCanvasProps> = ({
 
                     {!isCol && (
                       <div
+                        onMouseDown={(e) => e.stopPropagation()}
                         className={`p-3 overflow-auto ${dim.maxHeight} bg-[#0d1117]/30 backdrop-blur-sm rounded-b-2xl relative z-10`}
                         style={
                           dim.scale < 1.0

@@ -722,12 +722,12 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
               y={midPoint.y - 18}
               width="180"
               height="36"
-              className="pointer-events-auto overflow-visible select-none"
+              className="pointer-events-none overflow-visible select-none"
             >
               <div className="flex items-center justify-center">
                 {isLightning ? (
                   // Active Data Passage Floating Pill
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0d1117]/95 border-2 border-[#00f0ff] text-[#00f0ff] font-extrabold text-[11px] shadow-[0_0_18px_rgba(0,240,255,0.8)] backdrop-blur-md animate-pulse">
+                  <div className="pointer-events-auto flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0d1117]/95 border-2 border-[#00f0ff] text-[#00f0ff] font-extrabold text-[11px] shadow-[0_0_18px_rgba(0,240,255,0.8)] backdrop-blur-md animate-pulse">
                     <Zap className="w-3.5 h-3.5 fill-[#00f0ff] stroke-[#00f0ff] animate-bounce" />
                     <span>Passing: {transferredValue !== null && transferredValue !== undefined ? String(transferredValue) : 'Data'}</span>
                     <ArrowRight className="w-3.5 h-3.5 text-[#00f0ff]" />
@@ -735,7 +735,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
                 ) : (
                   // Normal Entity Relationship Pill (with cardinality e.g. 1:1, 1:N)
                   <div
-                    className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#161b22]/95 border border-[#30363d] hover:border-[#58a6ff] text-[#8b949e] hover:text-[#f0f6fc] text-[10px] font-mono shadow-md backdrop-blur-md transition-all cursor-help"
+                    className="pointer-events-auto flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#161b22]/95 border border-[#30363d] hover:border-[#58a6ff] text-[#8b949e] hover:text-[#f0f6fc] text-[10px] font-mono shadow-md backdrop-blur-md transition-all cursor-help"
                     title={`Relation: ${rel.label} (${rel.cardinality || '1:1'})`}
                   >
                     <Link2 className="w-3 h-3 text-[#58a6ff]" />
