@@ -173,12 +173,19 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
     if (!currentStep) return [];
     const rels: StructureRelation[] = [];
     const structList = Object.values(currentStep.structures);
-    const structIds = structList.map((s) => s.id);
-    const hasJvm = currentStep.heap.some((h) => h.className) || Object.keys(currentStep.variables).length > 0;
-    const allIds = [...structIds];
-    if (hasJvm) allIds.push('jvm-memory-card');
 
-    if (allIds.length < 2) return [];
+    // Check if JVM memory card is ACTUALLY present and rendered on canvas
+    const hasJvm =
+      currentStep.heap.some((h) => h.className) ||
+      (currentStep.staticFields && Object.keys(currentStep.staticFields).length > 0);
+
+    const validCardIds = new Set(structList.map((s) => s.id));
+    if (hasJvm) validCardIds.add('jvm-memory-card');
+
+    // If there are fewer than 2 distinct structures on the canvas, NO inter-structure relation arrows should exist!
+    if (validCardIds.size < 2) return [];
+
+    const allIds = Array.from(validCardIds);
 
     // A. Explicit Object Graph references
     if (currentStep.objectGraph && currentStep.objectGraph.length > 0) {
@@ -200,7 +207,7 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
       });
     }
 
-    // B. Entity / Foreign Key & Algorithmic pipeline matching
+    // B. Entity / Foreign Key & Algorithmic pipeline matching between distinct data structures
     for (let i = 0; i < structList.length; i++) {
       const s1 = structList[i];
       for (let j = 0; j < structList.length; j++) {
@@ -263,38 +270,30 @@ export const StructureRelationArrows: React.FC<StructureRelationArrowsProps> = (
     }
 
     // C. Ensure all structures in multi-structure algorithms are connected in a data flow pipeline
-    for (let i = 0; i < structList.length - 1; i++) {
-      const s1 = structList[i];
-      const s2 = structList[i + 1];
-      if (!rels.some((r) => (r.sourceId === s1.id && r.targetId === s2.id) || (r.sourceId === s2.id && r.targetId === s1.id))) {
-        rels.push({
-          id: `flow-${s1.id}-${s2.id}`,
-          sourceId: s1.id,
-          targetId: s2.id,
-          sourceName: s1.name,
-          targetName: s2.name,
-          type: 'data_flow',
-          label: `Data Flow: ${s1.name} ➔ ${s2.name}`,
-          cardinality: '1:1',
-        });
+    // ONLY if there are actually 2 or more distinct data structures!
+    if (structList.length >= 2) {
+      for (let i = 0; i < structList.length - 1; i++) {
+        const s1 = structList[i];
+        const s2 = structList[i + 1];
+        if (!rels.some((r) => (r.sourceId === s1.id && r.targetId === s2.id) || (r.sourceId === s2.id && r.targetId === s1.id))) {
+          rels.push({
+            id: `flow-${s1.id}-${s2.id}`,
+            sourceId: s1.id,
+            targetId: s2.id,
+            sourceName: s1.name,
+            targetName: s2.name,
+            type: 'data_flow',
+            label: `Data Flow: ${s1.name} ➔ ${s2.name}`,
+            cardinality: '1:1',
+          });
+        }
       }
     }
 
-    // D. Connect JVM Objects Memory card if present with first structure
-    if (hasJvm && structList.length > 0 && !rels.some((r) => r.sourceId === 'jvm-memory-card' || r.targetId === 'jvm-memory-card')) {
-      rels.push({
-        id: `jvm-rel-${structList[0].id}`,
-        sourceId: 'jvm-memory-card',
-        targetId: structList[0].id,
-        sourceName: 'JVM Memory',
-        targetName: structList[0].name,
-        type: 'reference',
-        label: `Heap Allocation: ${structList[0].name}`,
-        cardinality: '1:1',
-      });
-    }
-
-    return rels;
+    // Filter to strictly ensure BOTH source and target cards exist on the canvas
+    return rels.filter(
+      (r) => validCardIds.has(r.sourceId) && validCardIds.has(r.targetId) && r.sourceId !== r.targetId
+    );
   }, [currentStep]);
 
   // 2. Real-time Data Passage & Transfer Detection
