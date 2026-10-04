@@ -24,14 +24,98 @@ import { reconstructExecutionSteps } from './engine/stateReconstructor';
 import { Variable, Cpu, Layers, Terminal, Database, Compass, HelpCircle, ListOrdered, Sparkles, BookOpen, Maximize2, Minimize2, GitBranch } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-export function App() {
-  const [selectedPreset, setSelectedPreset] = useState<CodePreset>(CODE_PRESETS[0]);
-  const [language, setLanguage] = useState<SupportedLanguage>('java');
-  const [code, setCode] = useState<string>(CODE_PRESETS[0].code);
+const STORAGE_KEYS = {
+  CODE: 'codeflow_persisted_code',
+  LANGUAGE: 'codeflow_persisted_language',
+  PRESET_ID: 'codeflow_persisted_preset_id',
+  IS_CUSTOM: 'codeflow_persisted_is_custom',
+  CUSTOM_TITLE: 'codeflow_persisted_custom_title',
+  STEP_INDEX: 'codeflow_persisted_step_index',
+  STEPS: 'codeflow_persisted_steps',
+};
 
-  const [steps, setSteps] = useState<ExecutionStep[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState<number>(-1);
-  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>('IDLE');
+export function App() {
+  const [selectedPreset, setSelectedPreset] = useState<CodePreset>(() => {
+    try {
+      const isCustom = localStorage.getItem(STORAGE_KEYS.IS_CUSTOM) === 'true';
+      const savedCode = localStorage.getItem(STORAGE_KEYS.CODE);
+      const savedLang = (localStorage.getItem(STORAGE_KEYS.LANGUAGE) as SupportedLanguage) || 'java';
+      if (isCustom && savedCode) {
+        return {
+          id: 'custom-user-code',
+          title: localStorage.getItem(STORAGE_KEYS.CUSTOM_TITLE) || 'Custom User Code',
+          category: 'Custom Code',
+          difficulty: 'Medium',
+          language: savedLang,
+          timeComplexity: 'Dynamic',
+          spaceComplexity: 'Dynamic',
+          description: 'Custom code pasted and executed by user',
+          explanation: 'Executing live user-provided code on the execution engine',
+          code: savedCode,
+        };
+      }
+      const savedPresetId = localStorage.getItem(STORAGE_KEYS.PRESET_ID);
+      if (savedPresetId) {
+        const found = CODE_PRESETS.find((p) => p.id === savedPresetId);
+        if (found) return found;
+      }
+    } catch (e) {
+      console.warn('Failed to load initial preset from localStorage', e);
+    }
+    return CODE_PRESETS[0];
+  });
+
+  const [language, setLanguage] = useState<SupportedLanguage>(() => {
+    try {
+      const savedLang = localStorage.getItem(STORAGE_KEYS.LANGUAGE) as SupportedLanguage;
+      if (savedLang) return savedLang;
+    } catch (e) {}
+    return 'java';
+  });
+
+  const [code, setCode] = useState<string>(() => {
+    try {
+      const savedCode = localStorage.getItem(STORAGE_KEYS.CODE);
+      if (typeof savedCode === 'string' && savedCode.length > 0) {
+        return savedCode;
+      }
+    } catch (e) {}
+    return CODE_PRESETS[0].code;
+  });
+
+  const [steps, setSteps] = useState<ExecutionStep[]>(() => {
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEYS.STEPS) || localStorage.getItem(STORAGE_KEYS.STEPS);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [currentStepIndex, setCurrentStepIndex] = useState<number>(() => {
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEYS.STEP_INDEX) || localStorage.getItem(STORAGE_KEYS.STEP_INDEX);
+      if (stored !== null) {
+        const val = parseInt(stored, 10);
+        if (!isNaN(val)) return val;
+      }
+    } catch (e) {}
+    return -1;
+  });
+
+  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>(() => {
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEYS.STEP_INDEX) || localStorage.getItem(STORAGE_KEYS.STEP_INDEX);
+      if (stored !== null && parseInt(stored, 10) >= 0) {
+        return 'RUNNING';
+      }
+    } catch (e) {}
+    return 'IDLE';
+  });
   const [workerName, setWorkerName] = useState<string>('Java 22.0.1 (JVM Sandboxed)');
   const [compilationError, setCompilationError] = useState<{ line: number; message: string; detail: string } | null>(null);
 
@@ -61,6 +145,56 @@ export function App() {
 
   const playTimerRef = useRef<any>(null);
 
+  // Synchronize persisted storage on state changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CODE, code);
+      if (selectedPreset.id === 'custom-user-code' || code !== selectedPreset.code) {
+        localStorage.setItem(STORAGE_KEYS.IS_CUSTOM, 'true');
+      }
+    } catch (e) {}
+  }, [code, selectedPreset]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.LANGUAGE, language);
+    } catch (e) {}
+  }, [language]);
+
+  useEffect(() => {
+    try {
+      if (selectedPreset.id === 'custom-user-code') {
+        localStorage.setItem(STORAGE_KEYS.IS_CUSTOM, 'true');
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_TITLE, selectedPreset.title);
+      } else {
+        localStorage.setItem(STORAGE_KEYS.IS_CUSTOM, 'false');
+        localStorage.setItem(STORAGE_KEYS.PRESET_ID, selectedPreset.id);
+      }
+    } catch (e) {}
+  }, [selectedPreset]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEYS.STEP_INDEX, String(currentStepIndex));
+      localStorage.setItem(STORAGE_KEYS.STEP_INDEX, String(currentStepIndex));
+    } catch (e) {}
+  }, [currentStepIndex]);
+
+  useEffect(() => {
+    try {
+      if (steps.length > 0) {
+        const serialized = JSON.stringify(steps);
+        sessionStorage.setItem(STORAGE_KEYS.STEPS, serialized);
+        try {
+          localStorage.setItem(STORAGE_KEYS.STEPS, serialized);
+        } catch (e) {}
+      } else {
+        sessionStorage.removeItem(STORAGE_KEYS.STEPS);
+        localStorage.removeItem(STORAGE_KEYS.STEPS);
+      }
+    } catch (e) {}
+  }, [steps]);
+
   // Active step
   const currentStep: ExecutionStep | null =
     steps.length > 0 && currentStepIndex >= 0 && currentStepIndex < steps.length
@@ -71,7 +205,7 @@ export function App() {
   const activeLine: number | null = currentStep ? currentStep.line : (compilationError ? compilationError.line : null);
 
   // Run via real Java execution worker with graceful client fallback
-  const handleRun = useCallback(async (overrideCode?: string, overrideLanguage?: SupportedLanguage) => {
+  const handleRun = useCallback(async (overrideCode?: string, overrideLanguage?: SupportedLanguage, targetStepIndex?: number) => {
     const codeToRun = typeof overrideCode === 'string' ? overrideCode : code;
     const langToRun = overrideLanguage || language;
 
@@ -101,8 +235,11 @@ export function App() {
         setExecutionStatus('RUNNING');
 
         if (recordedSteps.length > 0) {
-          setCurrentStepIndex(0);
-          setConsoleOutput(recordedSteps[0].consoleOutput || []);
+          const initialIdx = typeof targetStepIndex === 'number' && targetStepIndex >= 0
+            ? Math.min(recordedSteps.length - 1, targetStepIndex)
+            : 0;
+          setCurrentStepIndex(initialIdx);
+          setConsoleOutput(recordedSteps[initialIdx]?.consoleOutput || []);
         } else {
           setCurrentStepIndex(-1);
           setExecutionStatus('COMPLETED');
@@ -161,11 +298,34 @@ export function App() {
       setExecutionStatus('RUNNING');
 
       if (recordedSteps.length > 0) {
-        setCurrentStepIndex(0);
-        setConsoleOutput(recordedSteps[0].consoleOutput || []);
+        const initialIdx = typeof targetStepIndex === 'number' && targetStepIndex >= 0
+          ? Math.min(recordedSteps.length - 1, targetStepIndex)
+          : 0;
+        setCurrentStepIndex(initialIdx);
+        setConsoleOutput(recordedSteps[initialIdx]?.consoleOutput || []);
       }
     }
   }, [code, language]);
+
+  // Initial mount recovery effect if steps weren't stored in session but code and stepIndex were
+  const initialMountRef = useRef(true);
+  useEffect(() => {
+    if (initialMountRef.current) {
+      initialMountRef.current = false;
+      if (steps.length > 0 && currentStepIndex >= 0 && currentStepIndex < steps.length) {
+        setConsoleOutput(steps[currentStepIndex].consoleOutput || []);
+        setExecutionStatus('RUNNING');
+      } else {
+        try {
+          const savedStepIdxStr = sessionStorage.getItem(STORAGE_KEYS.STEP_INDEX) || localStorage.getItem(STORAGE_KEYS.STEP_INDEX);
+          const savedStepIdx = savedStepIdxStr !== null ? parseInt(savedStepIdxStr, 10) : -1;
+          if (savedStepIdx >= 0 && steps.length === 0) {
+            handleRun(code, language, savedStepIdx);
+          }
+        } catch (e) {}
+      }
+    }
+  }, [steps, currentStepIndex, code, language, handleRun]);
 
   // Handle user pasting and running custom code
   const handleRunCustomCode = useCallback(async (customCode: string, lang: SupportedLanguage) => {
@@ -185,6 +345,12 @@ export function App() {
       code: customCode,
     };
     setSelectedPreset(customPreset);
+    try {
+      localStorage.setItem(STORAGE_KEYS.IS_CUSTOM, 'true');
+      localStorage.setItem(STORAGE_KEYS.CODE, customCode);
+      localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_TITLE, 'Custom User Code');
+    } catch (e) {}
 
     // Immediately execute the custom code without closure staleness
     await handleRun(customCode, lang);
@@ -265,6 +431,16 @@ export function App() {
     setCompilationError(null);
     setConsoleOutput([]);
     if (playTimerRef.current) clearInterval(playTimerRef.current);
+    try {
+      localStorage.setItem(STORAGE_KEYS.IS_CUSTOM, 'false');
+      localStorage.setItem(STORAGE_KEYS.PRESET_ID, preset.id);
+      localStorage.setItem(STORAGE_KEYS.CODE, preset.code);
+      localStorage.setItem(STORAGE_KEYS.LANGUAGE, preset.language);
+      localStorage.setItem(STORAGE_KEYS.STEP_INDEX, '-1');
+      sessionStorage.setItem(STORAGE_KEYS.STEP_INDEX, '-1');
+      sessionStorage.removeItem(STORAGE_KEYS.STEPS);
+      localStorage.removeItem(STORAGE_KEYS.STEPS);
+    } catch (e) {}
   }, []);
 
   const handleLanguageChange = useCallback((newLang: SupportedLanguage) => {
@@ -393,9 +569,28 @@ export function App() {
             language={language}
             currentLine={activeLine}
             breakpoints={breakpoints}
-            onChange={setCode}
+            onChange={(newCode) => {
+              setCode(newCode);
+              try {
+                localStorage.setItem(STORAGE_KEYS.CODE, newCode);
+                if (selectedPreset.id === 'custom-user-code' || newCode !== selectedPreset.code) {
+                  localStorage.setItem(STORAGE_KEYS.IS_CUSTOM, 'true');
+                }
+              } catch (e) {}
+            }}
             onToggleBreakpoint={handleToggleBreakpoint}
-            onReset={() => setCode(selectedPreset.code)}
+            onReset={() => {
+              setCode(selectedPreset.code);
+              setSteps([]);
+              setCurrentStepIndex(-1);
+              try {
+                localStorage.setItem(STORAGE_KEYS.CODE, selectedPreset.code);
+                localStorage.setItem(STORAGE_KEYS.STEP_INDEX, '-1');
+                sessionStorage.setItem(STORAGE_KEYS.STEP_INDEX, '-1');
+                sessionStorage.removeItem(STORAGE_KEYS.STEPS);
+                localStorage.removeItem(STORAGE_KEYS.STEPS);
+              } catch (e) {}
+            }}
             onFormat={() => {
               // Basic trim formatting
               setCode(code.trim());
