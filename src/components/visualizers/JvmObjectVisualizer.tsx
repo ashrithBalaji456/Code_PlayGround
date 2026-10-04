@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ExecutionStep, HeapObject, VariableInfo } from '../../types/execution';
 import { Layers, HardDrive, ShieldAlert, Cpu, Database, Eye, AlertTriangle } from 'lucide-react';
 import { ConcurrencyVisualizer } from './ConcurrencyVisualizer';
+import { CollectionsVisualizer } from './CollectionsVisualizer';
 
 interface JvmObjectVisualizerProps {
   currentStep: ExecutionStep;
@@ -88,6 +89,17 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
           currentStep={currentStep}
           onSelectThread={onSelectObject}
           onSelectLock={onSelectVariable}
+        />
+      )}
+
+      {/* Phase 18: Java Collections Framework, Generics & Iterators Visualizer */}
+      {(!!currentStep.genericsInfo ||
+        !!currentStep.collectionsRelationship ||
+        (currentStep.collectionsMetrics && (currentStep.collectionsMetrics.adds > 0 || currentStep.collectionsMetrics.iteratorNext > 0 || currentStep.collectionsMetrics.mapPuts > 0)) ||
+        !!currentStep.collectionOperation) && (
+        <CollectionsVisualizer
+          currentStep={currentStep}
+          onSelectCollection={onSelectVariable}
         />
       )}
 

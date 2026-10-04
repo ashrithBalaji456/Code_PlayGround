@@ -170,104 +170,87 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Stack<Integer> stack = new Stack<>();
-    const stackDeclMatch = trimmed.match(/^(?:Stack|java\.util\.Stack)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:Stack|java\.util\.Stack)<.*?>\(\);?$/);
-    if (stackDeclMatch) {
-      const varName = stackDeclMatch[2];
-      varTypes.set(varName, 'Stack');
+    // Java Collections Framework & Generics Declarations
+    const colGenericDeclMatch = trimmed.match(
+      /^(?:(?:java\.util\.)?(List|ArrayList|LinkedList|Vector|Stack|Queue|Deque|ArrayDeque|PriorityQueue|Set|HashSet|LinkedHashSet|TreeSet|Map|HashMap|LinkedHashMap|TreeMap|Hashtable))<(.+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:(?:java\.util\.)?([A-Za-z0-9_]+))<.*?>\((.*?)\);?$/
+    );
+    if (colGenericDeclMatch) {
+      const colInterface = colGenericDeclMatch[1];
+      const genericArgsStr = colGenericDeclMatch[2].trim();
+      const varName = colGenericDeclMatch[3];
+      const concreteClass = colGenericDeclMatch[4];
+      const ctorArgs = colGenericDeclMatch[5].trim();
+      varTypes.set(varName, concreteClass);
+
+      const parts = splitTopLevelComma(genericArgsStr);
+      const keyType = parts.length > 1 ? parts[0] : '';
+      const valType = parts.length > 1 ? parts[1] : parts[0];
+      let wildcardBound = 'NONE';
+      let boundType = '';
+      if (genericArgsStr.includes('? extends')) {
+        wildcardBound = 'EXTENDS';
+        boundType = genericArgsStr.replace(/.*?\?\s*extends\s+/, '').trim();
+      } else if (genericArgsStr.includes('? super')) {
+        wildcardBound = 'SUPER';
+        boundType = genericArgsStr.replace(/.*?\?\s*super\s+/, '').trim();
+      } else if (genericArgsStr.trim() === '?') {
+        wildcardBound = 'UNBOUNDED';
+      }
+
+      let cap = 0;
+      if (/^\d+$/.test(ctorArgs)) {
+        cap = parseInt(ctorArgs, 10);
+      } else if (concreteClass === 'ArrayList' || concreteClass === 'Vector') {
+        cap = 10;
+      } else if (concreteClass.includes('Hash')) {
+        cap = 16;
+      }
+
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.stackCreate("${varName}", "Stack<${stackDeclMatch[1]}>", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.genericTypeResolve("${varName}", "${concreteClass}", "${colInterface}<${genericArgsStr}>", "${keyType || valType}", "${valType}", "${wildcardBound}", "${boundType}", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.collectionCreate("${varName}", "${concreteClass}", "${genericArgsStr}", ${cap}, ${lineNum});`);
+
+      if (concreteClass === 'Stack') {
+        outputLines.push(`    CodeFlowTracer.stackCreate("${varName}", "Stack<${genericArgsStr}>", ${lineNum});`);
+      } else if (concreteClass === 'LinkedList') {
+        outputLines.push(`    CodeFlowTracer.linkedListCreate("${varName}", "LinkedList<${genericArgsStr}>", ${lineNum});`);
+      } else if (colInterface === 'Queue' || concreteClass === 'Queue') {
+        outputLines.push(`    CodeFlowTracer.queueCreate("${varName}", "Queue<${genericArgsStr}>", ${lineNum});`);
+      } else if (colInterface === 'Deque' || concreteClass === 'ArrayDeque' || concreteClass === 'Deque') {
+        outputLines.push(`    CodeFlowTracer.dequeCreate("${varName}", "Deque<${genericArgsStr}>", ${lineNum});`);
+      } else if (concreteClass === 'PriorityQueue') {
+        const isMin = !ctorArgs.includes('reverseOrder');
+        outputLines.push(`    CodeFlowTracer.priorityQueueCreate("${varName}", "PriorityQueue<${genericArgsStr}>", ${lineNum});`);
+        outputLines.push(`    CodeFlowTracer.heapCreate("${varName}", "${varName}", "PriorityQueue<${genericArgsStr}>", ${isMin}, ${lineNum});`);
+      } else if (concreteClass === 'HashMap' || concreteClass === 'LinkedHashMap' || concreteClass === 'Hashtable') {
+        outputLines.push(`    CodeFlowTracer.mapCreate("${varName}", "${concreteClass}<${genericArgsStr}>", ${lineNum});`);
+      } else if (concreteClass === 'TreeMap') {
+        outputLines.push(`    CodeFlowTracer.mapCreate("${varName}", "TreeMap<${genericArgsStr}>", ${lineNum});`);
+      } else if (concreteClass === 'HashSet' || concreteClass === 'LinkedHashSet') {
+        outputLines.push(`    CodeFlowTracer.setCreate("${varName}", "${concreteClass}<${genericArgsStr}>", ${lineNum});`);
+      } else if (concreteClass === 'TreeSet') {
+        outputLines.push(`    CodeFlowTracer.setCreate("${varName}", "TreeSet<${genericArgsStr}>", ${lineNum});`);
+      }
+
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${concreteClass}", ${varName}, ${lineNum});`);
       continue;
     }
 
-    // Queue<Integer> queue = new LinkedList<>() / new ArrayDeque<>();
-    const queueDeclMatch = trimmed.match(/^(?:Queue|java\.util\.Queue)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:LinkedList|ArrayDeque|java\.util\.LinkedList|java\.util\.ArrayDeque)<.*?>\(\);?$/);
-    if (queueDeclMatch) {
-      const varName = queueDeclMatch[2];
-      varTypes.set(varName, 'Queue');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.queueCreate("${varName}", "Queue<${queueDeclMatch[1]}>", ${lineNum});`);
-      continue;
-    }
 
-    // Deque<Integer> deque = new ArrayDeque<>() / new LinkedList<>();
-    const dequeDeclMatch = trimmed.match(/^(?:Deque|java\.util\.Deque)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:ArrayDeque|LinkedList|java\.util\.ArrayDeque|java\.util\.LinkedList)<.*?>\(\);?$/);
-    if (dequeDeclMatch) {
-      const varName = dequeDeclMatch[2];
-      varTypes.set(varName, 'Deque');
+    // Generic Class instantiation: Box<Integer> box = new Box<>();
+    const genericCustomMatch = trimmed.match(
+      /^([A-Z][a-zA-Z0-9_]*)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+\1<.*?>\((.*?)\);?$/
+    );
+    if (genericCustomMatch && !genericCustomMatch[1].match(/^(List|Set|Map|Queue|Deque|Stack|Vector|ArrayList|LinkedList|HashMap|HashSet|TreeMap|TreeSet|PriorityQueue|Hashtable)$/)) {
+      const customCls = genericCustomMatch[1];
+      const genericParam = genericCustomMatch[2].trim();
+      const varName = genericCustomMatch[3];
+      varTypes.set(varName, customCls);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.dequeCreate("${varName}", "Deque<${dequeDeclMatch[1]}>", ${lineNum});`);
-      continue;
-    }
-
-    // LinkedList<Integer> list = new LinkedList<>();
-    const listDeclMatch = trimmed.match(/^(?:LinkedList|java\.util\.LinkedList)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:LinkedList|java\.util\.LinkedList)<.*?>\(\);?$/);
-    if (listDeclMatch) {
-      const varName = listDeclMatch[2];
-      varTypes.set(varName, 'LinkedList');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.linkedListCreate("${varName}", "LinkedList<${listDeclMatch[1]}>", ${lineNum});`);
-      continue;
-    }
-
-    // HashMap<String, Integer> map = new HashMap<>() or Map<...>
-    const mapDeclMatch = trimmed.match(/^(?:HashMap|Map|java\.util\.HashMap|java\.util\.Map)<([^,]+),\s*([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:HashMap|java\.util\.HashMap)<.*?>\(\);?$/);
-    if (mapDeclMatch) {
-      const varName = mapDeclMatch[3];
-      varTypes.set(varName, 'HashMap');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.mapCreate("${varName}", "HashMap<${mapDeclMatch[1]}, ${mapDeclMatch[2]}>", ${lineNum});`);
-      continue;
-    }
-
-    // HashSet<Integer> set = new HashSet<>() or Set<...>
-    const setDeclMatch = trimmed.match(/^(?:HashSet|Set|java\.util\.HashSet|java\.util\.Set)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:HashSet|java\.util\.HashSet)<.*?>\(\);?$/);
-    if (setDeclMatch) {
-      const varName = setDeclMatch[2];
-      varTypes.set(varName, 'HashSet');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.setCreate("${varName}", "HashSet<${setDeclMatch[1]}>", ${lineNum});`);
-      continue;
-    }
-
-    // TreeMap<String, Integer> map = new TreeMap<>();
-    const treeMapDeclMatch = trimmed.match(/^(?:TreeMap|java\.util\.TreeMap)<([^,]+),\s*([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:TreeMap|java\.util\.TreeMap)<.*?>\(\);?$/);
-    if (treeMapDeclMatch) {
-      const varName = treeMapDeclMatch[3];
-      varTypes.set(varName, 'TreeMap');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.mapCreate("${varName}", "TreeMap<${treeMapDeclMatch[1]}, ${treeMapDeclMatch[2]}>", ${lineNum});`);
-      continue;
-    }
-
-    // TreeSet<Integer> set = new TreeSet<>();
-    const treeSetDeclMatch = trimmed.match(/^(?:TreeSet|java\.util\.TreeSet)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:TreeSet|java\.util\.TreeSet)<.*?>\(\);?$/);
-    if (treeSetDeclMatch) {
-      const varName = treeSetDeclMatch[2];
-      varTypes.set(varName, 'TreeSet');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.setCreate("${varName}", "TreeSet<${treeSetDeclMatch[1]}>", ${lineNum});`);
-      continue;
-    }
-
-    // PriorityQueue<Integer> pq = new PriorityQueue<>();
-    const pqDeclMatch = trimmed.match(/^(?:PriorityQueue|java\.util\.PriorityQueue)<([^>]+)>\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:PriorityQueue|java\.util\.PriorityQueue)<.*?>\((.*?)\);?$/);
-    if (pqDeclMatch) {
-      const varName = pqDeclMatch[2];
-      const isMin = !pqDeclMatch[3].includes('reverseOrder');
-      varTypes.set(varName, 'PriorityQueue');
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.priorityQueueCreate("${varName}", "PriorityQueue<${pqDeclMatch[1]}>", ${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.heapCreate("${varName}", "${varName}", "PriorityQueue<${pqDeclMatch[1]}>", ${isMin}, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.genericTypeResolve("${varName}", "${customCls}", "${customCls}<${genericParam}>", "T", "${genericParam}", "NONE", "", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${customCls}", ${varName}, ${lineNum});`);
       continue;
     }
 
@@ -464,35 +447,49 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // .put(k, v) for HashMap
-    const putMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.put\((.+),\s*(.+)\);?$/);
+    // .put(k, v) or .putIfAbsent(k, v) for Maps
+    const putMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(put|putIfAbsent)\((.+)\);?$/);
     if (putMatch) {
       const varName = putMatch[1];
-      const keyArg = putMatch[2].trim();
-      const valArg = putMatch[3].trim();
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    {`);
-      outputLines.push(`      var _old = ${varName}.put((${keyArg}), (${valArg}));`);
-      outputLines.push(`      CodeFlowTracer.mapPut("${varName}", (${keyArg}), ${varName}.get(${keyArg}), _old, Objects.hashCode(${keyArg}), Math.abs(Objects.hashCode(${keyArg}) % 8), ${varName}.size(), ${lineNum});`);
-      outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
-      outputLines.push(`    }`);
-      continue;
+      const mName = putMatch[2];
+      const rawArgs = putMatch[3].trim();
+      const parts = splitTopLevelComma(rawArgs);
+      if (parts.length >= 2) {
+        const keyArg = parts[0];
+        const valArg = parts.slice(1).join(', ');
+        outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+        outputLines.push(`    {`);
+        outputLines.push(`      var _old = ${varName}.${mName}((${keyArg}), (${valArg}));`);
+        outputLines.push(`      CodeFlowTracer.mapPut("${varName}", (${keyArg}), ${varName}.get(${keyArg}), _old, Objects.hashCode(${keyArg}), Math.abs(Objects.hashCode(${keyArg}) % 8), ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
+        outputLines.push(`    }`);
+        continue;
+      }
     }
 
-    // .add(idx, val) for LinkedList with 2 arguments: list.add(1, 15);
-    const addIndexedMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.add\((\d+|[a-zA-Z_0-9]+),\s*(.+)\);?$/);
-    if (addIndexedMatch && varTypes.get(addIndexedMatch[1]) === 'LinkedList') {
+    // .add(idx, val) for any List (ArrayList, LinkedList, Vector)
+    const addIndexedMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.add\((.+)\);?$/);
+    if (addIndexedMatch) {
       const varName = addIndexedMatch[1];
-      const idxArg = addIndexedMatch[2].trim();
-      const valArg = addIndexedMatch[3].trim();
-      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    {`);
-      outputLines.push(`      int _idx = (${idxArg});`);
-      outputLines.push(`      var _v = (${valArg});`);
-      outputLines.push(`      ${varName}.add(_idx, _v);`);
-      outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, _idx, ${varName}.size(), ${lineNum});`);
-      outputLines.push(`    }`);
-      continue;
+      const parts = splitTopLevelComma(addIndexedMatch[2].trim());
+      if (parts.length === 2) {
+        const idxArg = parts[0];
+        const valArg = parts[1];
+        const stType = varTypes.get(varName);
+        outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+        outputLines.push(`    {`);
+        outputLines.push(`      int _idx = (${idxArg});`);
+        outputLines.push(`      var _v = (${valArg});`);
+        outputLines.push(`      ${varName}.add(_idx, _v);`);
+        if (stType === 'LinkedList') {
+          outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, _idx, ${varName}.size(), ${lineNum});`);
+        } else {
+          outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", _idx, _v, ${lineNum});`);
+        }
+        outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
+        outputLines.push(`    }`);
+        continue;
+      }
     }
 
     // Nested collection add, e.g. graph.get(0).add(1);
@@ -513,21 +510,37 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const stType = varTypes.get(varName);
 
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    ${rawLine}`);
-      if (stType === 'HashSet') {
-        outputLines.push(`    CodeFlowTracer.setAdd("${varName}", (${arg}), true, ${varName}.size(), ${lineNum});`);
+      outputLines.push(`    {`);
+      if (stType === 'HashSet' || stType === 'LinkedHashSet' || stType === 'TreeSet' || stType?.includes('Set')) {
+        outputLines.push(`      var _v = (${arg});`);
+        outputLines.push(`      boolean _added = ${varName}.add(_v);`);
+        outputLines.push(`      CodeFlowTracer.setAdd("${varName}", _v, _added, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", -1, _v, ${lineNum});`);
       } else if (stType === 'PriorityQueue') {
-        outputLines.push(`    CodeFlowTracer.priorityQueueAdd("${varName}", (${arg}), new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
-        outputLines.push(`    CodeFlowTracer.heapInsert("${varName}", (${arg}), new ArrayList<>(${varName}), ${lineNum});`);
-        outputLines.push(`    CodeFlowTracer.heapifyUp("${varName}", ${varName}.size() - 1, (${arg}), ${lineNum});`);
+        outputLines.push(`      var _v = (${arg});`);
+        outputLines.push(`      ${varName}.add(_v);`);
+        outputLines.push(`      CodeFlowTracer.priorityQueueAdd("${varName}", _v, new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.heapInsert("${varName}", _v, new ArrayList<>(${varName}), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.heapifyUp("${varName}", ${varName}.size() - 1, _v, ${lineNum});`);
       } else if (stType === 'LinkedList') {
-        outputLines.push(`    CodeFlowTracer.linkedListAdd("${varName}", (${arg}), ${varName}.size() - 1, ${varName}.size(), ${lineNum});`);
-      } else if (stType === 'Deque') {
-        outputLines.push(`    CodeFlowTracer.dequeAddLast("${varName}", (${arg}), ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      var _v = (${arg});`);
+        outputLines.push(`      ${varName}.add(_v);`);
+        outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, ${varName}.size() - 1, ${varName}.size(), ${lineNum});`);
+      } else if (stType === 'Deque' || stType === 'ArrayDeque') {
+        outputLines.push(`      var _v = (${arg});`);
+        outputLines.push(`      ${varName}.addLast(_v);`);
+        outputLines.push(`      CodeFlowTracer.dequeAddLast("${varName}", _v, ${varName}.size(), ${lineNum});`);
       } else if (stType === 'Queue') {
-        outputLines.push(`    CodeFlowTracer.queueEnqueue("${varName}", (${arg}), ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      var _v = (${arg});`);
+        outputLines.push(`      ${varName}.add(_v);`);
+        outputLines.push(`      CodeFlowTracer.queueEnqueue("${varName}", _v, ${varName}.size(), ${lineNum});`);
+      } else {
+        outputLines.push(`      var _v = (${arg});`);
+        outputLines.push(`      ${varName}.add(_v);`);
+        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", ${varName}.size() - 1, _v, ${lineNum});`);
       }
-      outputLines.push(`    CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
+      outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
+      outputLines.push(`    }`);
       continue;
     }
 
@@ -549,22 +562,25 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const stType = varTypes.get(varName);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    {`);
-      if (stType === 'HashSet') {
+      if (stType === 'HashSet' || stType === 'LinkedHashSet' || stType === 'TreeSet' || stType?.includes('Set')) {
         outputLines.push(`      var _arg = (${arg});`);
         outputLines.push(`      boolean _rem = ${varName}.remove(_arg);`);
         outputLines.push(`      CodeFlowTracer.setRemove("${varName}", _arg, _rem, ${varName}.size(), ${lineNum});`);
-      } else if (stType === 'HashMap') {
+        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "remove", -1, _arg, ${lineNum});`);
+      } else if (stType === 'HashMap' || stType === 'LinkedHashMap' || stType === 'TreeMap' || stType === 'Hashtable' || stType?.includes('Map')) {
         outputLines.push(`      var _k = (${arg});`);
         outputLines.push(`      var _old = ${varName}.remove(_k);`);
         outputLines.push(`      int _h = Objects.hashCode(_k);`);
         outputLines.push(`      int _b = Math.abs(_h % 8);`);
         outputLines.push(`      CodeFlowTracer.mapRemove("${varName}", _k, _old, _h, _b, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "remove", -1, _old, ${lineNum});`);
       } else if (stType === 'LinkedList') {
-        outputLines.push(`      int _idx = (${arg});`);
-        outputLines.push(`      var _old = ${varName}.remove(_idx);`);
-        outputLines.push(`      CodeFlowTracer.linkedListRemove("${varName}", _old, _idx, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      var _remRes = ${varName}.remove(${arg});`);
+        outputLines.push(`      CodeFlowTracer.linkedListRemove("${varName}", _remRes, 0, ${varName}.size(), ${lineNum});`);
+        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "remove", -1, _remRes, ${lineNum});`);
       } else {
-        outputLines.push(`      ${rawLine}`);
+        outputLines.push(`      var _remRes = ${varName}.remove(${arg});`);
+        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "remove", -1, _remRes, ${lineNum});`);
       }
       outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
       outputLines.push(`    }`);
@@ -1292,22 +1308,49 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Phase 14: Iterators declaration (Iterator<T> it = col.iterator();)
-    const itDeclMatch = trimmed.match(/^(?:(?:List)?Iterator)(?:<[^>]+>)?\s+([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.(?:iterator|listIterator)\(\);?$/);
+    // Phase 14 & 18: Iterators declaration (Iterator<T> it = col.iterator();)
+    const itDeclMatch = trimmed.match(/^(?:(?:java\.util\.)?(?:List)?Iterator)(?:<[^>]+>)?\s+([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.(?:iterator|listIterator)\(\);?$/);
     if (itDeclMatch) {
       const itVar = itDeclMatch[1];
       const colVar = itDeclMatch[2];
-      varTypes.set(itVar, 'Iterator');
+      const isListIt = trimmed.includes('listIterator');
+      varTypes.set(itVar, isListIt ? 'ListIterator' : 'Iterator');
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.iteratorInit("${itVar}", "${colVar}", ${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.trackVar("${itVar}", "Iterator", ${itVar}, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackVar("${itVar}", "${isListIt ? 'ListIterator' : 'Iterator'}", ${itVar}, ${lineNum});`);
       continue;
     }
 
-    // Phase 14: Iterator it.next() call (Type x = it.next();)
+    // Phase 18: Iterator it.remove() call
+    const itRemoveMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.remove\(\);?$/);
+    if (itRemoveMatch && (varTypes.get(itRemoveMatch[1]) === 'Iterator' || varTypes.get(itRemoveMatch[1]) === 'ListIterator')) {
+      const itVar = itRemoveMatch[1];
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.iteratorRemove("${itVar}", "${itVar}", null, ${lineNum});`);
+      continue;
+    }
+
+    // Phase 18: ListIterator lit.add(val) or lit.set(val)
+    const litMutMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.(add|set)\((.+)\);?$/);
+    if (litMutMatch && varTypes.get(litMutMatch[1]) === 'ListIterator') {
+      const litVar = litMutMatch[1];
+      const op = litMutMatch[2];
+      const arg = litMutMatch[3].trim();
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      if (op === 'add') {
+        outputLines.push(`    CodeFlowTracer.listIteratorAdd("${litVar}", "${litVar}", (${arg}), ${lineNum});`);
+      } else {
+        outputLines.push(`    CodeFlowTracer.listIteratorSet("${litVar}", "${litVar}", (${arg}), ${lineNum});`);
+      }
+      continue;
+    }
+
+    // Phase 14 & 18: Iterator it.next() call (Type x = it.next(); or it.next();)
     const itNextMatch = trimmed.match(/^(?:([A-Za-z0-9_<>\[\]]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.next\(\);?$/);
-    if (itNextMatch && varTypes.get(itNextMatch[3]) === 'Iterator') {
+    if (itNextMatch && (varTypes.get(itNextMatch[3]) === 'Iterator' || varTypes.get(itNextMatch[3]) === 'ListIterator')) {
       const varName = itNextMatch[2];
       const itVar = itNextMatch[3];
       const varType = itNextMatch[1] || 'Object';
@@ -1315,13 +1358,14 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.iteratorStep("${itVar}", "${itVar}", ${varName}, -1, ${itVar}.hasNext(), ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.iteratorNext("${itVar}", "${itVar}", ${varName}, -1, ${lineNum});`);
       outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${varType}", ${varName}, ${lineNum});`);
       continue;
     }
 
-    // Phase 14: ListIterator lit.previous() call (Type x = lit.previous();)
+    // Phase 14 & 18: ListIterator lit.previous() call (Type x = lit.previous(); or lit.previous();)
     const itPrevMatch = trimmed.match(/^(?:([A-Za-z0-9_<>\[\]]+)\s+)?([a-zA-Z_0-9]+)\s*=\s*([a-zA-Z_0-9]+)\.previous\(\);?$/);
-    if (itPrevMatch && varTypes.get(itPrevMatch[3]) === 'Iterator') {
+    if (itPrevMatch && varTypes.get(itPrevMatch[3]) === 'ListIterator') {
       const varName = itPrevMatch[2];
       const itVar = itPrevMatch[3];
       const varType = itPrevMatch[1] || 'Object';
@@ -1329,6 +1373,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
       outputLines.push(`    CodeFlowTracer.listIteratorStep("${itVar}", "${itVar}", ${varName}, -1, "previous", ${itVar}.hasNext(), ${itVar}.hasPrevious(), ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.listIteratorPrevious("${itVar}", "${itVar}", ${varName}, -1, ${lineNum});`);
       outputLines.push(`    CodeFlowTracer.trackVar("${varName}", "${varType}", ${varName}, ${lineNum});`);
       continue;
     }
@@ -1543,10 +1588,12 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     if (enhancedForMatch) {
       const itemType = enhancedForMatch[1].trim();
       const itemName = enhancedForMatch[2];
+      const colExpr = enhancedForMatch[3].trim();
       const hasBrace = !!enhancedForMatch[4] || rawLine.includes('{');
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
       if (hasBrace) {
+        outputLines.push(`      CodeFlowTracer.foreachStep("${colExpr}", "${itemName}", ${itemName}, -1, ${lineNum});`);
         outputLines.push(`      CodeFlowTracer.trackVar("${itemName}", "${itemType}", ${itemName}, ${lineNum});`);
       }
       continue;
@@ -1593,6 +1640,14 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    while (true) {`);
       outputLines.push(`      boolean _cond_${lineNum} = (${condExpr});`);
       outputLines.push(`      CodeFlowTracer.condition("${condExpr.replace(/"/g, '\\"')}", _cond_${lineNum}, ${lineNum});`);
+      const itHasNextMatch = condExpr.match(/^([a-zA-Z_0-9]+)\.hasNext\(\)$/);
+      if (itHasNextMatch) {
+        outputLines.push(`      CodeFlowTracer.iteratorHasNext("${itHasNextMatch[1]}", _cond_${lineNum}, ${lineNum});`);
+      }
+      const litHasPrevMatch = condExpr.match(/^([a-zA-Z_0-9]+)\.hasPrevious\(\)$/);
+      if (litHasPrevMatch) {
+        outputLines.push(`      CodeFlowTracer.listIteratorHasPrevious("${litHasPrevMatch[1]}", _cond_${lineNum}, ${lineNum});`);
+      }
       outputLines.push(`      if (!_cond_${lineNum}) {`);
       outputLines.push(`        CodeFlowTracer.loopEnd(${lineNum});`);
       outputLines.push(`        break;`);
@@ -1776,14 +1831,17 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Phase 16: Collections utility method calls: Collections.sort(list); Collections.reverse(list); etc.
-    const collectionsUtilMatch = trimmed.match(/^Collections\.([a-zA-Z0-9_]+)\(([a-zA-Z_0-9]+)(?:,\s*(.+))?\);$/);
+    // Phase 16 & 18: Collections utility method calls: Collections.sort(list); Collections.reverse(list); etc.
+    const collectionsUtilMatch = trimmed.match(/^Collections\.([a-zA-Z0-9_]+)\(([a-zA-Z_0-9]+)(?:,\s*(.+))?\);?$/);
     if (collectionsUtilMatch) {
       const utilMethod = collectionsUtilMatch[1];
       const targetVar = collectionsUtilMatch[2];
+      const extraArg = collectionsUtilMatch[3] ? collectionsUtilMatch[3].trim() : 'null';
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.collectionsUtilOp("${utilMethod}", "${targetVar}", ${extraArg}, ${lineNum});`);
       outputLines.push(`    CodeFlowTracer.collectionOp(${targetVar}, "${targetVar}", "${utilMethod}", -1, null, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.trackMutation(${targetVar}, "${targetVar}", ${lineNum});`);
       continue;
     }
 

@@ -33,6 +33,9 @@ import {
   MethodOverloadResolution,
   CollectionOperationInfo,
   CollectionInspectorState,
+  CollectionsMetrics,
+  GenericsInfo,
+  CollectionRelationshipInfo,
 } from '../types/execution';
 
 function estimateSize(type: string, val: any): number {
@@ -723,6 +726,98 @@ function computeBeginnerExplanation(
         actionType: 'METHOD_OVERLOAD',
       };
 
+    // Phase 18: Advanced Java Collections, Generics & Iterators
+    case 'COLLECTION_CREATE':
+      return {
+        what: `Created ${ev.collectionType || 'Collection'}${ev.genericType ? `<${ev.genericType}>` : ''} '${ev.variable || 'col'}' (initial capacity: ${ev.capacity || 10}).`,
+        why: `Allocates internal storage on the JVM Heap. ArrayList uses a dynamic backing array; HashSet and HashMap allocate hash buckets.`,
+        actionType: 'COLLECTION_CREATE',
+      };
+
+    case 'COLLECTION_PUT':
+      return {
+        what: `Stored entry ${JSON.stringify(ev.key)} ➔ ${JSON.stringify(ev.value)} in Map '${ev.variable}'.`,
+        why: `Computes hash code Objects.hashCode(key) to place the entry in an internal bucket. If key already exists, updates value in-place.`,
+        actionType: 'MAP_PUT',
+      };
+
+    case 'COLLECTION_PUSH':
+      return {
+        what: `Pushed element ${JSON.stringify(ev.value)} onto top of Stack '${ev.variable}'.`,
+        why: `LIFO (Last-In First-Out) operation adds the element to the stack top in O(1) time.`,
+        actionType: 'STACK_PUSH',
+      };
+
+    case 'COLLECTION_POP':
+      return {
+        what: `Popped and returned top element ${JSON.stringify(ev.value)} from Stack '${ev.variable}'.`,
+        why: `LIFO operation removes the most recently pushed element from the stack top.`,
+        actionType: 'STACK_POP',
+      };
+
+    case 'COLLECTION_PEEK':
+      return {
+        what: `Inspected element ${JSON.stringify(ev.value)} in '${ev.variable}' without removing it.`,
+        why: `Peek evaluates the head/top element in O(1) time without modifying collection state or size.`,
+        actionType: 'COLLECTION_PEEK',
+      };
+
+    case 'COLLECTION_POLL':
+      return {
+        what: `Polled and removed head element ${JSON.stringify(ev.value)} from '${ev.variable}'.`,
+        why: `Retrieves and removes the front element of a Queue/Deque or highest priority element of a PriorityQueue (Heap).`,
+        actionType: 'COLLECTION_POLL',
+      };
+
+    case 'ITERATOR_NEXT':
+      return {
+        what: `Iterator advanced to element ${JSON.stringify(ev.value)} at cursor position ${ev.iteratorPos ?? -1}.`,
+        why: `iterator.next() yields the current element and advances the internal traversal pointer by 1.`,
+        actionType: 'ITERATOR_NEXT',
+      };
+
+    case 'ITERATOR_REMOVE':
+      return {
+        what: `Iterator safely removed the current element from the collection.`,
+        why: `iterator.remove() is the ONLY safe way to delete elements during iteration without triggering ConcurrentModificationException.`,
+        actionType: 'ITERATOR_REMOVE',
+      };
+
+    case 'FOREACH_STEP':
+      return {
+        what: `Enhanced For-Each loop visited element ${ev.variable} = ${JSON.stringify(ev.value)} in '${ev.structureId}'.`,
+        why: `The Java compiler transforms enhanced for-loops into Iterator traversal for Iterable collections or indexed access for arrays.`,
+        actionType: 'FOREACH_STEP',
+      };
+
+    case 'COLLECTIONS_UTIL_OP':
+      return {
+        what: `Executed java.util.Collections.${ev.operation}() on '${ev.variable}'.`,
+        why: `Standard Collections framework utility algorithm applied directly to the collection.`,
+        actionType: 'COLLECTIONS_UTIL',
+      };
+
+    case 'GENERIC_TYPE_RESOLVE':
+      return {
+        what: `Generic type resolved: ${ev.collectionType}<${ev.genericType}> (Key: ${ev.genericKeyType || 'none'}, Value: ${ev.genericValueType || 'T'}).`,
+        why: `Java Generics enforce compile-time type safety preventing ClassCastException. At runtime, the JVM uses Type Erasure.`,
+        actionType: 'GENERIC_RESOLVE',
+      };
+
+    case 'TYPE_ERASURE_INFO':
+      return {
+        what: `Type Erasure: Generic type parameters are erased in JVM bytecode.`,
+        why: `To preserve backward compatibility with pre-generics Java bytecode, generic types exist only at compile time and are erased to raw types at runtime.`,
+        actionType: 'TYPE_ERASURE',
+      };
+
+    case 'CONCURRENT_MODIFICATION_DETECTED':
+      return {
+        what: `ConcurrentModificationException detected on '${ev.structureId}'!`,
+        why: `Fail-fast iterator detected that the collection was modified while iterating outside the iterator's own methods (modCount mismatch).`,
+        actionType: 'CONCURRENT_MODIFICATION',
+      };
+
     default:
       return {
         what: explanation,
@@ -899,6 +994,22 @@ export function reconstructExecutionSteps(
   // Phase 16 Java Collections & Internal Data Structures State
   let currentCollectionOperation: CollectionOperationInfo | null = null;
   let currentCollectionInspectors: Record<string, CollectionInspectorState> = {};
+
+  // Phase 18 Advanced Java Collections & Generics State
+  let currentCollectionsMetrics: CollectionsMetrics = {
+    adds: 0,
+    removes: 0,
+    gets: 0,
+    sets: 0,
+    mapPuts: 0,
+    mapGets: 0,
+    mapRemoves: 0,
+    setContains: 0,
+    iteratorNext: 0,
+    iteratorHasNext: 0,
+  };
+  let currentGenericsInfo: GenericsInfo | null = null;
+  let currentCollectionsRelationship: CollectionRelationshipInfo | null = null;
 
   let currentLine = 1;
 
@@ -1301,6 +1412,14 @@ export function reconstructExecutionSteps(
         buckets: ci.buckets ? ci.buckets.map((b: any) => ({ ...b, entries: b.entries.map((e: any) => ({ ...e })) })) : undefined,
       };
     }
+
+    // Phase 18 Advanced Java Collections & Generics clones
+    const nextCollectionsMetrics: CollectionsMetrics = { ...currentCollectionsMetrics };
+    let nextGenericsInfo: GenericsInfo | null = currentGenericsInfo ? (Object.assign({}, currentGenericsInfo) as GenericsInfo) : null;
+    let nextCollectionsRelationship: CollectionRelationshipInfo | null = currentCollectionsRelationship ? (Object.assign({}, currentCollectionsRelationship, {
+      hierarchy: [...currentCollectionsRelationship.hierarchy],
+      keyCharacteristics: [...currentCollectionsRelationship.keyCharacteristics],
+    }) as CollectionRelationshipInfo) : null;
 
     const nextMetrics: AlgorithmMetrics = { ...currentMetrics };
     const nextAlgorithmState: AlgorithmState = {
@@ -2568,6 +2687,450 @@ export function reconstructExecutionSteps(
           details: { operand1: op1, operand2: op2, result: val },
         };
         explanation = `Comparison: ${JSON.stringify(op1)} vs ${JSON.stringify(op2)} ➔ ${val}`;
+        break;
+      }
+
+      // ==========================================
+      // PHASE 18: ADVANCED JAVA COLLECTIONS & GENERICS
+      // ==========================================
+
+      case 'COLLECTION_CREATE': {
+        const vName = ev.variable || ev.structureId || 'col';
+        const cType = ev.collectionType || 'ArrayList';
+        const genType = ev.genericType || 'Integer';
+        const initialCap = ev.capacity || (cType === 'ArrayList' || cType === 'Vector' ? 10 : (cType.includes('Hash') ? 16 : 0));
+        
+        let stType: any = 'array';
+        if (cType === 'LinkedList') stType = 'linkedlist';
+        else if (cType === 'Vector') stType = 'array';
+        else if (cType === 'Stack') stType = 'stack';
+        else if (cType === 'ArrayDeque' || cType === 'Deque') stType = 'deque';
+        else if (cType === 'Queue') stType = 'queue';
+        else if (cType === 'PriorityQueue') stType = 'priorityqueue';
+        else if (cType === 'HashSet' || cType === 'LinkedHashSet' || cType === 'TreeSet') stType = 'set';
+        else if (cType === 'HashMap' || cType === 'LinkedHashMap' || cType === 'TreeMap' || cType === 'Hashtable') stType = 'map';
+
+        nextStructures[vName] = {
+          id: vName,
+          name: vName,
+          type: stType,
+          dataType: `${cType}<${genType}>`,
+          collectionType: cType,
+          genericType: genType,
+          size: 0,
+          capacity: initialCap,
+          isDerivedCapacity: cType === 'ArrayList' || cType.includes('Hash'),
+          isConceptualHash: cType.includes('Hash'),
+          arrayData: stType === 'array' ? [] : undefined,
+          stackData: stType === 'stack' ? [] : undefined,
+          queueData: stType === 'queue' ? [] : undefined,
+          dequeData: stType === 'deque' ? [] : undefined,
+          priorityQueueData: stType === 'priorityqueue' ? [] : undefined,
+          setData: stType === 'set' ? [] : undefined,
+          mapData: stType === 'map' ? { bucketCount: 16, entries: [] } : undefined,
+          lastOperation: `new ${cType}<>()`,
+        };
+
+        // Determine collection relationship info
+        let iface: 'List' | 'Set' | 'Queue' | 'Deque' | 'Map' = 'List';
+        let hierarchy: string[] = ['Iterable', 'Collection', 'List', cType];
+        let characteristics: string[] = ['Dynamic array resizing', 'O(1) indexed random access', 'Amortized O(1) append'];
+        if (cType === 'LinkedList') {
+          hierarchy = ['Iterable', 'Collection', 'List & Deque', 'LinkedList'];
+          characteristics = ['Doubly-linked nodes (prev & next)', 'O(1) insertion/deletion at ends', 'Sequential traversal'];
+        } else if (cType === 'Vector') {
+          hierarchy = ['Iterable', 'Collection', 'List', 'Vector'];
+          characteristics = ['Synchronized dynamic array', 'Thread-safe legacy collection', '100% capacity doubling'];
+        } else if (cType === 'Stack') {
+          iface = 'Queue';
+          hierarchy = ['Vector', 'Stack'];
+          characteristics = ['LIFO (Last-In First-Out)', 'push(), pop(), peek()', 'Inherits from legacy Vector'];
+        } else if (cType === 'ArrayDeque') {
+          iface = 'Deque';
+          hierarchy = ['Iterable', 'Collection', 'Queue', 'Deque', 'ArrayDeque'];
+          characteristics = ['Circular resizable array', 'Double-ended queue', 'Faster than Stack/LinkedList for push/pop'];
+        } else if (cType === 'PriorityQueue') {
+          iface = 'Queue';
+          hierarchy = ['Iterable', 'Collection', 'Queue', 'PriorityQueue'];
+          characteristics = ['Binary Heap backed array', 'Natural order or Comparator', 'O(log n) offer/poll, O(1) peek'];
+        } else if (cType === 'HashSet') {
+          iface = 'Set';
+          hierarchy = ['Iterable', 'Collection', 'Set', 'HashSet'];
+          characteristics = ['Hash table backed (via HashMap)', 'No duplicates permitted', 'Order not guaranteed'];
+        } else if (cType === 'LinkedHashSet') {
+          iface = 'Set';
+          hierarchy = ['Iterable', 'Collection', 'Set', 'HashSet', 'LinkedHashSet'];
+          characteristics = ['Hash table + doubly-linked list', 'Insertion order maintained', 'Predictable iteration order'];
+        } else if (cType === 'TreeSet') {
+          iface = 'Set';
+          hierarchy = ['Iterable', 'Collection', 'Set', 'NavigableSet', 'TreeSet'];
+          characteristics = ['Red-Black tree backed (TreeMap)', 'Sorted in natural order / Comparator', 'O(log n) operations'];
+        } else if (cType === 'HashMap') {
+          iface = 'Map';
+          hierarchy = ['Map', 'HashMap'];
+          characteristics = ['Hash table with buckets', 'O(1) average lookup/put', 'Allows 1 null key, multiple null values'];
+        } else if (cType === 'LinkedHashMap') {
+          iface = 'Map';
+          hierarchy = ['Map', 'HashMap', 'LinkedHashMap'];
+          characteristics = ['HashMap + doubly-linked list', 'Maintains insertion order', 'Predictable entry iteration'];
+        } else if (cType === 'TreeMap') {
+          iface = 'Map';
+          hierarchy = ['Map', 'SortedMap', 'NavigableMap', 'TreeMap'];
+          characteristics = ['Red-Black Tree balanced search tree', 'Keys strictly ordered', 'firstKey(), lastKey(), subMap()'];
+        } else if (cType === 'Hashtable') {
+          iface = 'Map';
+          hierarchy = ['Dictionary', 'Map', 'Hashtable'];
+          characteristics = ['Legacy synchronized hash table', 'Thread-safe', 'Does NOT permit null keys or values'];
+        }
+
+        nextCollectionsRelationship = {
+          interfaceType: iface,
+          concreteClass: cType,
+          hierarchy,
+          keyCharacteristics: characteristics,
+        };
+
+        nextActiveConcept = {
+          name: `${cType} Collection`,
+          category: 'COLLECTIONS',
+          explanation: `Instantiated ${cType}<${genType}>. ${characteristics[0]}.`,
+          badge: cType,
+          details: { variable: vName, collectionType: cType, genericType: genType, capacity: initialCap },
+        };
+        explanation = `Created ${cType}<${genType}> '${vName}' (capacity: ${initialCap})`;
+        break;
+      }
+
+      case 'COLLECTION_PUT': {
+        const vName = ev.variable || 'map';
+        const key = ev.key;
+        const val = ev.value;
+        nextCollectionsMetrics.mapPuts++;
+        const st = nextStructures[vName];
+        if (st) {
+          if (!st.mapData) st.mapData = { bucketCount: 16, entries: [] };
+          const existing = st.mapData.entries.find((e: any) => String(e.key) === String(key));
+          if (existing) {
+            existing.value = val;
+          } else {
+            const h = Math.abs(String(key).split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0));
+            st.mapData.entries.push({ key, value: val, hash: h, bucket: h % 16 });
+          }
+          st.size = st.mapData.entries.length;
+          st.lastOperation = `put(${JSON.stringify(key)}, ${JSON.stringify(val)})`;
+        }
+        explanation = `${vName}.put(${JSON.stringify(key)}, ${JSON.stringify(val)})`;
+        break;
+      }
+
+      case 'COLLECTION_PUSH': {
+        const vName = ev.variable || 'stack';
+        const val = ev.value;
+        nextCollectionsMetrics.adds++;
+        const st = nextStructures[vName];
+        if (st) {
+          if (!st.stackData) st.stackData = [];
+          st.stackData.push(val);
+          st.size = st.stackData.length;
+          st.lastOperation = `push(${JSON.stringify(val)})`;
+        }
+        explanation = `${vName}.push(${JSON.stringify(val)}) ➔ size: ${st?.size ?? 1}`;
+        break;
+      }
+
+      case 'COLLECTION_POP': {
+        const vName = ev.variable || 'stack';
+        nextCollectionsMetrics.removes++;
+        const st = nextStructures[vName];
+        if (st && st.stackData && st.stackData.length > 0) {
+          const popped = st.stackData.pop();
+          st.size = st.stackData.length;
+          st.lastOperation = `pop() ➔ ${JSON.stringify(popped)}`;
+        }
+        explanation = `${vName}.pop() ➔ ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'COLLECTION_PEEK': {
+        const vName = ev.variable || 'col';
+        nextCollectionsMetrics.gets++;
+        const st = nextStructures[vName];
+        if (st) {
+          st.lastOperation = `peek() ➔ ${JSON.stringify(ev.value)}`;
+        }
+        explanation = `${vName}.peek() ➔ ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'COLLECTION_POLL': {
+        const vName = ev.variable || 'queue';
+        nextCollectionsMetrics.removes++;
+        const st = nextStructures[vName];
+        if (st) {
+          if (st.queueData && st.queueData.length > 0) {
+            st.queueData.shift();
+            st.size = st.queueData.length;
+          } else if (st.dequeData && st.dequeData.length > 0) {
+            st.dequeData.shift();
+            st.size = st.dequeData.length;
+          } else if (st.priorityQueueData && st.priorityQueueData.length > 0) {
+            st.priorityQueueData.shift();
+            st.size = st.priorityQueueData.length;
+          }
+          st.lastOperation = `poll() ➔ ${JSON.stringify(ev.value)}`;
+        }
+        explanation = `${vName}.poll() ➔ ${JSON.stringify(ev.value)}`;
+        break;
+      }
+
+      case 'ITERATOR_CREATE':
+      case 'ITERATOR_INIT': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || 'col';
+        nextIteratorState = {
+          iteratorId: itVar,
+          collectionName: colName,
+          cursorIndex: 0,
+          currentElement: undefined,
+          hasNext: true,
+          isListIterator: ev.collectionType === 'ListIterator',
+          direction: 'FORWARD',
+        };
+        const st = nextStructures[colName];
+        if (st) {
+          st.activeIterators = {
+            ...(st.activeIterators || {}),
+            [itVar]: {
+              id: itVar,
+              cursor: 0,
+              hasNext: true,
+              hasPrevious: false,
+            },
+          };
+        }
+        explanation = `Iterator '${itVar}' initialized on ${colName} (cursor = 0)`;
+        break;
+      }
+
+      case 'ITERATOR_NEXT': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || nextIteratorState?.collectionName || 'col';
+        const val = ev.value;
+        const curIdx = nextIteratorState ? nextIteratorState.cursorIndex + 1 : 1;
+        nextCollectionsMetrics.iteratorNext++;
+        nextIteratorState = {
+          iteratorId: itVar,
+          collectionName: colName,
+          cursorIndex: curIdx,
+          currentElement: val,
+          hasNext: ev.conditionResult !== false,
+          isListIterator: nextIteratorState?.isListIterator || false,
+          direction: 'FORWARD',
+          action: 'next',
+        };
+        const st = nextStructures[colName];
+        if (st) {
+          st.activeIterators = {
+            ...(st.activeIterators || {}),
+            [itVar]: {
+              id: itVar,
+              cursor: curIdx,
+              hasNext: ev.conditionResult !== false,
+              hasPrevious: curIdx > 0,
+            },
+          };
+          st.lastOperation = `${itVar}.next() ➔ ${JSON.stringify(val)}`;
+        }
+        explanation = `${itVar}.next() ➔ ${JSON.stringify(val)} (cursor: ${curIdx})`;
+        break;
+      }
+
+      case 'ITERATOR_REMOVE': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || nextIteratorState?.collectionName || 'col';
+        nextCollectionsMetrics.removes++;
+        if (nextIteratorState) {
+          nextIteratorState.action = undefined;
+        }
+        const st = nextStructures[colName];
+        if (st) {
+          st.lastOperation = `${itVar}.remove() ➔ removed current element`;
+        }
+        explanation = `${itVar}.remove() safely removed current element from ${colName}`;
+        break;
+      }
+
+      case 'LIST_ITERATOR_PREVIOUS': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || nextIteratorState?.collectionName || 'col';
+        const val = ev.value;
+        const curIdx = nextIteratorState ? Math.max(0, nextIteratorState.cursorIndex - 1) : 0;
+        nextCollectionsMetrics.iteratorNext++;
+        nextIteratorState = {
+          iteratorId: itVar,
+          collectionName: colName,
+          cursorIndex: curIdx,
+          currentElement: val,
+          hasNext: true,
+          hasPrevious: curIdx > 0,
+          isListIterator: true,
+          direction: 'BACKWARD',
+          action: 'previous',
+        };
+        const st = nextStructures[colName];
+        if (st) {
+          st.activeIterators = {
+            ...(st.activeIterators || {}),
+            [itVar]: {
+              id: itVar,
+              cursor: curIdx,
+              hasNext: true,
+              hasPrevious: curIdx > 0,
+            },
+          };
+          st.lastOperation = `${itVar}.previous() ➔ ${JSON.stringify(val)}`;
+        }
+        explanation = `${itVar}.previous() ➔ ${JSON.stringify(val)} (cursor: ${curIdx})`;
+        break;
+      }
+
+      case 'LIST_ITERATOR_ADD': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || nextIteratorState?.collectionName || 'col';
+        const val = ev.value;
+        nextCollectionsMetrics.adds++;
+        const st = nextStructures[colName];
+        if (st && st.arrayData) {
+          const pos = nextIteratorState ? nextIteratorState.cursorIndex : st.arrayData.length;
+          st.arrayData.splice(pos, 0, val);
+          st.size = st.arrayData.length;
+          st.lastOperation = `${itVar}.add(${JSON.stringify(val)})`;
+        }
+        explanation = `${itVar}.add(${JSON.stringify(val)}) inserted element into ${colName}`;
+        break;
+      }
+
+      case 'LIST_ITERATOR_SET': {
+        const itVar = ev.variable || 'it';
+        const colName = ev.structureId || nextIteratorState?.collectionName || 'col';
+        const val = ev.value;
+        nextCollectionsMetrics.sets++;
+        const st = nextStructures[colName];
+        if (st && st.arrayData && nextIteratorState) {
+          const pos = Math.max(0, nextIteratorState.cursorIndex - 1);
+          if (pos < st.arrayData.length) {
+            st.arrayData[pos] = val;
+          }
+          st.lastOperation = `${itVar}.set(${JSON.stringify(val)})`;
+        }
+        explanation = `${itVar}.set(${JSON.stringify(val)}) modified element in ${colName}`;
+        break;
+      }
+
+      case 'FOREACH_STEP': {
+        const colName = ev.structureId || 'collection';
+        const varName = ev.variable || 'item';
+        const val = ev.value;
+        nextCollectionsMetrics.iteratorNext++;
+        const st = nextStructures[colName];
+        if (st) {
+          st.pointers = {
+            ...st.pointers,
+            forEach: val,
+          };
+          st.lastOperation = `for (${varName} : ${colName}) ➔ ${JSON.stringify(val)}`;
+        }
+        nextActiveConcept = {
+          name: 'Enhanced For-Each Iteration',
+          category: 'COLLECTIONS',
+          explanation: `Iterating over ${colName}: current element is ${JSON.stringify(val)}. The JVM translates this to an Iterator internally.`,
+          badge: 'For-Each',
+          details: { collection: colName, variable: varName, value: val },
+        };
+        explanation = `For-each: ${varName} = ${JSON.stringify(val)} in ${colName}`;
+        break;
+      }
+
+      case 'COLLECTIONS_UTIL_OP': {
+        const op = ev.operation || 'sort';
+        const target = ev.variable || ev.structureId || 'list';
+        const st = nextStructures[target];
+        if (st) {
+          if (op === 'sort' && st.arrayData) {
+            st.arrayData.sort((a, b) => typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b)));
+          } else if (op === 'reverse' && st.arrayData) {
+            st.arrayData.reverse();
+          } else if (op === 'fill' && st.arrayData && ev.value !== undefined) {
+            st.arrayData = st.arrayData.map(() => ev.value);
+          }
+          st.lastOperation = `Collections.${op}(${target})`;
+        }
+        nextActiveConcept = {
+          name: `Collections.${op}()`,
+          category: 'COLLECTIONS',
+          explanation: `Executed java.util.Collections.${op}() utility method on ${target}. Typical complexity: O(n log n) for sort, O(n) for linear operations.`,
+          badge: `Collections.${op}`,
+          details: { operation: op, target, extraArg: ev.value },
+        };
+        explanation = `Collections.${op}(${target})`;
+        break;
+      }
+
+      case 'GENERIC_TYPE_RESOLVE': {
+        const vName = ev.variable || 'var';
+        const cType = ev.collectionType || 'Collection';
+        const declGen = ev.genericType || 'T';
+        const keyT = ev.genericKeyType || '';
+        const valT = ev.genericValueType || 'Object';
+        const wBound = (ev.wildcardBound as any) || 'NONE';
+        const bType = ev.boundType || '';
+
+        nextGenericsInfo = {
+          variableName: vName,
+          collectionType: cType,
+          declaredGenericType: declGen,
+          keyType: keyT,
+          valueType: valT,
+          wildcardBound: wBound,
+          boundType: bType,
+          isTypeErasedAtRuntime: true,
+          erasureExplanation: `At compile time, Java enforces type safety for ${declGen}. At runtime, the JVM erases generic parameters to Object (or the upper bound) via Type Erasure.`,
+          isCompileTimeMetadata: true,
+        };
+
+        if (nextStructures[vName]) {
+          nextStructures[vName].genericType = declGen;
+          nextStructures[vName].genericKeyType = keyT;
+          nextStructures[vName].genericValueType = valT;
+        }
+
+        nextActiveConcept = {
+          name: 'Java Generics & Type Erasure',
+          category: 'COLLECTIONS',
+          explanation: `Compile-time generic constraint: ${declGen}. Erased to raw types at runtime for JVM bytecode backward compatibility.`,
+          badge: 'Generics',
+          details: { variable: vName, genericType: declGen, wildcardBound: wBound },
+        };
+        explanation = `Generics resolved: ${vName} -> ${declGen} (Type erased at runtime)`;
+        break;
+      }
+
+      case 'TYPE_ERASURE_INFO': {
+        if (nextGenericsInfo) {
+          nextGenericsInfo.erasureExplanation = ev.message || nextGenericsInfo.erasureExplanation;
+        }
+        explanation = `Type Erasure: Generic type parameters erased to raw types in bytecode`;
+        break;
+      }
+
+      case 'CONCURRENT_MODIFICATION_DETECTED': {
+        nextActiveConcept = {
+          name: 'ConcurrentModificationException',
+          category: 'COLLECTIONS',
+          explanation: `ConcurrentModificationException detected! Collection '${ev.structureId}' was structurally modified while an iterator was traversing it.`,
+          badge: 'Fail-Fast CME',
+        };
+        explanation = `ConcurrentModificationException: Collection modified during iteration!`;
         break;
       }
 
@@ -10463,7 +11026,18 @@ export function reconstructExecutionSteps(
       collectionInspectors: Object.fromEntries(
         Object.entries(nextCollectionInspectors).map(([k, v]) => [k, { ...v, elements: [...v.elements] }])
       ),
+      // Phase 18 Advanced Java Collections & Generics
+      genericsInfo: nextGenericsInfo ? (Object.assign({}, nextGenericsInfo) as GenericsInfo) : null,
+      collectionsRelationship: nextCollectionsRelationship ? (Object.assign({}, nextCollectionsRelationship, {
+        hierarchy: [...nextCollectionsRelationship.hierarchy],
+        keyCharacteristics: [...nextCollectionsRelationship.keyCharacteristics],
+      }) as CollectionRelationshipInfo) : null,
+      collectionsMetrics: { ...nextCollectionsMetrics },
     });
+
+    currentCollectionsMetrics = nextCollectionsMetrics;
+    currentGenericsInfo = nextGenericsInfo;
+    currentCollectionsRelationship = nextCollectionsRelationship;
   }
 
   return steps;
