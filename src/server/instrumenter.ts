@@ -1520,28 +1520,36 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Field mutation: obj.field = val;
+    // Field mutation: obj.field = val; (including chained obj.a.b = val;)
     const fieldAssignMatch = trimmed.match(/^([a-zA-Z_0-9]+(?:\.[a-zA-Z_0-9]+)+)\s*=\s*(.+);$/);
     if (fieldAssignMatch && !trimmed.startsWith('System.out.')) {
       const fieldExpr = fieldAssignMatch[1];
+      const lastDot = fieldExpr.lastIndexOf('.');
+      const targetExpr = fieldExpr.substring(0, lastDot);
+      const fldName = fieldExpr.substring(lastDot + 1);
       const rootVar = fieldExpr.split('.')[0];
-      const fieldSub = fieldExpr.substring(fieldExpr.indexOf('.') + 1);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.fieldUpdate(${rootVar}, "${fieldSub}", ${fieldExpr}, ${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.trackObjectMutation(${rootVar}, "${rootVar}", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.fieldUpdate(${targetExpr}, "${fldName}", ${fieldExpr}, ${lineNum});`);
+      if (rootVar !== 'this') {
+        outputLines.push(`    CodeFlowTracer.trackObjectMutation(${rootVar}, "${rootVar}", ${lineNum});`);
+      }
       continue;
     }
 
     const fieldIncMatch = trimmed.match(/^([a-zA-Z_0-9]+(?:\.[a-zA-Z_0-9]+)+)\s*(\+\+|--);$/);
     if (fieldIncMatch && !trimmed.startsWith('System.out.')) {
       const fieldExpr = fieldIncMatch[1];
+      const lastDot = fieldExpr.lastIndexOf('.');
+      const targetExpr = fieldExpr.substring(0, lastDot);
+      const fldName = fieldExpr.substring(lastDot + 1);
       const rootVar = fieldExpr.split('.')[0];
-      const fieldSub = fieldExpr.substring(fieldExpr.indexOf('.') + 1);
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(rawLine);
-      outputLines.push(`    CodeFlowTracer.fieldUpdate(${rootVar}, "${fieldSub}", ${fieldExpr}, ${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.trackObjectMutation(${rootVar}, "${rootVar}", ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.fieldUpdate(${targetExpr}, "${fldName}", ${fieldExpr}, ${lineNum});`);
+      if (rootVar !== 'this') {
+        outputLines.push(`    CodeFlowTracer.trackObjectMutation(${rootVar}, "${rootVar}", ${lineNum});`);
+      }
       continue;
     }
 

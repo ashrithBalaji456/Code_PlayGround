@@ -928,6 +928,11 @@ export interface ExecutionEvent {
   methodName?: string;
   resolvedMethod?: string;
   fieldName?: string;
+  fieldType?: string;
+  oldReferenceId?: string;
+  newReferenceId?: string;
+  isNull?: boolean;
+  ownerObjectId?: string;
   castSuccess?: boolean;
   instanceOfResult?: boolean;
   threadId?: string;

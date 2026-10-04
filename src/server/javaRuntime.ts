@@ -90,7 +90,7 @@ public class CodeFlowTracer {
         String oldValField = isUpdate ? (",\\\"oldValue\\\":" + (oldVal == null ? "\\\"null\\\"" : (isPrimitiveOrString(oldVal) ? formatValue(oldVal) : ("\\\"@obj-" + System.identityHashCode(oldVal) + "\\\"")))) : "";
 
         if (val == null) {
-            recordEvent("{\\\"type\\\":\\\"" + eventType + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"" + valField + "\\\":\\\"null\\\",\\\"isReference\\\":false" + oldValField + "}");
+            recordEvent("{\\\"type\\\":\\\"" + eventType + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"" + valField + "\\\":\\\"null\\\",\\\"isReference\\\":true,\\\"isNull\\\":true,\\\"refTargetId\\\":\\\"null\\\"" + oldValField + "}");
             return;
         }
 
@@ -104,6 +104,11 @@ public class CodeFlowTracer {
         }
 
         recordEvent("{\\\"type\\\":\\\"" + eventType + "\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + name + "\\\",\\\"dataType\\\":\\\"" + declaredType + "\\\",\\\"" + valField + "\\\":\\\"@" + objId + "\\\",\\\"isReference\\\":true,\\\"refTargetId\\\":\\\"" + objId + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"" + oldValField + "}");
+
+        if ("this".equals(name)) {
+            // 'this' is a method/constructor receiver, never a separate data structure
+            return;
+        }
 
         if (clazz.isArray()) {
             inspectAndEmitArray(name, val, declaredType, objId, line);
@@ -173,11 +178,42 @@ public class CodeFlowTracer {
         recordEvent("{\\\"type\\\":\\\"OBJECT_CREATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"variable\\\":\\\"" + varName + "\\\",\\\"className\\\":\\\"" + className + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\"}");
     }
 
-    public static void fieldUpdate(Object target, String fieldName, Object newVal, int line) {
+    public static void fieldWrite(Object target, String fieldName, Object oldVal, Object newVal, int line) {
         if (target == null) return;
         String objId = "obj-" + System.identityHashCode(target);
+        boolean isRef = (newVal == null || !isPrimitiveOrString(newVal));
+        boolean isNull = (newVal == null);
+        String newRefId = (newVal != null && isRef) ? ("obj-" + System.identityHashCode(newVal)) : (isNull ? "null" : "");
+        boolean oldIsRef = (oldVal == null || !isPrimitiveOrString(oldVal));
+        boolean oldIsNull = (oldVal == null);
+        String oldRefId = (oldVal != null && oldIsRef) ? ("obj-" + System.identityHashCode(oldVal)) : (oldIsNull ? "null" : "");
         String valStr = formatValue(newVal);
-        recordEvent("{\\\"type\\\":\\\"OBJECT_FIELD_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"className\\\":\\\"" + target.getClass().getSimpleName() + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"newValue\\\":" + valStr + "}");
+        String oldValStr = formatValue(oldVal);
+        String fType = "Object";
+        try {
+            Field f = target.getClass().getDeclaredField(fieldName);
+            f.setAccessible(true);
+            fType = f.getType().getSimpleName();
+        } catch (Throwable ignored) {}
+
+        String threadName = Thread.currentThread().getName();
+        recordEvent("{\\\"type\\\":\\\"OBJECT_FIELD_WRITE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"className\\\":\\\"" + target.getClass().getSimpleName() + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"fieldType\\\":\\\"" + fType + "\\\",\\\"oldValue\\\":" + oldValStr + ",\\\"newValue\\\":" + valStr + ",\\\"oldReferenceId\\\":\\\"" + oldRefId + "\\\",\\\"newReferenceId\\\":\\\"" + newRefId + "\\\",\\\"isReference\\\":" + isRef + ",\\\"isNull\\\":" + isNull + ",\\\"threadId\\\":\\\"" + threadName + "\\\"}");
+        recordEvent("{\\\"type\\\":\\\"OBJECT_FIELD_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"className\\\":\\\"" + target.getClass().getSimpleName() + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"oldValue\\\":" + oldValStr + ",\\\"newValue\\\":" + valStr + ",\\\"oldReferenceId\\\":\\\"" + oldRefId + "\\\",\\\"newReferenceId\\\":\\\"" + newRefId + "\\\",\\\"isReference\\\":" + isRef + ",\\\"isNull\\\":" + isNull + "}");
+    }
+
+    public static void fieldUpdate(Object target, String fieldName, Object newVal, int line) {
+        fieldWrite(target, fieldName, null, newVal, line);
+    }
+
+    public static Object fieldRead(Object target, String fieldName, Object val, int line) {
+        if (target == null) return val;
+        String objId = "obj-" + System.identityHashCode(target);
+        boolean isRef = (val == null || !isPrimitiveOrString(val));
+        boolean isNull = (val == null);
+        String refId = (val != null && isRef) ? ("obj-" + System.identityHashCode(val)) : (isNull ? "null" : "");
+        String valStr = formatValue(val);
+        recordEvent("{\\\"type\\\":\\\"OBJECT_FIELD_READ\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"className\\\":\\\"" + target.getClass().getSimpleName() + "\\\",\\\"fieldName\\\":\\\"" + fieldName + "\\\",\\\"value\\\":" + valStr + ",\\\"isReference\\\":" + isRef + ",\\\"isNull\\\":" + isNull + (refId.length() > 0 ? (",\\\"refTargetId\\\":\\\"" + refId + "\\\"") : "") + "}");
+        return val;
     }
 
     public static void staticFieldUpdate(String className, String fieldName, Object newVal, int line) {
@@ -1031,10 +1067,13 @@ public class CodeFlowTracer {
 
         recordEvent("{\\\"type\\\":\\\"CUSTOM_OBJECT_UPDATE\\\",\\\"step\\\":" + (++stepCounter) + ",\\\"line\\\":" + line + ",\\\"structureId\\\":\\\"" + name + "\\\",\\\"variable\\\":\\\"" + name + "\\\",\\\"className\\\":\\\"" + clazz.getSimpleName() + "\\\",\\\"objectId\\\":\\\"" + objId + "\\\",\\\"fields\\\":" + fieldsJson.toString() + "}");
 
-        if (hasNext) {
+        boolean isPointer = "this".equals(name) || "current".equals(name) || "curr".equals(name)
+            || "prev".equals(name) || "previous".equals(name) || "next".equals(name)
+            || "ptr".equals(name) || "temp".equals(name) || "p".equals(name) || "q".equals(name);
+        if (hasNext && !isPointer) {
             emitLinkedListChain(name, obj, line);
         }
-        if (hasLeftRight) {
+        if (hasLeftRight && !isPointer) {
             emitBinaryTree(name, obj, line);
         }
     }
@@ -1067,7 +1106,8 @@ public class CodeFlowTracer {
             nodesJson.append("\\\"").append(nid).append("\\\":{")
                      .append("\\\"id\\\":\\\"").append(nid).append("\\\",")
                      .append("\\\"value\\\":").append(formatValue(val)).append(",")
-                     .append("\\\"next\\\":").append(nextId).append("}");
+                     .append("\\\"next\\\":").append(nextId).append(",")
+                     .append("\\\"nextId\\\":").append(nextId).append("}");
 
             curr = nextObj;
             count++;
