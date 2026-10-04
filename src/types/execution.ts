@@ -659,6 +659,35 @@ export type EventType =
   | 'FUTURE_GET_END'
   | 'RACE_CONDITION_OBSERVED'
   | 'CONCURRENT_COLLECTION_OP'
+  // Phase 17 Advanced Java Concurrency, Threads & Synchronization Events
+  | 'THREAD_RUN_ENTER'
+  | 'THREAD_RUN_EXIT'
+  | 'THREAD_TERMINATE'
+  | 'THREAD_JOIN'
+  | 'THREAD_JOIN_WAIT'
+  | 'THREAD_JOIN_RESUME'
+  | 'THREAD_SLEEP'
+  | 'LOCK_CREATE'
+  | 'LOCK_ATTEMPT'
+  | 'LOCK_BLOCK'
+  | 'LOCK_CONTENTION'
+  | 'MONITOR_ENTER'
+  | 'MONITOR_EXIT'
+  | 'RACE_READ'
+  | 'RACE_WRITE'
+  | 'RACE_CONFLICT'
+  | 'EXECUTOR_CREATE'
+  | 'TASK_QUEUE'
+  | 'TASK_START'
+  | 'TASK_COMPLETE'
+  | 'WORKER_CREATE'
+  | 'WORKER_START'
+  | 'WORKER_IDLE'
+  | 'WORKER_TERMINATE'
+  | 'EXECUTOR_SHUTDOWN'
+  | 'THREAD_EXCEPTION'
+  | 'THREAD_EXCEPTION_CAUGHT'
+  | 'THREAD_EXCEPTION_UNCAUGHT'
   // Phase 14 Java OOP, Collections & Functional Events
   | 'CONSTRUCTOR_CHAIN'
   | 'SUPER_CONSTRUCTOR_ENTER'
@@ -718,7 +747,27 @@ export type EventType =
   | 'COLLECTION_REHASH'
   | 'COLLECTION_REORDER'
   | 'COLLECTION_COMPARE'
-  | 'COLLECTION_END';
+  | 'COLLECTION_END'
+  // Phase 18 Advanced Java Collections & Generics Visualization Events
+  | 'COLLECTION_CREATE'
+  | 'COLLECTION_EMPTY_CHECK'
+  | 'COLLECTION_PEEK'
+  | 'COLLECTION_PUSH'
+  | 'COLLECTION_POP'
+  | 'COLLECTION_POLL'
+  | 'COLLECTION_PUT'
+  | 'COLLECTION_REPLACE'
+  | 'ITERATOR_CREATE'
+  | 'ITERATOR_NEXT'
+  | 'ITERATOR_REMOVE'
+  | 'LIST_ITERATOR_HAS_PREVIOUS'
+  | 'LIST_ITERATOR_ADD'
+  | 'LIST_ITERATOR_SET'
+  | 'FOREACH_STEP'
+  | 'COLLECTIONS_UTIL_OP'
+  | 'TYPE_ERASURE_INFO'
+  | 'GENERIC_WILDCARD_INFO'
+  | 'CONCURRENT_MODIFICATION_DETECTED';
 
 export interface ExecutionEvent {
   type: EventType;
@@ -913,6 +962,17 @@ export interface ExecutionEvent {
   lambdaParam?: any;
   lambdaResult?: any;
   passed?: boolean;
+  // Phase 18 Collections & Generics fields
+  genericType?: string;
+  genericKeyType?: string;
+  genericValueType?: string;
+  iteratorId?: string;
+  iteratorPos?: number;
+  hasMore?: boolean;
+  isConceptualHash?: boolean;
+  isDerivedCapacity?: boolean;
+  wildcardBound?: 'UNBOUNDED' | 'EXTENDS' | 'SUPER' | 'NONE';
+  boundType?: string;
 }
 
 export interface VariableInfo {
@@ -1087,6 +1147,16 @@ export interface DataStructureState {
     cycleDetected?: boolean;
     cycleEdges?: string[];
   };
+  // Phase 18 Collections & Generics State
+  collectionType?: string;
+  genericType?: string;
+  genericKeyType?: string;
+  genericValueType?: string;
+  capacity?: number;
+  isDerivedCapacity?: boolean;
+  isConceptualHash?: boolean;
+  activeIterators?: Record<string, { id: string; cursor: number; hasNext: boolean; hasPrevious?: boolean }>;
+  nestedCollections?: Record<string, any>;
   // Phase 8 Dedicated Data Structures
   dsuData?: {
     parents: Record<string, string>;
@@ -1208,30 +1278,44 @@ export interface HeapObject {
 export interface ThreadState {
   id: string;
   name: string;
+  threadId?: string;
+  threadName?: string;
   state: 'NEW' | 'RUNNABLE' | 'RUNNING' | 'WAITING' | 'TIMED_WAITING' | 'BLOCKED' | 'TERMINATED';
+  threadState?: 'NEW' | 'RUNNABLE' | 'RUNNING' | 'WAITING' | 'TIMED_WAITING' | 'BLOCKED' | 'TERMINATED';
   callStack: CallFrame[];
   priority?: number;
   currentLine?: number;
   currentMethod?: string;
   stackFrames?: CallFrame[];
   createdAt?: number;
+  createdAtStep?: number;
   startedAt?: number;
+  startedAtStep?: number;
   finishedAt?: number;
+  terminatedAtStep?: number;
   ownedLocks?: string[];
   waitingFor?: string;
+  blockedOn?: string;
   parentThreadName?: string;
+  parentThreadId?: string;
   isDaemon?: boolean;
+  daemon?: boolean;
+  color?: string;
 }
 
 export interface LockState {
   id: string;
   name: string;
   ownerThreadId: string | null;
+  ownerThreadName?: string | null;
   waitingThreadIds: string[];
   entryQueue?: string[];
   waitSet?: string[];
   acquiredAt?: number;
   releasedAt?: number;
+  isStatic?: boolean;
+  className?: string;
+  objectId?: string;
 }
 
 export interface ConcurrencyStepInfo {
@@ -1850,6 +1934,45 @@ export interface ExecutionStep {
   // Phase 16 Java Collections & Internal Data Structures
   collectionOperation?: CollectionOperationInfo | null;
   collectionInspectors?: Record<string, CollectionInspectorState>;
+  // Phase 18 Advanced Java Collections & Generics
+  genericsInfo?: GenericsInfo | null;
+  collectionsRelationship?: CollectionRelationshipInfo | null;
+  collectionsMetrics?: CollectionsMetrics | null;
+}
+
+export interface GenericsInfo {
+  variableName?: string;
+  collectionType?: string;
+  declaredGenericType?: string;
+  typeArguments?: string[];
+  keyType?: string;
+  valueType?: string;
+  nestedGenericType?: string;
+  wildcardBound?: 'UNBOUNDED' | 'EXTENDS' | 'SUPER' | 'NONE';
+  boundType?: string;
+  isTypeErasedAtRuntime: boolean;
+  erasureExplanation: string;
+  isCompileTimeMetadata: boolean;
+}
+
+export interface CollectionsMetrics {
+  adds: number;
+  removes: number;
+  gets: number;
+  sets: number;
+  mapPuts: number;
+  mapGets: number;
+  mapRemoves: number;
+  setContains: number;
+  iteratorNext: number;
+  iteratorHasNext: number;
+}
+
+export interface CollectionRelationshipInfo {
+  interfaceType: 'Collection' | 'List' | 'Set' | 'Queue' | 'Deque' | 'Map';
+  concreteClass: string;
+  hierarchy: string[];
+  keyCharacteristics: string[];
 }
 
 export type SupportedLanguage = 'java' | 'python';
@@ -1872,10 +1995,12 @@ export interface CodePreset {
     | 'Java OOP & Language Fundamentals'
     | 'Java Runtime & Memory Execution'
     | 'Java Multithreading & Concurrency'
+    | 'Java Concurrency & Threads'
     | 'Java OOP & Language Advanced'
     | 'Java Collections & Streams'
     | 'Java OOP, Polymorphism & Type System'
     | 'Java Collections & Data Structures'
+    | 'Java Collections & Generics'
     | 'Custom Code';
   difficulty: 'Easy' | 'Medium' | 'Hard';
   language: SupportedLanguage;

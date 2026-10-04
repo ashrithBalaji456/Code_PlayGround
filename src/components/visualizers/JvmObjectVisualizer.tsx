@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ExecutionStep, HeapObject, VariableInfo } from '../../types/execution';
 import { Layers, HardDrive, ShieldAlert, Cpu, Database, Eye, AlertTriangle } from 'lucide-react';
+import { ConcurrencyVisualizer } from './ConcurrencyVisualizer';
 
 interface JvmObjectVisualizerProps {
   currentStep: ExecutionStep;
@@ -75,6 +76,19 @@ export const JvmObjectVisualizer: React.FC<JvmObjectVisualizerProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Phase 17: Concurrency & Multithreading Visualizer */}
+      {(Object.keys(threads).length > 1 ||
+        Object.keys(locks).length > 0 ||
+        !!currentStep.concurrencyInfo ||
+        !!currentStep.deadlockDetected ||
+        !!currentStep.executorState) && (
+        <ConcurrencyVisualizer
+          currentStep={currentStep}
+          onSelectThread={onSelectObject}
+          onSelectLock={onSelectVariable}
+        />
       )}
 
       {/* Tri-Column Memory Layout: Stack | Heap | Static Metaspace */}

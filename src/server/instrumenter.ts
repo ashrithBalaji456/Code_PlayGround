@@ -37,7 +37,7 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
   const varTypes = new Map<string, string>();
   let inMainMethod = false;
   let mainMethodDepth = 0;
-  let currentMethod: { name: string; depth: number; lastWasReturn?: boolean } | null = null;
+  let currentMethod: { name: string; depth: number; lastWasReturn?: boolean; isSynchronized?: boolean; isStatic?: boolean } | null = null;
   let pendingCtorEnter: string | null = null;
 
   const scopeVars: Array<string[]> = [[]];
@@ -128,6 +128,9 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
 
       if (closeCount > 0 && currentMethod.depth + openCount - closeCount === 0) {
         if (!currentMethod.lastWasReturn) {
+          if (currentMethod.isSynchronized) {
+            outputLines.push(`    CodeFlowTracer.lockRelease("${currentMethod.isStatic ? className : 'this'}", Thread.currentThread().getName(), ${lineNum});`);
+          }
           outputLines.push(`    CodeFlowTracer.funcExit("${currentMethod.name}", null, ${lineNum});`);
         }
         outputLines.push(rawLine);
@@ -1090,7 +1093,15 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
-    // Phase 13: Multithreading & Synchronization
+    // Phase 13 & 17: Multithreading, Concurrency & Synchronization
+    const threadDeclMatch = trimmed.match(/^(?:Thread|java\.lang\.Thread)\s+([a-zA-Z_0-9]+)\s*=\s*new\s+(?:Thread|java\.lang\.Thread)\(.*\);$/);
+    if (threadDeclMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadCreate(${threadDeclMatch[1]}, ${lineNum});`);
+      continue;
+    }
+
     const threadStartMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.start\(\);?$/);
     if (threadStartMatch) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
@@ -1123,6 +1134,14 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       continue;
     }
 
+    const threadDaemonMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.setDaemon\((.+)\);?$/);
+    if (threadDaemonMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadDaemon(${threadDaemonMatch[1]}, Boolean.valueOf(${threadDaemonMatch[2]}), ${lineNum});`);
+      continue;
+    }
+
     const threadInterruptMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.interrupt\(\);?$/);
     if (threadInterruptMatch) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
@@ -1144,17 +1163,20 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     if (joinMatch) {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    CodeFlowTracer.threadJoinStart(${joinMatch[1]}, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.threadJoinWait(${joinMatch[1]}, ${lineNum});`);
       outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.threadJoinResume(${joinMatch[1]}, ${lineNum});`);
       outputLines.push(`    CodeFlowTracer.threadJoinEnd(${joinMatch[1]}, ${lineNum});`);
       continue;
     }
 
-    const syncMatch = trimmed.match(/^synchronized\s*\((.+)\)/);
+    const syncMatch = trimmed.match(/^synchronized\s*\((.+)\)\s*\{?$/);
     if (syncMatch) {
       const lockExpr = syncMatch[1].trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
-      outputLines.push(`    CodeFlowTracer.lockAcquire("${lockExpr}", Thread.currentThread().getName(), ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.lockAttempt("${lockExpr}", ${lineNum});`);
       outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.lockAcquire("${lockExpr}", Thread.currentThread().getName(), ${lineNum});`);
       continue;
     }
 
@@ -1181,6 +1203,23 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       const op = atomicMatch[2];
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    { Object _oldA = ${varN}.get(); ${rawLine} CodeFlowTracer.atomicOp("${varN}", "${op}", _oldA, ${varN}.get(), ${lineNum}); }`);
+      continue;
+    }
+
+    const poolMatch = trimmed.match(/Executors\.newFixedThreadPool\((\d+)\)/);
+    if (poolMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.executorCreate("FixedThreadPool", ${poolMatch[1]}, ${lineNum});`);
+      outputLines.push(`    CodeFlowTracer.executorInit("FixedThreadPool", ${poolMatch[1]}, ${lineNum});`);
+      continue;
+    }
+
+    const shutdownMatch = trimmed.match(/^([a-zA-Z_0-9]+)\.shutdown\(\);?$/);
+    if (shutdownMatch) {
+      outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      outputLines.push(rawLine);
+      outputLines.push(`    CodeFlowTracer.executorShutdown(${lineNum});`);
       continue;
     }
 
@@ -1683,7 +1722,9 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
     }
 
     // 7. METHODS
-    const methodMatch = trimmed.match(/^(?:(?:public|private|protected)\s+)?(?:static\s+)?([A-Za-z0-9_<>\[\],\s]+)\s+([a-zA-Z_0-9]+)\s*\(([^)]*)\)\s*(\{)?$/);
+    const isSynchronizedMethod = /\bsynchronized\b/.test(trimmed);
+    const isStaticMethod = /\bstatic\b/.test(trimmed);
+    const methodMatch = trimmed.match(/^(?:(?:public|private|protected)\s+)?(?:(?:static|synchronized)\s+)*([A-Za-z0-9_<>\[\],\s]+)\s+([a-zA-Z_0-9]+)\s*\(([^)]*)\)\s*(\{)?$/);
     if (methodMatch && methodMatch[2] !== 'main' && !/^(if|while|for|switch|catch)\b/.test(trimmed)) {
       const fnName = methodMatch[2];
       const paramsStr = methodMatch[3].trim();
@@ -1700,8 +1741,12 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       }
       const namesArray = paramNames.map((n) => `"${n}"`).join(', ');
       const valuesArray = paramNames.map((n) => `(Object)(${n})`).join(', ');
+      if (isSynchronizedMethod) {
+        const lockTarget = isStaticMethod ? className : 'this';
+        outputLines.push(`    CodeFlowTracer.lockAcquire("${lockTarget}", Thread.currentThread().getName(), ${lineNum});`);
+      }
       outputLines.push(`    CodeFlowTracer.funcEnter("${fnName}", new String[]{ ${namesArray} }, new Object[]{ ${valuesArray} }, ${lineNum});`);
-      currentMethod = { name: fnName, depth: 1, lastWasReturn: false };
+      currentMethod = { name: fnName, depth: 1, lastWasReturn: false, isSynchronized: isSynchronizedMethod, isStatic: isStaticMethod };
       continue;
     }
 
@@ -1710,6 +1755,9 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       if (currentMethod) currentMethod.lastWasReturn = true;
       const retExpr = returnMatch[1]?.trim();
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
+      if (currentMethod?.isSynchronized) {
+        outputLines.push(`    CodeFlowTracer.lockRelease("${currentMethod.isStatic ? className : 'this'}", Thread.currentThread().getName(), ${lineNum});`);
+      }
       if (retExpr) {
         outputLines.push(`    var _retVal = (${retExpr});`);
         outputLines.push(`    CodeFlowTracer.funcExit("${currentMethod?.name || 'method'}", _retVal, ${lineNum});`);
