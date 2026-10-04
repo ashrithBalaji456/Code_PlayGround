@@ -1540,6 +1540,15 @@ export function reconstructExecutionSteps(
         if (topFrame) {
           topFrame.localVariables[ev.variable!] = varInfo;
         }
+        if (ev.variable) {
+          if (isNull) {
+            nextPointers[ev.variable] = 'null';
+          } else if (isRef) {
+            const ptrHash = String(rawTarget || ev.refTargetId || ev.objectId || val).replace(/\D/g, '');
+            nextPointers[ev.variable] = ptrHash ? `Node#${ptrHash}` : val;
+          }
+        }
+
         explanation = `Declared ${type} ${ev.variable} = ${val}`;
         break;
       }
@@ -1590,6 +1599,14 @@ export function reconstructExecutionSteps(
         const topFrame = nextCallStack[nextCallStack.length - 1];
         if (topFrame && nextVariables[ev.variable!]) {
           topFrame.localVariables[ev.variable!] = nextVariables[ev.variable!];
+        }
+        if (ev.variable) {
+          if (isNull) {
+            nextPointers[ev.variable] = 'null';
+          } else if (isRef) {
+            const ptrHash = String(rawTarget || ev.refTargetId || ev.objectId || val).replace(/\D/g, '');
+            nextPointers[ev.variable] = ptrHash ? `Node#${ptrHash}` : val;
+          }
         }
         explanation = `Updated variable ${ev.variable} to ${val}`;
         break;
