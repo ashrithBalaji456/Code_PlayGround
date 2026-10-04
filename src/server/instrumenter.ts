@@ -479,8 +479,13 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
         outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
         outputLines.push(`    {`);
         outputLines.push(`      int _idx = (${idxArg});`);
-        outputLines.push(`      var _v = (${valArg});`);
-        outputLines.push(`      ${varName}.add(_idx, _v);`);
+        if (valArg.includes('<>')) {
+          outputLines.push(`      ${varName}.add(_idx, ${valArg});`);
+          outputLines.push(`      Object _v = ${varName}.get(_idx);`);
+        } else {
+          outputLines.push(`      var _v = (${valArg});`);
+          outputLines.push(`      ${varName}.add(_idx, _v);`);
+        }
         if (stType === 'LinkedList') {
           outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, _idx, ${varName}.size(), ${lineNum});`);
         } else {
@@ -512,32 +517,67 @@ export function instrumentJavaCode(sourceCode: string): InstrumentationResult {
       outputLines.push(`    CodeFlowTracer.line(${lineNum});`);
       outputLines.push(`    {`);
       if (stType === 'HashSet' || stType === 'LinkedHashSet' || stType === 'TreeSet' || stType?.includes('Set')) {
-        outputLines.push(`      var _v = (${arg});`);
-        outputLines.push(`      boolean _added = ${varName}.add(_v);`);
-        outputLines.push(`      CodeFlowTracer.setAdd("${varName}", _v, _added, ${varName}.size(), ${lineNum});`);
-        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", -1, _v, ${lineNum});`);
+        if (arg.includes('<>')) {
+          outputLines.push(`      boolean _added = ${varName}.add(${arg});`);
+          outputLines.push(`      CodeFlowTracer.setAdd("${varName}", null, _added, ${varName}.size(), ${lineNum});`);
+          outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", -1, null, ${lineNum});`);
+        } else {
+          outputLines.push(`      var _v = (${arg});`);
+          outputLines.push(`      boolean _added = ${varName}.add(_v);`);
+          outputLines.push(`      CodeFlowTracer.setAdd("${varName}", _v, _added, ${varName}.size(), ${lineNum});`);
+          outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", -1, _v, ${lineNum});`);
+        }
       } else if (stType === 'PriorityQueue') {
-        outputLines.push(`      var _v = (${arg});`);
-        outputLines.push(`      ${varName}.add(_v);`);
-        outputLines.push(`      CodeFlowTracer.priorityQueueAdd("${varName}", _v, new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
-        outputLines.push(`      CodeFlowTracer.heapInsert("${varName}", _v, new ArrayList<>(${varName}), ${lineNum});`);
-        outputLines.push(`      CodeFlowTracer.heapifyUp("${varName}", ${varName}.size() - 1, _v, ${lineNum});`);
+        if (arg.includes('<>')) {
+          outputLines.push(`      ${varName}.add(${arg});`);
+          outputLines.push(`      CodeFlowTracer.priorityQueueAdd("${varName}", null, new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
+          outputLines.push(`      CodeFlowTracer.heapInsert("${varName}", null, new ArrayList<>(${varName}), ${lineNum});`);
+          outputLines.push(`      CodeFlowTracer.heapifyUp("${varName}", ${varName}.size() - 1, null, ${lineNum});`);
+        } else {
+          outputLines.push(`      var _v = (${arg});`);
+          outputLines.push(`      ${varName}.add(_v);`);
+          outputLines.push(`      CodeFlowTracer.priorityQueueAdd("${varName}", _v, new ArrayList<>(${varName}), ${varName}.size(), ${lineNum});`);
+          outputLines.push(`      CodeFlowTracer.heapInsert("${varName}", _v, new ArrayList<>(${varName}), ${lineNum});`);
+          outputLines.push(`      CodeFlowTracer.heapifyUp("${varName}", ${varName}.size() - 1, _v, ${lineNum});`);
+        }
       } else if (stType === 'LinkedList') {
-        outputLines.push(`      var _v = (${arg});`);
-        outputLines.push(`      ${varName}.add(_v);`);
-        outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, ${varName}.size() - 1, ${varName}.size(), ${lineNum});`);
+        if (arg.includes('<>')) {
+          outputLines.push(`      ${varName}.add(${arg});`);
+          outputLines.push(`      Object _v = ${varName}.get(${varName}.size() - 1);`);
+          outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, ${varName}.size() - 1, ${varName}.size(), ${lineNum});`);
+        } else {
+          outputLines.push(`      var _v = (${arg});`);
+          outputLines.push(`      ${varName}.add(_v);`);
+          outputLines.push(`      CodeFlowTracer.linkedListAdd("${varName}", _v, ${varName}.size() - 1, ${varName}.size(), ${lineNum});`);
+        }
       } else if (stType === 'Deque' || stType === 'ArrayDeque') {
-        outputLines.push(`      var _v = (${arg});`);
-        outputLines.push(`      ${varName}.addLast(_v);`);
-        outputLines.push(`      CodeFlowTracer.dequeAddLast("${varName}", _v, ${varName}.size(), ${lineNum});`);
+        if (arg.includes('<>')) {
+          outputLines.push(`      ${varName}.addLast(${arg});`);
+          outputLines.push(`      CodeFlowTracer.dequeAddLast("${varName}", ${varName}.peekLast(), ${varName}.size(), ${lineNum});`);
+        } else {
+          outputLines.push(`      var _v = (${arg});`);
+          outputLines.push(`      ${varName}.addLast(_v);`);
+          outputLines.push(`      CodeFlowTracer.dequeAddLast("${varName}", _v, ${varName}.size(), ${lineNum});`);
+        }
       } else if (stType === 'Queue') {
-        outputLines.push(`      var _v = (${arg});`);
-        outputLines.push(`      ${varName}.add(_v);`);
-        outputLines.push(`      CodeFlowTracer.queueEnqueue("${varName}", _v, ${varName}.size(), ${lineNum});`);
+        if (arg.includes('<>')) {
+          outputLines.push(`      ${varName}.add(${arg});`);
+          outputLines.push(`      CodeFlowTracer.queueEnqueue("${varName}", null, ${varName}.size(), ${lineNum});`);
+        } else {
+          outputLines.push(`      var _v = (${arg});`);
+          outputLines.push(`      ${varName}.add(_v);`);
+          outputLines.push(`      CodeFlowTracer.queueEnqueue("${varName}", _v, ${varName}.size(), ${lineNum});`);
+        }
       } else {
-        outputLines.push(`      var _v = (${arg});`);
-        outputLines.push(`      ${varName}.add(_v);`);
-        outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", ${varName}.size() - 1, _v, ${lineNum});`);
+        if (arg.includes('<>')) {
+          outputLines.push(`      ${varName}.add(${arg});`);
+          outputLines.push(`      Object _v = ${varName}.get(${varName}.size() - 1);`);
+          outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", ${varName}.size() - 1, _v, ${lineNum});`);
+        } else {
+          outputLines.push(`      var _v = (${arg});`);
+          outputLines.push(`      ${varName}.add(_v);`);
+          outputLines.push(`      CodeFlowTracer.collectionOp(${varName}, "${varName}", "add", ${varName}.size() - 1, _v, ${lineNum});`);
+        }
       }
       outputLines.push(`      CodeFlowTracer.trackMutation(${varName}, "${varName}", ${lineNum});`);
       outputLines.push(`    }`);
